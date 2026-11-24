@@ -5,8 +5,10 @@ import { useEffect, useState } from "react";
 import type { SearchMatchFilterV1 } from "@/lib/api/v1/types";
 
 import { AudioDetailPanel } from "./audio-detail-panel";
-import { AudioList, type AudioListView } from "./audio-list";
+import { AudioList } from "./audio-list";
 import { AudioSearchBar } from "./audio-search-bar";
+import { type AudioListView, useListView } from "./queries";
+import { SelectAllCheckbox, SelectionActions, useSelection } from "./selection";
 
 /** Wait for a pause in typing: every search embeds the query on the server. */
 const SEARCH_DEBOUNCE_MS = 300;
@@ -35,6 +37,8 @@ export function AudioBrowser() {
     : searchQuery
       ? { kind: "search", q: searchQuery, match }
       : { kind: "browse" };
+  const { rows, summary } = useListView(view);
+  const selection = useSelection();
 
   const showSimilar = (audio: { id: string; title: string }) => {
     setQuery("");
@@ -54,10 +58,15 @@ export function AudioBrowser() {
         onMatchChange={setMatch}
         similarTo={similarTo}
         onClearSimilar={() => setSimilarTo(null)}
+        summary={summary}
+        // The select-all checkbox lines up with the checkboxes of the rows.
+        leading={<SelectAllCheckbox className="mr-1" rows={rows} selection={selection} />}
+        trailing={<SelectionActions selection={selection} />}
       />
       <div className="flex min-h-0 flex-1">
         <AudioList
           view={view}
+          selection={selection}
           selectedId={selectedId}
           onSelect={setSelectedId}
           onFindSimilar={showSimilar}

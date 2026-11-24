@@ -1,45 +1,32 @@
 "use client";
 
-import {
-  keepPreviousData,
-  useInfiniteQuery,
-  useMutation,
-  useQuery,
-} from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   AudioWaveformIcon,
   CircleAlertIcon,
-  DownloadIcon,
   LoaderCircleIcon,
   PauseIcon,
   PlayIcon,
 } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  ApiError,
-  exportAudios,
-  fetchAudios,
-  fetchSimilarAudios,
-  searchAudios,
-} from "@/lib/api/v1/client";
-import {
-  type AudioListItemV1,
-  type AudioSource,
-  exportFileName,
-  MAX_EXPORT_IDS,
-  type SearchMatchFilterV1,
-  type SearchMatchV1,
+import { IconButton } from "@/components/ui/icon-button";
+import { ApiError } from "@/lib/api/v1/client";
+import type {
+  AudioListItemV1,
+  AudioSource,
+  SearchMatchFilterV1,
+  SearchMatchV1,
 } from "@/lib/api/v1/types";
-import { chooseSaveTarget, formatBytes, type SaveTarget, saveStream } from "@/lib/save-file";
 import { cn } from "@/lib/utils";
 
+import { type AudioListView, catalogQuery, searchQuery, similarQuery } from "./queries";
+import { clearOnEscape, type Selection } from "./selection";
 import { type PlayerStatus, useAudioPlayer } from "./use-audio-player";
 
-const PAGE_SIZE = 50;
 const ROW_HEIGHT = 72;
 
 const SOURCE_LABEL: Record<AudioSource, string> = {
@@ -70,30 +57,8 @@ function matchLabel(match: SearchMatchV1, source: AudioSource) {
 
 const FILTER_LABEL: Record<SearchMatchV1, string> = { text: "Words", sound: "Sound" };
 
-/** What the list shows: the whole catalog, a text search, or the audios similar to one. */
-export type AudioListView =
-  | { kind: "browse" }
-  | { kind: "search"; q: string; match: SearchMatchFilterV1 }
-  | { kind: "similar"; id: string };
-
 /** A list item, plus why it is in the results when it comes from a search. */
 type Row = AudioListItemV1 & { matches?: SearchMatchV1[]; similarity?: number };
-
-/** Rows checked for download, by id: they stay checked across pages and views. */
-type Selection = {
-  checked: ReadonlySet<string>;
-  /** While a download runs the selection can't change, so it matches the ZIP. */
-  locked: boolean;
-  setChecked: (next: ReadonlySet<string>) => void;
-  download: {
-    /** From choosing where to save until the whole ZIP is written. */
-    isPending: boolean;
-    /** Bytes of the ZIP received so far, null until it starts arriving. */
-    receivedBytes: number | null;
-    error: Error | null;
-    start: () => void;
-  };
-};
 
 type RowActions = {
   selection: Selection;
@@ -115,11 +80,14 @@ function withShift(event: Event) {
 
 export function AudioList({
   view,
+  selection,
   selectedId,
   onSelect,
   onFindSimilar,
 }: {
   view: AudioListView;
+  /** Checked rows, shared with the select-all checkbox in the search bar. */
+  selection: Selection;
   selectedId: string | null;
   onSelect: (id: string) => void;
   onFindSimilar: (audio: { id: string; title: string }) => void;
@@ -127,63 +95,13 @@ export function AudioList({
   // Lives here, above the views, so playback continues when the view changes.
   const player = useAudioPlayer();
 
-  // Also above the views, so checked rows survive searching and browsing.
-  const [checked, setCheckedState] = useState<ReadonlySet<string>>(() => new Set());
-  // The save dialog is open: no download yet, but the selection is already in use.
-  const [choosingTarget, setChoosingTarget] = useState(false);
-  const [receivedBytes, setReceivedBytes] = useState<number | null>(null);
-  const download = useMutation({
-    // Pending until the ZIP is fully written, not just until the response starts.
-    mutationFn: async ({ ids, target }: { ids: string[]; target: SaveTarget }) => {
-      const { body } = await exportAudios(ids);
-      await saveStream(body, target, setReceivedBytes);
-    },
-  });
-  const busy = choosingTarget || download.isPending;
-
-  const startDownload = async () => {
-    const ids = [...checked];
-    setChoosingTarget(true);
-    let target;
-    try {
-      target = await chooseSaveTarget(exportFileName(ids.length), {
-        description: "ZIP archive",
-        mime: "application/zip",
-        extension: ".zip",
-      });
-    } finally {
-      setChoosingTarget(false);
-    }
-    if (!target) return; // Save dialog cancelled.
-    setReceivedBytes(null);
-    download.mutate({ ids, target });
-  };
-
-  const selection: Selection = {
-    checked,
-    locked: busy,
-    setChecked: (next) => {
-      if (busy) return;
-      setCheckedState(next);
-      download.reset();
-    },
-    download: {
-      isPending: busy,
-      receivedBytes: download.isPending ? receivedBytes : null,
-      error: download.error,
-      start: () => void startDownload(),
-    },
-  };
-
   const actions: RowActions = { selection, selectedId, onSelect, onFindSimilar, player };
 
   return (
     <section
       className="flex min-w-0 flex-1 flex-col"
       aria-label="Audios"
-      onKeyDown={(event) => {
-        if (event.key === "Escape" && checked.size > 0) selection.setChecked(new Set());
-      }}
+      onKeyDown={clearOnEscape(selection)}
     >
       {view.kind === "browse" && <BrowseList actions={actions} />}
       {view.kind === "search" && (
@@ -204,16 +122,9 @@ function BrowseList({ actions }: { actions: RowActions }) {
     isFetchingNextPage,
     isFetchNextPageError,
     fetchNextPage,
-  } = useInfiniteQuery({
-    queryKey: ["v1", "audios", { pageSize: PAGE_SIZE }],
-    queryFn: ({ pageParam, signal }) =>
-      fetchAudios({ page: pageParam, pageSize: PAGE_SIZE, signal }),
-    initialPageParam: 1,
-    getNextPageParam: (lastPage) => lastPage.pagination.nextPage ?? undefined,
-  });
+  } = useInfiniteQuery(catalogQuery());
 
   const rows: Row[] = data?.pages.flatMap((p) => p.data) ?? [];
-  const total = data?.pages[0]?.pagination.total ?? 0;
 
   // Infinite scroll: load the next page once the loader row comes into view.
   const loadMore = useCallback(() => {
@@ -224,11 +135,6 @@ function BrowseList({ actions }: { actions: RowActions }) {
 
   return (
     <>
-      <ListSummary rows={rows} selection={actions.selection}>
-        {data
-          ? `${rows.length.toLocaleString()} of ${total.toLocaleString()} audios`
-          : "Loading audios…"}
-      </ListSummary>
       {status === "pending" && <ListMessage>Loading…</ListMessage>}
       {/* A failed next page keeps `data`, so only show this when nothing loaded. */}
       {status === "error" && !data && (
@@ -272,24 +178,12 @@ function SearchResults({
   match: SearchMatchFilterV1;
   actions: RowActions;
 }) {
-  const { data, status, error, refetch, isPlaceholderData } = useQuery({
-    queryKey: ["v1", "search", { q, match }],
-    queryFn: ({ signal }) => searchAudios({ q, match, signal }),
-    // Keep the previous results on screen while the next query loads.
-    placeholderData: keepPreviousData,
-  });
+  const { data, status, error, refetch, isPlaceholderData } = useQuery(searchQuery(q, match));
   const rows = data?.data;
   const searching = status === "pending" || isPlaceholderData;
 
   return (
     <>
-      <ListSummary rows={rows ?? []} selection={actions.selection}>
-        {searching || !rows
-          ? status === "error"
-            ? "Search failed"
-            : "Searching…"
-          : `${rows.length.toLocaleString()} ${rows.length === 1 ? "result" : "results"} for “${q}”`}
-      </ListSummary>
       {status === "pending" && <ListMessage>Searching…</ListMessage>}
       {status === "error" && <ListError message={error.message} onRetry={() => refetch()} />}
       {rows && rows.length === 0 && !searching && (
@@ -308,23 +202,11 @@ function SearchResults({
 }
 
 function SimilarResults({ id, actions }: { id: string; actions: RowActions }) {
-  const { data, status, error, refetch } = useQuery({
-    queryKey: ["v1", "audio", id, "similar"],
-    queryFn: ({ signal }) => fetchSimilarAudios(id, signal),
-  });
+  const { data, status, error, refetch } = useQuery(similarQuery(id));
   const rows = data?.data;
 
   return (
     <>
-      <ListSummary rows={rows ?? []} selection={actions.selection}>
-        {status === "pending"
-          ? "Finding similar audios…"
-          : status === "error"
-            ? "Search failed"
-            : rows?.length === 0
-              ? "No similar audios"
-              : `The ${rows?.length.toLocaleString()} audios that sound most like it, most similar first`}
-      </ListSummary>
       {status === "pending" && <ListMessage>Loading…</ListMessage>}
       {status === "error" && <ListError message={error.message} onRetry={() => refetch()} />}
       {rows && rows.length === 0 && (
@@ -333,90 +215,6 @@ function SimilarResults({ id, actions }: { id: string; actions: RowActions }) {
       {/* Keyed by the example so the scroll position resets with it. */}
       {rows && rows.length > 0 && <AudioRows key={id} rows={rows} actions={actions} />}
     </>
-  );
-}
-
-/**
- * The bar above the rows: what the list shows, a checkbox for all of its rows,
- * and the download controls once some rows are checked.
- */
-function ListSummary({
-  rows,
-  selection,
-  children,
-}: {
-  rows: Row[];
-  selection: Selection;
-  children: ReactNode;
-}) {
-  const { checked, setChecked, download } = selection;
-  const checkedHere = rows.filter((row) => checked.has(row.id)).length;
-  const allChecked = rows.length > 0 && checkedHere === rows.length;
-  const tooMany = checked.size > MAX_EXPORT_IDS;
-
-  const checkAll = (value: boolean) => {
-    const next = new Set(checked);
-    for (const row of rows) {
-      if (value) next.add(row.id);
-      else next.delete(row.id);
-    }
-    setChecked(next);
-  };
-
-  return (
-    <div className="flex h-10 shrink-0 items-center gap-3 border-b pr-2 pl-4 text-sm text-muted-foreground">
-      <Checkbox
-        aria-label="Select all audios in the list"
-        checked={allChecked}
-        indeterminate={checkedHere > 0 && !allChecked}
-        disabled={rows.length === 0 || selection.locked}
-        onCheckedChange={checkAll}
-      />
-      <span aria-live="polite" className="min-w-0 truncate">
-        {children}
-      </span>
-      {checked.size > 0 && (
-        <div className="ml-auto flex min-w-0 shrink-0 items-center gap-3">
-          {download.error ? (
-            <span className="truncate text-destructive" role="alert">
-              {download.error.message}
-            </span>
-          ) : tooMany ? (
-            <span className="truncate">Up to {MAX_EXPORT_IDS} at a time</span>
-          ) : null}
-          <span className="shrink-0 text-foreground">
-            {checked.size.toLocaleString()} selected
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={selection.locked}
-            onClick={() => setChecked(new Set())}
-          >
-            Clear
-          </Button>
-          <Button
-            size="sm"
-            disabled={tooMany || download.isPending}
-            onClick={download.start}
-          >
-            {download.isPending ? (
-              <>
-                <LoaderCircleIcon className="animate-spin" />
-                {download.receivedBytes === null
-                  ? "Preparing ZIP…"
-                  : `Downloading… ${formatBytes(download.receivedBytes)}`}
-              </>
-            ) : (
-              <>
-                <DownloadIcon />
-                {download.error ? "Retry download" : `Download (${checked.size})`}
-              </>
-            )}
-          </Button>
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -614,16 +412,15 @@ function AudioRow({
         </div>
         <p className="truncate text-sm text-muted-foreground">{audio.text}</p>
       </button>
-      <Button
+      <IconButton
         variant="ghost"
-        size="icon"
         className="mr-3 text-muted-foreground"
+        label="Find similar sound"
         aria-label={`Find audios that sound like ${audio.title}`}
-        title="Find similar audios"
         onClick={() => onFindSimilar({ id: audio.id, title: audio.title })}
       >
         <AudioWaveformIcon />
-      </Button>
+      </IconButton>
     </div>
   );
 }
@@ -638,20 +435,19 @@ function PlayButton({
   onClick: () => void;
 }) {
   const playing = status === "playing" || status === "loading";
-  const label =
+  const [label, ariaLabel] =
     status === "error"
-      ? `Couldn't play ${title}. Try again`
+      ? ["Couldn't load this audio. Click to retry", `Couldn't play ${title}. Try again`]
       : playing
-        ? `Pause ${title}`
-        : `Play ${title}`;
+        ? ["Pause", `Pause ${title}`]
+        : ["Play", `Play ${title}`];
 
   return (
-    <Button
+    <IconButton
       variant={status === "error" ? "destructive" : "outline"}
-      size="icon"
       className="ml-3 rounded-full"
-      aria-label={label}
-      title={status === "error" ? "Couldn't load this audio. Click to retry." : undefined}
+      label={label}
+      aria-label={ariaLabel}
       onClick={onClick}
     >
       {status === "loading" ? (
@@ -663,6 +459,6 @@ function PlayButton({
       ) : (
         <PlayIcon />
       )}
-    </Button>
+    </IconButton>
   );
 }

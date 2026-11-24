@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AudioWaveformIcon, XIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { fetchAudio } from "@/lib/api/v1/client";
 
 export function AudioDetailPanel({
@@ -36,16 +37,17 @@ export function AudioDetailPanel({
           onClick={() => data && onFindSimilar({ id, title: data.data.title })}
         >
           <AudioWaveformIcon />
-          Find similar
+          Find similar sound
         </Button>
-        <Button
+        <IconButton
           variant="ghost"
           size="icon-sm"
-          aria-label="Close details"
+          label="Close details"
+          tooltipSide="bottom"
           onClick={onClose}
         >
           <XIcon />
-        </Button>
+        </IconButton>
       </div>
       <div className="min-h-0 flex-1 overflow-auto p-4">
         {status === "pending" && (
