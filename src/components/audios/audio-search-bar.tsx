@@ -570,7 +570,9 @@ function RecordingControls({ recorder }: { recorder: RecorderControls }) {
       aria-label="Recording"
       className="flex h-full min-w-0 flex-1 items-center gap-3"
       onKeyDown={(event) => {
-        if (event.key === "Escape") recorder.onCancel();
+        if (event.key !== "Escape") return;
+        event.preventDefault(); // Cancels the recording, not the details panel too.
+        recorder.onCancel();
       }}
     >
       {starting ? (

@@ -16,7 +16,7 @@ import {
   RotateCwIcon,
   XIcon,
 } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
@@ -122,9 +122,35 @@ export function AudioDetailPanel({
   // An error from a download of another audio stays with that audio.
   const downloadError = download.error?.id === id ? download.error.message : null;
   const audio = data?.data;
+  const panelRef = useRef<HTMLElement>(null);
+
+  // Focus inside the panel would fall to the page when it closes: hand it to the clip's row.
+  const close = () => {
+    if (panelRef.current?.contains(document.activeElement)) {
+      document.querySelector<HTMLElement>("[data-row-select][aria-current]")?.focus();
+    }
+    onClose();
+  };
+  const closeOnEscape = useEffectEvent(close);
+
+  // Escape closes the panel from anywhere, unless something else took the
+  // press first: an open menu or tooltip, the recent searches, checked rows, a
+  // recording. They all preventDefault, and window hears the key after them.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented || event.isComposing) return;
+      if (event.target instanceof Element && event.target.closest("input, textarea, select, [contenteditable]")) {
+        return; // Escape in a text field belongs to the field.
+      }
+      closeOnEscape();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   return (
     <aside
+      ref={panelRef}
       className="flex w-[min(28rem,42%)] shrink-0 flex-col border-l bg-card"
       aria-label="Clip details"
     >
@@ -134,7 +160,7 @@ export function AudioDetailPanel({
           className="ml-auto"
           label="Close details"
           tooltipSide="bottom"
-          onClick={onClose}
+          onClick={close}
         >
           <XIcon />
         </IconButton>

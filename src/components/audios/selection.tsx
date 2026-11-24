@@ -104,11 +104,13 @@ export function useSelection(): Selection {
 /**
  * Escape unchecks every row. For the list and for the selection bar, so it
  * works wherever the focus is after checking rows, but not in the search input
- * or the details panel.
+ * or the details panel. It takes the press, so the details panel stays open.
  */
 export function clearOnEscape(selection: Selection) {
   return (event: KeyboardEvent) => {
-    if (event.key === "Escape" && selection.checked.size > 0) selection.setChecked(new Map());
+    if (event.key !== "Escape" || selection.checked.size === 0) return;
+    event.preventDefault();
+    selection.setChecked(new Map());
   };
 }
 
