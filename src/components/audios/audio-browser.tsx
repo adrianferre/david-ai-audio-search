@@ -1,5 +1,6 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { AudioLinesIcon } from "lucide-react";
 import { type DragEvent, useEffect, useRef, useState } from "react";
 
@@ -16,6 +17,7 @@ import {
   type AudioListView,
   type ClipMatch,
   type ReferenceClip,
+  transcriptQuery,
   useListView,
   useTranscriptSearch,
 } from "./queries";
@@ -58,7 +60,7 @@ export function AudioBrowser() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [match, setMatch] = useState<SearchMatchFilterV1>("all");
-  // A search with a clip compares its sound unless the user picks Words or Meaning.
+  // A search with a clip compares its sound unless the user picks All, Words or Meaning.
   const [clipMatch, setClipMatch] = useState<ClipMatch>("sound");
   const [similarTo, setSimilarTo] = useState<ReferenceClip | null>(null);
   const [example, setExample] = useState<AudioExample | null>(null);
@@ -73,6 +75,7 @@ export function AudioBrowser() {
   // One player for the list, the details panel and the user's clip.
   const player = useAudioPlayer();
   const recent = useRecentSearches();
+  const queryClient = useQueryClient();
   const { remember } = recent;
 
   const debouncedQuery = useDebouncedValue(query, SEARCH_DEBOUNCE_MS).trim();
@@ -99,7 +102,6 @@ export function AudioBrowser() {
               view.kind === "similar"
                 ? displayText({ source: view.reference.source, text: transcript.data.text })
                 : transcript.data.text,
-            generated: transcript.data.generated,
           }
         : { status: transcript.status };
   const selection = useSelection();
@@ -115,6 +117,19 @@ export function AudioBrowser() {
     );
     return () => clearTimeout(timeout);
   }, [settledText, match, source, remember]);
+
+  // A search with a clip is kept as it stands, and saved again as it changes:
+  // its match, its dataset filter, and the transcript once it is in.
+  const spoken = view.kind !== "browse" && view.kind !== "search" && view.match !== "sound" && transcript.isSuccess
+    ? transcript.data.text
+    : undefined;
+  useEffect(() => {
+    if (similarTo) {
+      remember({ kind: "similar", reference: similarTo, source, match: clipMatch, transcript: spoken });
+    } else if (example) {
+      remember({ kind: "audio", example, source, match: clipMatch, transcript: spoken });
+    }
+  }, [similarTo, example, source, clipMatch, spoken, remember]);
 
   const commitQuery = () => {
     const q = query.trim();
@@ -139,7 +154,6 @@ export function AudioBrowser() {
     clearExample();
     setSimilarTo(clip);
     setClipMatch("sound");
-    remember({ kind: "similar", reference: clip, source });
   };
 
   const toggleExample = () => {
@@ -174,7 +188,6 @@ export function AudioBrowser() {
       setClipMatch("sound");
       setExample(searched);
       setExampleStatus(null);
-      remember({ kind: "audio", example: searched, source });
     } catch (error) {
       if (token !== attachToken.current) return;
       if (!(error instanceof UnreadableAudioError)) console.error(error);
@@ -218,6 +231,13 @@ export function AudioBrowser() {
   /** Runs a recent search again, with the dataset filter it ran with. */
   const rerun = (entry: RecentSearch) => {
     setSource(entry.source);
+    // The user's clip was transcribed already: don't send it to the model again.
+    if (entry.kind === "audio" && entry.transcript !== undefined) {
+      const { queryKey } = transcriptQuery({ kind: "file", example: entry.example, source: null, match: "all" });
+      if (queryClient.getQueryData(queryKey) === undefined) {
+        queryClient.setQueryData(queryKey, { data: { text: entry.transcript, generated: true } });
+      }
+    }
     switch (entry.kind) {
       case "text":
         setSimilarTo(null);
@@ -229,7 +249,7 @@ export function AudioBrowser() {
         setQuery("");
         clearExample();
         setSimilarTo(entry.reference);
-        setClipMatch("sound");
+        setClipMatch(entry.match ?? "sound");
         break;
       case "audio":
         // Same id as when it first ran, so its results come from the cache.
@@ -237,7 +257,7 @@ export function AudioBrowser() {
         attachToken.current++;
         setQuery("");
         setSimilarTo(null);
-        setClipMatch("sound");
+        setClipMatch(entry.match ?? "sound");
         setExample(entry.example);
         setExampleStatus(null);
         break;
@@ -281,9 +301,11 @@ export function AudioBrowser() {
         Results for <span className="text-muted-foreground">“{view.q}”</span>
       </>
     ) : view.kind === "similar" ? (
-      view.match === "sound" ? "Sounds similar" : "Says something similar"
+      { all: "Similar", exact: "Says something similar", text: "Says something similar", sound: "Sounds similar" }[
+        view.match
+      ]
     ) : (
-      `${view.match === "sound" ? "Sounds like" : "Says what’s in"} your ${view.example.source === "recording" ? "recording" : "file"}`
+      `${{ all: "Like", exact: "Says what’s in", text: "Says what’s in", sound: "Sounds like" }[view.match]} your ${view.example.source === "recording" ? "recording" : "file"}`
     );
   const scope = source && view.kind !== "browse" ? `${SOURCE_LABEL[source]} only` : null;
 

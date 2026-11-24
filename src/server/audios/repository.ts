@@ -161,6 +161,8 @@ const EXACT_WORDS_BONUS = 3;
  * vector carries the spoken words too, and captions describe the sound), so
  * adding them would count the same evidence twice.
  * A signal whose vector is missing is skipped.
+ * With `soundOf` (an audio's id) and no `vectors.sound`, the sound signal is
+ * that audio's own vector: search by an example's sound, plus its words.
  * With `source`, only that dataset's clips are returned. They are still scored
  * against the whole catalog, so a score means the same with or without it.
  *
@@ -171,18 +173,23 @@ const EXACT_WORDS_BONUS = 3;
 export async function searchAudios({
   query,
   vectors,
+  soundOf = null,
   limit,
   source = null,
 }: {
   query: string;
   vectors: Partial<Record<SearchMatch, number[]>>;
+  soundOf?: string | null;
   limit: number;
   source?: AudioSource | null;
 }): Promise<AudioSearchHit[]> {
   const rows = await getSql()`
     WITH q AS (
       SELECT ${toVector(vectors.text)}::vector AS text_vector,
-             ${toVector(vectors.sound)}::vector AS sound_vector,
+             coalesce(
+               ${toVector(vectors.sound)}::vector,
+               (SELECT audio_embedding FROM audios WHERE id = ${soundOf}::text)
+             ) AS sound_vector,
              websearch_to_tsquery('english', ${query}) AS words,
              -- Any of the query's words, to pick the caption to show.
              replace(plainto_tsquery('english', ${query})::text, '&', '|')::tsquery AS any_word

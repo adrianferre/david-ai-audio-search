@@ -78,17 +78,38 @@ export function fetchAudio(
   return getJson(`${BASE}/audios/${encodeURIComponent(id)}`, signal);
 }
 
-/** Text search over each audio's text, its sound, or both (`match: "all"`). */
-export function searchAudios(params: {
+/**
+ * Text search over each audio's text, its sound, or both (`match: "all"`).
+ * With `soundOf` (a catalog audio's id) or `wav` (a clip of the user's), the
+ * sound is compared with that clip's sound instead of the text of `q`, and `q`
+ * may be empty (then `match` must be "all" or "sound").
+ */
+export async function searchAudios(params: {
   q: string;
   match: SearchMatchFilterV1;
   /** At most this many results; the API defaults to 50. */
   limit?: number;
   source?: AudioSource | null;
+  soundOf?: string | null;
+  wav?: Blob | null;
   signal?: AbortSignal;
 }): Promise<AudioSearchResponseV1> {
-  const query = queryString({ q: params.q, match: params.match, limit: params.limit, source: params.source });
-  return getJson(`${BASE}/search${query}`, params.signal);
+  const query = queryString({
+    q: params.q || null,
+    match: params.match,
+    limit: params.limit,
+    source: params.source,
+    soundOf: params.soundOf,
+  });
+  if (!params.wav) return getJson(`${BASE}/search${query}`, params.signal);
+  const res = await fetch(`${BASE}/search${query}`, {
+    method: "POST",
+    body: params.wav,
+    headers: { accept: "application/json", "content-type": "audio/wav" },
+    signal: params.signal,
+  });
+  await ensureOk(res);
+  return res.json() as Promise<AudioSearchResponseV1>;
 }
 
 /** Search by example: the audios that sound most like `id`. */

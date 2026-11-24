@@ -24,6 +24,7 @@ import {
   type AudioListView,
   catalogQuery,
   type ClipMatch,
+  type ClipSound,
   type ClipView,
   fileQuery,
   type ReferenceClip,
@@ -228,6 +229,7 @@ function SearchResults({
   match,
   source,
   excludeId = null,
+  sound = null,
   actions,
   recovery,
   empty,
@@ -237,14 +239,15 @@ function SearchResults({
   source: AudioSource | null;
   /** An audio to leave out of the results (see `searchQuery`). */
   excludeId?: string | null;
+  /** A clip whose own sound is compared, instead of the text of `q`. */
+  sound?: ClipSound | null;
   actions: RowActions;
   recovery: ListRecovery;
   /** Shown instead of the usual "nothing matches" message. */
   empty?: ReactNode;
 }) {
-  const { data, status, error, refetch, isPlaceholderData } = useQuery(
-    searchQuery(q, match, source, excludeId),
-  );
+  const rowsQuery = searchQuery(q, match, source, excludeId, sound);
+  const { data, status, error, refetch, isPlaceholderData } = useQuery(rowsQuery);
   const searching = status === "pending" || isPlaceholderData;
 
   if (status === "pending") return <LoadingRows label="Searching" />;
@@ -282,7 +285,7 @@ function SearchResults({
   // Keyed by the search so the scroll position resets with it.
   return (
     <AudioTable
-      key={`${match}:${source}:${q}`}
+      key={JSON.stringify(rowsQuery.queryKey)}
       kind="search"
       rows={rows}
       actions={actions}
@@ -300,11 +303,11 @@ function TranscriptResults({
   actions,
   recovery,
 }: {
-  view: ClipView & { match: "exact" | "text" };
+  view: ClipView & { match: "all" | "exact" | "text" };
   actions: RowActions;
   recovery: ListRecovery;
 }) {
-  const { transcript, q, excludeId } = useTranscriptSearch(view);
+  const { transcript, q, excludeId, sound, searchable } = useTranscriptSearch(view);
   const yours = view.kind === "file";
   const what = !yours ? "this clip" : view.example.source === "recording" ? "your recording" : "your file";
 
@@ -320,11 +323,11 @@ function TranscriptResults({
       />
     );
   }
-  if (q === "") {
+  if (!searchable) {
     return (
       <EmptyResults
         title={`Nobody speaks in ${what}`}
-        message={`${FILTER_LABEL[view.match]} searches with what’s said in the clip, and the speech-to-text model heard no words. Its sound can still find similar clips.`}
+        message={`${view.match === "all" ? "All" : FILTER_LABEL[view.match]} searches with what’s said in the clip, and the speech-to-text model heard no words. Its sound can still find similar clips.`}
       >
         <Button onClick={() => recovery.onClipMatch("sound")}>Search by sound instead</Button>
       </EmptyResults>
@@ -337,13 +340,16 @@ function TranscriptResults({
       match={view.match}
       source={view.source}
       excludeId={excludeId}
+      sound={sound}
       actions={actions}
       recovery={recovery}
       empty={
         <EmptyResults
-          title={`No clip${where} says anything like ${what}`}
+          title={`No clip${where} ${view.match === "all" ? "stands out as like" : "says anything like"} ${what}`}
           message={
-            view.match === "exact"
+            view.match === "all"
+              ? "All lists the clips that stand out for the clip’s sound, or for the words or meaning of what’s said in it. Sound lists the nearest clips by sound, however close."
+              : view.match === "exact"
               ? "Words looks for every word said in the clip, as said, in the transcripts and captions. Meaning also finds other ways of saying it, and its sound may still match."
               : "Meaning compares what’s said in the clip with the transcripts and captions. Its sound may still match."
           }

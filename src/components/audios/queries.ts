@@ -65,20 +65,35 @@ export const datasetsQuery = () =>
   });
 
 /**
+ * The clip whose own sound a search compares with (All on a clip), instead of
+ * the text of the query: one of the catalog, or the user's own.
+ */
+export type ClipSound = { kind: "audio"; id: string } | { kind: "file"; example: AudioExample };
+
+/**
  * A text search. `excludeId` leaves out one audio: the clip whose transcript
- * is the query, which would otherwise come first.
+ * is the query, which would otherwise come first. With `sound`, the sound
+ * signal is that clip's sound, and `q` may be empty.
  */
 export const searchQuery = (
   q: string,
   match: SearchMatchFilterV1,
   source: AudioSource | null,
   excludeId: string | null = null,
+  sound: ClipSound | null = null,
 ) => {
   // One more than shown, and one more again for the audio left out.
   const limit = RESULTS_LIMIT + 1 + (excludeId ? 1 : 0);
+  const soundOf = sound?.kind === "audio" ? sound.id : null;
+  const wav = sound?.kind === "file" ? sound.example : null;
   return queryOptions({
-    queryKey: ["v1", "search", { q, match, source, limit }],
-    queryFn: ({ signal }) => searchAudios({ q, match, source, limit, signal }),
+    queryKey: [
+      "v1",
+      "search",
+      { q, match, source, limit, ...(sound && { sound: soundOf ?? `file:${wav!.id}` }) },
+    ],
+    queryFn: ({ signal }) =>
+      searchAudios({ q, match, source, limit, soundOf, wav: wav?.wav ?? null, signal }),
     // Keep the previous results on screen while the next query loads.
     placeholderData: keepPreviousData,
     select: excludeId
@@ -156,11 +171,11 @@ export type AudioListView = { source: AudioSource | null } & (
   | { kind: "file"; example: AudioExample; match: ClipMatch }
 );
 
-/** What a search with a clip compares, as the text search's `match`; all but "all". */
-export type ClipMatch = Exclude<SearchMatchFilterV1, "all">;
+/** What a search with a clip compares, as the text search's `match`. */
+export type ClipMatch = SearchMatchFilterV1;
 
-/** Whether the view searches with what's said in a clip (Words or Meaning), not its sound. */
-export function searchesTranscript(view: AudioListView): view is ClipView & { match: "exact" | "text" } {
+/** Whether the view searches with what's said in a clip (All, Words or Meaning), not only its sound. */
+export function searchesTranscript(view: AudioListView): view is ClipView & { match: "all" | "exact" | "text" } {
   return (view.kind === "similar" || view.kind === "file") && view.match !== "sound";
 }
 /** A view that searches with a clip: one of the catalog, or the user's own. */
@@ -187,22 +202,41 @@ export const transcriptQuery = (view: ClipView | null) =>
     select: (response) => response.data,
   });
 
+/** A hyphen that isn't inside a word ("-well", " - "): web-search syntax for "not". */
+const LOOSE_HYPHENS = /(?<![\p{L}\p{N}])-+|-+(?![\p{L}\p{N}])/gu;
+/** "or" as a word of its own, in any case and next to any punctuation ("OR", "or,", "(or"). */
+const OR_WORD = /(?:^|[^\p{L}\p{N}])or(?:$|[^\p{L}\p{N}])/iu;
+
 /**
- * The transcript as a search query. A clip of at most 30 s says far less than
- * the limit; anything past it is cut at a word.
+ * The transcript as a search query, said as plain words. The search reads `q`
+ * as web-search syntax (`websearch_to_tsquery`), where what's said would act as
+ * operators: quotes make a phrase, a loose hyphen excludes the next word, and
+ * "or" splits the query in two. Those are dropped, and "or" is quoted so it's a
+ * word to match ("go or stay" needs all three words). A clip of at most 30 s
+ * says far less than the length limit; anything past it is cut at a word.
  */
 export function transcriptToQuery(transcript: string): string {
-  const text = transcript.trim();
-  if (text.length <= MAX_SEARCH_QUERY_LENGTH) return text;
-  const cut = text.slice(0, MAX_SEARCH_QUERY_LENGTH + 1);
-  return cut.slice(0, Math.max(cut.lastIndexOf(" "), 1)).trim();
+  const words = transcript
+    .replace(/"/g, " ")
+    .replace(LOOSE_HYPHENS, " ")
+    .split(/\s+/)
+    .filter((word) => word !== "")
+    .map((word) => (OR_WORD.test(word) ? `"${word}"` : word));
+  let query = "";
+  for (const word of words) {
+    const next = query === "" ? word : `${query} ${word}`;
+    if (next.length > MAX_SEARCH_QUERY_LENGTH) return query === "" ? word.slice(0, MAX_SEARCH_QUERY_LENGTH) : query;
+    query = next;
+  }
+  return query;
 }
 
 /**
  * A search by what's said in a clip: its transcript first, then a text search
- * with it (Words or Meaning, as the view's `match`). The search waits for the
- * transcript, and doesn't run when nobody speaks in the clip. Both are idle
- * while the view searches by sound.
+ * with it, as the view's `match` (All, Words or Meaning). All also compares the
+ * clip's own sound. The search waits for the transcript; when nobody speaks in
+ * the clip, only All runs (on the sound alone). Both are idle while the view
+ * searches by sound only.
  */
 export function useTranscriptSearch(view: AudioListView): {
   transcript: UseQueryResult<TranscriptV1>;
@@ -211,16 +245,27 @@ export function useTranscriptSearch(view: AudioListView): {
   q: string;
   /** The catalog clip searched with, left out of its own results. */
   excludeId: string | null;
+  /** The clip whose sound the search compares with (All only). */
+  sound: ClipSound | null;
+  /** Whether there's a search to run: the transcript is in, and has words or the match is All. */
+  searchable: boolean;
 } {
   const clip = searchesTranscript(view) ? view : null;
   const transcript = useQuery(transcriptQuery(clip));
   const q = transcriptToQuery(transcript.data?.text ?? "");
   const excludeId = clip?.kind === "similar" ? clip.reference.id : null;
+  const sound: ClipSound | null =
+    clip?.match !== "all"
+      ? null
+      : clip.kind === "similar"
+        ? { kind: "audio", id: clip.reference.id }
+        : { kind: "file", example: clip.example };
+  const searchable = clip !== null && transcript.isSuccess && (q !== "" || clip.match === "all");
   const search = useQuery({
-    ...searchQuery(q, clip?.match ?? "text", view.source, excludeId),
-    enabled: clip !== null && q !== "",
+    ...searchQuery(q, clip?.match ?? "text", view.source, excludeId, sound),
+    enabled: searchable,
   });
-  return { transcript, search, q, excludeId };
+  return { transcript, search, q, excludeId, sound, searchable };
 }
 
 /**
@@ -251,7 +296,7 @@ export function useListView(view: AudioListView): {
       : view.kind === "search"
         ? (search.data?.data ?? [])
         : byWords
-          ? words.q !== "" && !words.search.isPlaceholderData
+          ? words.searchable && !words.search.isPlaceholderData
             ? (words.search.data?.data ?? [])
             : []
           : view.kind === "similar"
@@ -294,8 +339,8 @@ function summarize(
   if (searchesTranscript(view)) {
     if (words.transcript.status === "error") return "";
     if (words.transcript.status === "pending") return "Transcribing…";
-    // Nobody speaks in the clip: nothing to search with.
-    if (words.q === "") return "";
+    // Nobody speaks in the clip: nothing to search with, but its sound for All.
+    if (!words.searchable) return "";
     return ranked(words.search);
   }
 

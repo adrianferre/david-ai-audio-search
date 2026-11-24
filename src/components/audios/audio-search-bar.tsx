@@ -55,11 +55,16 @@ const MATCH_OPTIONS: { value: SearchMatchFilterV1; label: string; hint: string }
 
 /**
  * What a search with a clip (a file, a recording, a "similar to" clip)
- * compares. Sound comes first: it's the default. Words and Meaning search with
- * what's said in the clip, as the text filters of the same names do.
+ * compares, in the order of the text search's options. Sound is the default.
+ * Words and Meaning search with what's said in the clip, as the text filters of
+ * the same names do; All adds the clip's own sound.
  */
 const CLIP_MATCH_OPTIONS: { value: ClipMatch; label: string; hint: string }[] = [
-  { value: "sound", label: "Sound", hint: "Finds the clips that sound like this one" },
+  {
+    value: "all",
+    label: "All",
+    hint: "Finds the clips that sound like this one, or whose transcripts or captions say what’s said in it",
+  },
   {
     value: "exact",
     label: "Words",
@@ -70,13 +75,11 @@ const CLIP_MATCH_OPTIONS: { value: ClipMatch; label: string; hint: string }[] = 
     label: "Meaning",
     hint: "Finds the clips whose transcripts or captions mean what’s said in this one",
   },
+  { value: "sound", label: "Sound", hint: "Finds the clips that sound like this one" },
 ];
 
-/** What's said in the clip searched by its words, as the line under the bar shows it. */
-export type TranscriptLine =
-  | { status: "pending" }
-  | { status: "error" }
-  | { status: "success"; text: string; generated: boolean };
+/** What's said in the clip searched by its words, as its chip shows it. */
+export type TranscriptLine = { status: "pending" } | { status: "error" } | { status: "success"; text: string };
 
 const MATCH_EXPLANATION: Record<SearchMatchFilterV1, ReactNode> = {
   all: (
@@ -138,7 +141,7 @@ export function AudioSearchBar({
   /** What a search with a clip compares: its sound, or what's said in it (exact words or meaning). */
   clipMatch: ClipMatch;
   onClipMatchChange: (match: ClipMatch) => void;
-  /** The clip's transcript, while a clip is searched by its words. */
+  /** The clip's transcript, while a clip is searched by what's said in it (All, Words, Meaning). */
   transcript: TranscriptLine | null;
   /** Set while the list shows the clips similar to this one. */
   similarTo: ReferenceClip | null;
@@ -180,6 +183,11 @@ export function AudioSearchBar({
   const error = exampleStatus?.kind === "error" ? exampleStatus.message : null;
   // A file, a recording, or a "similar to" clip replaces the text input until its X clears it.
   const chip = reading || example !== null || similarTo !== null;
+  // Searched by what's said in it, the chip names the clip by its words, once they're known.
+  const byWords = clipMatch !== "sound" && transcript !== null;
+  const spoken = byWords && transcript.status === "success" && transcript.text !== "" ? transcript.text : null;
+  const transcribing = byWords && transcript.status === "pending";
+  const nobodySpeaks = byWords && transcript.status === "success" && transcript.text === "";
   const recentOpen =
     inputFocused && !recentDismissed && query === "" && recentSearches.length > 0;
   const activeIndex = recentOpen && activeRecent < recentSearches.length ? activeRecent : -1;
@@ -248,13 +256,22 @@ export function AudioSearchBar({
                     <PlayIcon className="ml-px size-3 fill-current" />
                   )}
                 </IconButton>
-                <span className="truncate">
-                  <span className="text-muted-foreground">
-                    {clipMatch === "sound" ? "Sounds like " : "Says what’s in "}
-                  </span>
-                  {example.name}
-                  {example.trimmed && (
-                    <span className="text-muted-foreground"> · first {MAX_EXAMPLE_SECONDS} s</span>
+                <span className="truncate" title={spoken ?? undefined}>
+                  {spoken ? (
+                    <>
+                      <span className="text-muted-foreground">Similar to </span>“{spoken}”
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-muted-foreground">
+                        {transcribing ? "Transcribing " : clipMatch === "sound" ? "Sounds like " : "Similar to "}
+                      </span>
+                      {example.name}
+                      {transcribing && "…"}
+                      {example.trimmed && (
+                        <span className="text-muted-foreground"> · first {MAX_EXAMPLE_SECONDS} s</span>
+                      )}
+                    </>
                   )}
                 </span>
                 <Waveform
@@ -300,8 +317,9 @@ export function AudioSearchBar({
                     <PlayIcon className="ml-px size-3 fill-current" />
                   )}
                 </IconButton>
-                <span className="truncate">
-                  <span className="text-muted-foreground">Similar to </span>“{displayText(similarTo)}”
+                <span className="truncate" title={spoken ?? undefined}>
+                  <span className="text-muted-foreground">{transcribing ? "Transcribing " : "Similar to "}</span>“
+                  {spoken ?? displayText(similarTo)}”{transcribing && "…"}
                 </span>
                 <Waveform
                   peaks={similarTo.waveformPeaks}
@@ -485,9 +503,15 @@ export function AudioSearchBar({
           {error}
         </p>
       ) : chip ? (
+        // Words and Meaning have nothing to search with then; the list says so.
         !reading &&
-        clipMatch !== "sound" &&
-        transcript && <TranscriptExplanation match={clipMatch} transcript={transcript} />
+        clipMatch === "all" &&
+        nobodySpeaks && (
+          <p className="pl-1 text-[0.8rem] text-muted-foreground">
+            Nobody speaks in the clip, so <b className="font-medium text-foreground">All</b> matches its
+            sound only.
+          </p>
+        )
       ) : (
         !recording &&
         query.trim() !== "" && (
@@ -530,36 +554,6 @@ function MatchToggle<T extends string>({
         </Tooltip>
       ))}
     </div>
-  );
-}
-
-/**
- * Under the bar while a clip is searched by its words: the transcript searched
- * with. The list explains a failure, or a clip where nobody speaks.
- */
-function TranscriptExplanation({
-  match,
-  transcript,
-}: {
-  match: "exact" | "text";
-  transcript: TranscriptLine;
-}) {
-  if (transcript.status === "pending") {
-    return (
-      <p role="status" className="flex items-center gap-2 pl-1 text-[0.8rem] text-muted-foreground">
-        <LoaderCircleIcon aria-hidden="true" className="size-3.5 shrink-0 animate-spin" />
-        Transcribing what’s said in the clip…
-      </p>
-    );
-  }
-  if (transcript.status === "error" || transcript.text === "") return null;
-  return (
-    <p className="line-clamp-2 pl-1 text-[0.8rem] text-muted-foreground">
-      <b className="font-medium text-foreground">{match === "exact" ? "Words" : "Meaning"}</b>{" "}
-      {match === "exact" ? "looks for the exact words said" : "searches with the meaning of what’s said"}
-      {transcript.generated ? " (transcribed automatically)" : ""}:{" "}
-      <span className="text-foreground">“{transcript.text}”</span>
-    </p>
   );
 }
 

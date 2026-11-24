@@ -107,19 +107,22 @@ Each clip has up to three things to match against, all in the `audios` table:
   `MediaRecorder` (up to 30 seconds, stopped by "Stop and search") and sends the recording
   through the same conversion as a file. Echo cancellation and noise suppression are turned off,
   since they are tuned for voices and would filter out the sounds being searched for.
-- **Sound, Words or Meaning, for any clip.** A search with a clip (a file, a recording, or "Find
-  similar sound") compares its **Sound** by default: the audio vector, as above. Pick **Words** or
-  **Meaning** next to the clip to search by what's said in it instead: its transcript goes through
-  the text search as the query, with `match=exact` (every word said, as said) or `match=text` (its
-  meaning: text vector plus exact words). Either way it is compared with the transcripts and captions,
-  not the sound, and the clip itself is left out of its own results. LibriSpeech and Common Voice
-  clips come with their transcript. AudioCaps clips and your own clips are transcribed when Words or
-  Meaning is picked, by `mistral/voxtral-mini-transcribe-3` through the AI Gateway (about $0.0035 a
-  minute of audio). No speech-to-text library fits a Vercel Function: Whisper on ONNX needs a large
-  runtime and model download, and Whisper also makes up words for clips without speech ("Thank you
-  for watching."). Tried live on catalog clips, this model was as accurate as the OpenAI and Google
-  ones, the fastest, and returned nothing when nobody speaks. A clip with no speech says so and
-  offers its sound instead. The transcript is shown under the search bar.
+- **All, Words, Meaning or Sound, for any clip.** A search with a clip (a file, a recording, or
+  "Find similar sound") has the same options as text search, in the same order, and compares its
+  **Sound** by default: the audio vector, as above. **Words** and **Meaning** search by what's said
+  in it instead: its transcript goes through the text search as the query, with `match=exact`
+  (every word said, as said) or `match=text` (its meaning: text vector plus exact words), so it is
+  compared with the transcripts and captions, not the sound. **All** is text search's All with the
+  clip's own sound as the sound signal (`soundOf`, or a WAV body): a clip stands out on its sound or
+  on what's said in it, and each result says which. The clip itself is left out of its own results.
+  LibriSpeech and Common Voice clips come with their transcript. AudioCaps clips and your own clips
+  are transcribed when All, Words or Meaning is picked, by `mistral/voxtral-mini-transcribe-3`
+  through the AI Gateway (about $0.0035 a minute of audio). No speech-to-text library fits a Vercel
+  Function: Whisper on ONNX needs a large runtime and model download, and Whisper also makes up
+  words for clips without speech ("Thank you for watching."). Tried live on catalog clips, this
+  model was as accurate as the OpenAI and Google ones, the fastest, and returned nothing when nobody
+  speaks. With no speech, Words and Meaning say so and offer the sound instead; All matches on the
+  sound alone. The transcript is shown under the search bar.
 - **Captions are indexed as text.** A sound query such as "dog barking" can match an AudioCaps
   clip through its captions, its audio, or both. The "Sounds like" filter (`match=sound`) uses
   the audio alone, which is what finds sounds in clips nobody has described. A clip has several
@@ -260,10 +263,11 @@ relevant first. There is no pagination: it is a ranked top list.
 
 | Query param | Default | Rules |
 | --- | --- | --- |
-| `q` | required | 1–1,000 characters (room for a clip's transcript; the search box takes 200) |
+| `q` | required | 1–1,000 characters (room for a clip's transcript; the search box takes 200). Optional with an example's sound and `match` `all` or `sound` |
 | `match` | `all` | `all`, `exact` (the exact words of the transcripts and captions, no vectors; "Words" in the UI), `text` (their meaning; "Meaning") or `sound` (the audio alone; "Sound") |
 | `limit` | `50` | integer 1–100 |
 | `source` | every dataset | `librispeech`, `audiocaps` or `commonvoice`: only that dataset's clips |
+| `soundOf` | none | An audio's id: the sound signal compares with that audio's sound instead of the text of `q` (`404` for an unknown id) |
 
 ```json
 {
@@ -286,6 +290,11 @@ query's words as written is returned (up to `limit`), with `matches: ["text"]`. 
 Postgres's `ts_rank_cd` (more and closer occurrences rank higher). The query takes web-search
 syntax: `"a phrase"`, `or`, `-word`.
 
+`POST /api/v1/search` with a WAV body (`Content-Type: audio/wav`, same rules and errors as
+`/search/audio`) works like `soundOf` for a clip outside the catalog: the sound signal compares
+with the body's sound. The UI uses `soundOf` and the POST for **All** on a clip, with the clip's
+transcript as `q`. The clip is embedded and discarded.
+
 ### `GET /api/v1/audios/{id}/similar`
 
 Search by example: the audios that sound most like `{id}`, most similar first. Each item is a list
@@ -297,8 +306,8 @@ unknown id.
 What's said in the audio: `{ "data": { "text": "…", "generated": false } }`. LibriSpeech and Common
 Voice return their transcript (`generated: false`). AudioCaps clips come with captions, not
 transcripts, so one is made on the spot by a speech-to-text model (`generated: true`); `text` is
-empty when nobody speaks. The UI searches with it (`GET /api/v1/search`, `match=exact` or `text`) when
-Words or Meaning is picked for a "similar" clip. Cached by the browser for a day. `404` for an unknown id,
+empty when nobody speaks. The UI searches with it (`GET /api/v1/search`, `match=all` with `soundOf`,
+`exact` or `text`) when All, Words or Meaning is picked for a "similar" clip. Cached by the browser for a day. `404` for an unknown id,
 `503 transcription_unavailable` when the model can't be reached.
 
 ### `POST /api/v1/audios/export`
@@ -337,8 +346,8 @@ embedding model can't be reached.
 What's said in the WAV clip in the request body, by a speech-to-text model:
 `{ "data": { "text": "…", "generated": true } }`, with an empty `text` when nobody speaks. Same body
 and body errors as `/search/audio`; `503 transcription_unavailable` when the model can't be reached.
-The clip is transcribed and discarded. The UI uses it when Words or Meaning is picked for a file or a
-recording, then searches with the text.
+The clip is transcribed and discarded. The UI uses it when All, Words or Meaning is picked for a file or
+a recording, then searches with the text.
 
 Errors always look like `{ "error": { "code", "message", "details"? } }`: `400 invalid_request`, `404 not_found`, `413 payload_too_large`, `415 unsupported_media_type`, `500 internal_error` (e.g. the database is unreachable), `503 search_unavailable` and `503 transcription_unavailable`.
 
