@@ -10,7 +10,11 @@
     "typecheck": "next typegen && tsc --noEmit",
     "embed-catalog": "node --env-file=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/embed-catalog.mts",
     "compute-waveforms": "node --env-file=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/compute-waveforms.mts",
-    "import-commonvoice": "node --env-file=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/import-commonvoice.mts"
+    "import-commonvoice": "node --env-file=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/import-commonvoice.mts",
+    "test": "node --test --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/eval/metrics.test.mts",
+    "eval": "node --env-file=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/eval/run.mts",
+    "eval:queries": "node --env-file=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/eval/build-queries.mts",
+    "eval:labels": "node --env-file=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/eval/fetch-audioset-labels.mts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

@@ -72,8 +72,9 @@ export type ClipSound = { kind: "audio"; id: string } | { kind: "file"; example:
 
 /**
  * A text search. `excludeId` leaves out one audio: the clip whose transcript
- * is the query, which would otherwise come first. With `sound`, the sound
- * signal is that clip's sound, and `q` may be empty.
+ * is the query, which would otherwise come first (and set the bar the others
+ * are cut against). With `sound`, the sound signal is that clip's sound, and
+ * `q` may be empty.
  */
 export const searchQuery = (
   q: string,
@@ -82,24 +83,28 @@ export const searchQuery = (
   excludeId: string | null = null,
   sound: ClipSound | null = null,
 ) => {
-  // One more than shown, and one more again for the audio left out.
-  const limit = RESULTS_LIMIT + 1 + (excludeId ? 1 : 0);
+  // One more than shown.
+  const limit = RESULTS_LIMIT + 1;
   const soundOf = sound?.kind === "audio" ? sound.id : null;
   const wav = sound?.kind === "file" ? sound.example : null;
   return queryOptions({
     queryKey: [
       "v1",
       "search",
-      { q, match, source, limit, ...(sound && { sound: soundOf ?? `file:${wav!.id}` }) },
+      {
+        q,
+        match,
+        source,
+        limit,
+        ...(sound && { sound: soundOf ?? `file:${wav!.id}` }),
+        ...(excludeId && { exclude: excludeId }),
+      },
     ],
     queryFn: ({ signal }) =>
-      searchAudios({ q, match, source, limit, soundOf, wav: wav?.wav ?? null, signal }),
+      searchAudios({ q, match, source, limit, soundOf, wav: wav?.wav ?? null, exclude: excludeId, signal }),
     // Keep the previous results on screen while the next query loads.
     placeholderData: keepPreviousData,
-    select: excludeId
-      ? (response: AudioSearchResponseV1) =>
-          cutToLimit({ ...response, data: response.data.filter((hit) => hit.id !== excludeId) })
-      : cutToLimit,
+    select: cutToLimit,
   });
 };
 

@@ -1,0 +1,2005 @@
+{
+  "source": "http://storage.googleapis.com/us_audioset/youtube_corpus/v1/csv/unbalanced_train_segments.csv",
+  "license": "AudioSet labels, CC BY 4.0, Google",
+  "clips": 426,
+  "missing": [],
+  "labels": {
+    "audiocaps-rqfQRErjfk8_170": [
+      "Applause"
+    ],
+    "audiocaps-rqu8iB22I_Y_5": [
+      "Accelerating, revving, vroom",
+      "Vehicle",
+      "Speech",
+      "Car"
+    ],
+    "audiocaps-rwT__ERCUno_90": [
+      "Motorcycle",
+      "Idling",
+      "Vehicle",
+      "Speech"
+    ],
+    "audiocaps-rwb6PSAee5Y_60": [
+      "Toilet flush"
+    ],
+    "audiocaps-rwtmaKiCcQU_30": [
+      "Spray",
+      "Speech"
+    ],
+    "audiocaps-ryFDPxgDOGc_570": [
+      "Insect",
+      "Speech",
+      "Outside, rural or natural"
+    ],
+    "audiocaps-s-T9OVOiMLo_330": [
+      "Bee, wasp, etc.",
+      "Insect",
+      "Fly, housefly"
+    ],
+    "audiocaps-s3cT_DAj31g_80": [
+      "Steam",
+      "Hiss"
+    ],
+    "audiocaps-s4Uz1Ffgo04_100": [
+      "Motor vehicle (road)",
+      "Motorcycle",
+      "Vehicle",
+      "Speech"
+    ],
+    "audiocaps-s4tUs779vBA_160": [
+      "Frog"
+    ],
+    "audiocaps-s59PfAghdkM_0": [
+      "Horse",
+      "Neigh, whinny",
+      "Speech",
+      "Animal"
+    ],
+    "audiocaps-s6DESzUTGjY_16": [
+      "Gurgling"
+    ],
+    "audiocaps-s7knHCFW82w_30": [
+      "Train",
+      "Vehicle",
+      "Vehicle horn, car horn, honking",
+      "Outside, urban or manmade"
+    ],
+    "audiocaps-sC_i_y7QS1U_300": [
+      "Motorcycle",
+      "Vehicle",
+      "Speech"
+    ],
+    "audiocaps-sCeWURVHfOM_30": [
+      "Tick-tock"
+    ],
+    "audiocaps-sDSppXIlJrs_27": [
+      "Boat, Water vehicle",
+      "Wind",
+      "Rowboat, canoe, kayak",
+      "Wind noise (microphone)"
+    ],
+    "audiocaps-sEprKHm8Sj8_90": [
+      "Skidding",
+      "Vehicle",
+      "Tire squeal",
+      "Race car, auto racing"
+    ],
+    "audiocaps-sG7TyPnFDR0_180": [
+      "Smoke detector, smoke alarm",
+      "Beep, bleep",
+      "Speech",
+      "Inside, small room"
+    ],
+    "audiocaps-sGgBtiZY0U8_30": [
+      "Boat, Water vehicle",
+      "Motorboat, speedboat",
+      "Vehicle",
+      "Speech"
+    ],
+    "audiocaps-sHbXC6na9hg_0": [
+      "Engine",
+      "Speech",
+      "Outside, rural or natural"
+    ],
+    "audiocaps-sIXTftIuUgw_90": [
+      "Whistling"
+    ],
+    "audiocaps-sK4u5T8hW78_30": [
+      "Speech",
+      "Car",
+      "Car passing by"
+    ],
+    "audiocaps-sLUnaPT5gM8_0": [
+      "Laughter",
+      "Baby laughter"
+    ],
+    "audiocaps-sLkeqCDJIyw_120": [
+      "Snoring"
+    ],
+    "audiocaps-sNB8zxXneIM_20": [
+      "Bird",
+      "Duck",
+      "Speech"
+    ],
+    "audiocaps-sOa7g-44Dag_30": [
+      "Spray",
+      "Speech"
+    ],
+    "audiocaps-sQGXqGcwOTc_3": [
+      "Dishes, pots, and pans"
+    ],
+    "audiocaps-sQwlkXjQabo_10": [
+      "Spray"
+    ],
+    "audiocaps-sSMl2vc3e_k_20": [
+      "Snoring"
+    ],
+    "audiocaps-sShpyu2l4YQ_0": [
+      "Bark",
+      "Domestic animals, pets",
+      "Dog",
+      "Animal",
+      "Whimper (dog)"
+    ],
+    "audiocaps-sTpirNYo8vQ_30": [
+      "Bus",
+      "Vehicle",
+      "Speech"
+    ],
+    "audiocaps-sU53zg9Jp7s_380": [
+      "Bird",
+      "Bird vocalization, bird call, bird song",
+      "Chirp, tweet"
+    ],
+    "audiocaps-sUVVjE3Ucp8_0": [
+      "Bell"
+    ],
+    "audiocaps-sW_ZzX_uWYY_420": [
+      "Speech",
+      "Sewing machine"
+    ],
+    "audiocaps-sYITalLZjj4_30": [
+      "Stream",
+      "Animal"
+    ],
+    "audiocaps-sZPuqDgX2V0_30": [
+      "Motorcycle",
+      "Vehicle",
+      "Speech"
+    ],
+    "audiocaps-sZuuj08Gr_I_150": [
+      "Dishes, pots, and pans",
+      "Speech",
+      "Inside, small room"
+    ],
+    "audiocaps-sZvwOuuPGP0_50": [
+      "Truck",
+      "Vehicle",
+      "Outside, rural or natural"
+    ],
+    "audiocaps-s_apQIQUhFc_280": [
+      "Trickle, dribble",
+      "Speech"
+    ],
+    "audiocaps-sa6TLVbooCc_240": [
+      "Laughter",
+      "Speech"
+    ],
+    "audiocaps-scYRUkrFLiQ_30": [
+      "Whistling"
+    ],
+    "audiocaps-sd7x_Vssqlw_50": [
+      "Motor vehicle (road)",
+      "Vehicle",
+      "Tire squeal",
+      "Car",
+      "Race car, auto racing"
+    ],
+    "audiocaps-sd_XV-ylviw_190": [
+      "Toilet flush",
+      "Water"
+    ],
+    "audiocaps-sdv_I1mHAsc_20": [
+      "Horse",
+      "Speech",
+      "Animal"
+    ],
+    "audiocaps-se87d6yxEOA_10": [
+      "Steam whistle",
+      "Steam",
+      "Hiss"
+    ],
+    "audiocaps-sfAvvZwdLCY_20": [
+      "Toilet flush"
+    ],
+    "audiocaps-sfk9D8cQEAg_70": [
+      "Door"
+    ],
+    "audiocaps-sgAjFcKriHk_60": [
+      "Aircraft engine",
+      "Vehicle",
+      "Fixed-wing aircraft, airplane",
+      "Aircraft"
+    ],
+    "audiocaps-shmR4OZtzqA_30": [
+      "Bus",
+      "Vehicle",
+      "Speech"
+    ],
+    "audiocaps-siJFXfGWgDk_50": [
+      "Bee, wasp, etc.",
+      "Insect",
+      "Fly, housefly"
+    ],
+    "audiocaps-sjlVMgdGSK0_30": [
+      "Idling",
+      "Vehicle",
+      "Car",
+      "Race car, auto racing",
+      "Outside, urban or manmade"
+    ],
+    "audiocaps-sk3WTKnlJ-U_30": [
+      "Motorboat, speedboat",
+      "Vehicle",
+      "Speech"
+    ],
+    "audiocaps-skd2PphS6oI_190": [
+      "Telephone",
+      "Telephone bell ringing"
+    ],
+    "audiocaps-sm74QGpHDXg_20": [
+      "Typing",
+      "Speech"
+    ],
+    "audiocaps-smDKStoHBJo_0": [
+      "Speech",
+      "Baby cry, infant cry"
+    ],
+    "audiocaps-smGI3C1N_Zc_30": [
+      "Toilet flush"
+    ],
+    "audiocaps-snFy48Lv3r8_30": [
+      "Boat, Water vehicle",
+      "Motorboat, speedboat",
+      "Vehicle"
+    ],
+    "audiocaps-sncRqQ67iJU_460": [
+      "Snoring"
+    ],
+    "audiocaps-soTOh3zYJfY_40": [
+      "Skidding",
+      "Vehicle",
+      "Tire squeal",
+      "Race car, auto racing"
+    ],
+    "audiocaps-sofxkNWaP0s_30": [
+      "Aircraft engine",
+      "Vehicle",
+      "Speech",
+      "Fixed-wing aircraft, airplane",
+      "Aircraft",
+      "Outside, urban or manmade"
+    ],
+    "audiocaps-spJCm8tD9Zo_90": [
+      "Snoring"
+    ],
+    "audiocaps-spYNpeN7rPY_1": [
+      "Tick-tock",
+      "Speech"
+    ],
+    "audiocaps-sppL1JLyvXQ_30": [
+      "Bus",
+      "Vehicle",
+      "Speech"
+    ],
+    "audiocaps-sr1_Gfm0syI_140": [
+      "Horse",
+      "Television",
+      "Animal"
+    ],
+    "audiocaps-sxIvBMSavMQ_210": [
+      "Bee, wasp, etc.",
+      "Animal"
+    ],
+    "audiocaps-sxYkFKFIZD0_20": [
+      "Vehicle",
+      "Speech",
+      "Tire squeal",
+      "Car"
+    ],
+    "audiocaps-syyyCQcHSfQ_60": [
+      "Snoring"
+    ],
+    "audiocaps-t25U-v4k4ts_40": [
+      "Bee, wasp, etc.",
+      "Insect",
+      "Fly, housefly"
+    ],
+    "audiocaps-t4Azt5G_n9I_130": [
+      "Drill",
+      "Tools",
+      "Power tool"
+    ],
+    "audiocaps-t4WCFbE0A50_30": [
+      "Snake",
+      "Hiss"
+    ],
+    "audiocaps-t5ZbXbniOWk_30": [
+      "Helicopter"
+    ],
+    "audiocaps-t69a8aRKhmc_30": [
+      "Speech",
+      "Pigeon, dove",
+      "Animal",
+      "Outside, rural or natural"
+    ],
+    "audiocaps-t8CV69hcvF0_210": [
+      "Sneeze",
+      "Speech"
+    ],
+    "audiocaps-t8tv5YRMJUg_0": [
+      "Snoring"
+    ],
+    "audiocaps-t97k0cejSQE_250": [
+      "Bee, wasp, etc.",
+      "Insect"
+    ],
+    "audiocaps-tB7hWb9gTuQ_30": [
+      "Trickle, dribble"
+    ],
+    "audiocaps-tDVADusiIoc_60": [
+      "Boat, Water vehicle",
+      "Waves, surf",
+      "Wind",
+      "Ocean",
+      "Sailboat, sailing ship",
+      "Wind noise (microphone)"
+    ],
+    "audiocaps-tDlfY3nmx1A_160": [
+      "Applause",
+      "Speech"
+    ],
+    "audiocaps-tDlysoZiA1I_0": [
+      "Domestic animals, pets",
+      "Chirp, tweet",
+      "Dog",
+      "Animal",
+      "Inside, large room or hall"
+    ],
+    "audiocaps-tEE3MpBt1sg_50": [
+      "Drill",
+      "Speech"
+    ],
+    "audiocaps-tFCUUGdREgA_70": [
+      "Horse",
+      "Speech",
+      "Animal"
+    ],
+    "audiocaps-tG_cFnX0GHI_0": [
+      "Telephone",
+      "Speech"
+    ],
+    "audiocaps-tH-q8LXgHEc_70": [
+      "Bird",
+      "Domestic animals, pets",
+      "Pigeon, dove"
+    ],
+    "audiocaps-tH17JPjDPnc_260": [
+      "Goat",
+      "Sheep",
+      "Livestock, farm animals, working animals",
+      "Animal"
+    ],
+    "audiocaps-tHyNqRyK34A_24": [
+      "Bus",
+      "Vehicle",
+      "Speech"
+    ],
+    "audiocaps-tIY7qOV3rEM_0": [
+      "Canidae, dogs, wolves",
+      "Bark",
+      "Domestic animals, pets",
+      "Yip",
+      "Dog",
+      "Animal",
+      "Outside, rural or natural",
+      "Whimper (dog)"
+    ],
+    "audiocaps-tIk3enR8Yy4_30": [
+      "Ocean",
+      "Gurgling",
+      "Speech"
+    ],
+    "audiocaps-tK4VlLsNxak_120": [
+      "Telephone",
+      "Speech"
+    ],
+    "audiocaps-tMJne1a4AFI_0": [
+      "Bee, wasp, etc."
+    ],
+    "audiocaps-tOS_WIURC-4_0": [
+      "Motorcycle",
+      "Idling",
+      "Vehicle"
+    ],
+    "audiocaps-tO_j4tdLRaA_70": [
+      "Laughter",
+      "Speech",
+      "Baby laughter"
+    ],
+    "audiocaps-tPJvjq9QePY_40": [
+      "Goat",
+      "Sheep",
+      "Speech",
+      "Animal"
+    ],
+    "audiocaps-tQWGZLItBXk_170": [
+      "Whoosh, swoosh, swish"
+    ],
+    "audiocaps-tRJVUSdMjQI_30": [
+      "Laughter",
+      "Speech",
+      "Inside, small room"
+    ],
+    "audiocaps-tTKJR_oYdhw_11": [
+      "Oink"
+    ],
+    "audiocaps-tZGN5a7ybxo_60": [
+      "Railroad car, train wagon",
+      "Train horn",
+      "Rail transport",
+      "Train"
+    ],
+    "audiocaps-tbLjCaI0-Lo_80": [
+      "Bird",
+      "Whistling",
+      "Bird vocalization, bird call, bird song",
+      "Chirp, tweet"
+    ],
+    "audiocaps-tc7UjDIyobI_10": [
+      "Bird",
+      "Bird vocalization, bird call, bird song",
+      "Chirp, tweet"
+    ],
+    "audiocaps-tcd9QCdjTI0_40": [
+      "Rain",
+      "Thunderstorm",
+      "Thunder"
+    ],
+    "audiocaps-tdWhHV3X25Q_60": [
+      "Applause",
+      "Speech"
+    ],
+    "audiocaps-tezvROoo4bs_40": [
+      "Vehicle",
+      "Speech",
+      "Car",
+      "Race car, auto racing",
+      "Outside, urban or manmade"
+    ],
+    "audiocaps-tgbONvsP47Y_0": [
+      "Motor vehicle (road)",
+      "Truck",
+      "Vehicle",
+      "Traffic noise, roadway noise"
+    ],
+    "audiocaps-ti_DFTC-5vU_30": [
+      "Quack",
+      "Honk",
+      "Duck",
+      "Speech",
+      "Livestock, farm animals, working animals",
+      "Animal"
+    ],
+    "audiocaps-tjmoSi330GM_23": [
+      "Boat, Water vehicle",
+      "Motorboat, speedboat",
+      "Vehicle"
+    ],
+    "audiocaps-tqQp8lSf-V4_0": [
+      "Vibration",
+      "Vehicle"
+    ],
+    "audiocaps-tqR406bGi_E_40": [
+      "Toilet flush",
+      "Water"
+    ],
+    "audiocaps-ttUaPa1mkgU_230": [
+      "Sewing machine"
+    ],
+    "audiocaps-tvP4E1r7yk8_120": [
+      "Railroad car, train wagon",
+      "Train horn",
+      "Rail transport",
+      "Train"
+    ],
+    "audiocaps-tw76HGONaKg_570": [
+      "Typing"
+    ],
+    "audiocaps-u--KhUW8l1Y_0": [
+      "Fire engine, fire truck (siren)",
+      "Truck",
+      "Vehicle"
+    ],
+    "audiocaps-u-6osTkkOfY_80": [
+      "Steam",
+      "Hiss"
+    ],
+    "audiocaps-u0T_rcHhkPQ_20": [
+      "Vehicle",
+      "Car",
+      "Race car, auto racing"
+    ],
+    "audiocaps-u21-Z5gJCB8_30": [
+      "Speech",
+      "Frying (food)"
+    ],
+    "audiocaps-u2f5NpsoHBg_30": [
+      "Applause",
+      "Speech"
+    ],
+    "audiocaps-u5RmF3c3_Aw_60": [
+      "Vehicle",
+      "Tire squeal",
+      "Car",
+      "Race car, auto racing"
+    ],
+    "audiocaps-u6BnG6YZqJ4_0": [
+      "Whistling"
+    ],
+    "audiocaps-u6jIvCtKarQ_70": [
+      "Cutlery, silverware",
+      "Dishes, pots, and pans"
+    ],
+    "audiocaps-u7C-_AEBQ_M_30": [
+      "Tick-tock",
+      "Tick"
+    ],
+    "audiocaps-u9A6VZQCZpU_30": [
+      "Boat, Water vehicle",
+      "Motorboat, speedboat",
+      "Vehicle",
+      "Speech"
+    ],
+    "audiocaps-uC9dtII1KDI_150": [
+      "Horse",
+      "Speech",
+      "Livestock, farm animals, working animals",
+      "Animal"
+    ],
+    "audiocaps-uCuo8zAkTvE_90": [
+      "Rain",
+      "Rain on surface"
+    ],
+    "audiocaps-uEU-Hg5MTN8_27": [
+      "Speech",
+      "Oink"
+    ],
+    "audiocaps-uFoga8sHpiw_90": [
+      "Whistling"
+    ],
+    "audiocaps-uGS7O46tlSo_70": [
+      "Bee, wasp, etc.",
+      "Insect",
+      "Fly, housefly"
+    ],
+    "audiocaps-uJV8NDaHqqk_100": [
+      "Bee, wasp, etc.",
+      "Insect",
+      "Fly, housefly"
+    ],
+    "audiocaps-uJe1Gvp-MeM_40": [
+      "Bird",
+      "Bird vocalization, bird call, bird song",
+      "Chirp, tweet"
+    ],
+    "audiocaps-uK5doE8g_nY_80": [
+      "Vehicle",
+      "Helicopter",
+      "Aircraft"
+    ],
+    "audiocaps-uKCSGgof8gI_12": [
+      "Fire engine, fire truck (siren)",
+      "Truck",
+      "Vehicle",
+      "Heavy engine (low frequency)"
+    ],
+    "audiocaps-uMT_TDZ2mb4_30": [
+      "Vehicle",
+      "Speech",
+      "Aircraft",
+      "Outside, urban or manmade"
+    ],
+    "audiocaps-uOJJan5RRGo_120": [
+      "Speech",
+      "Child speech, kid speaking",
+      "Inside, small room"
+    ],
+    "audiocaps-uOpoD0gGXcs_120": [
+      "Bird vocalization, bird call, bird song",
+      "Sheep",
+      "Speech",
+      "Animal"
+    ],
+    "audiocaps-uP_Dn2BFTHk_140": [
+      "Laughter",
+      "Speech"
+    ],
+    "audiocaps-uRExseg-0XI_210": [
+      "Trickle, dribble",
+      "Speech",
+      "Outside, rural or natural"
+    ],
+    "audiocaps-uRlbY6_aoBU_0": [
+      "Sneeze"
+    ],
+    "audiocaps-uWAAAL4CIoc_0": [
+      "Domestic animals, pets",
+      "Speech",
+      "Whimper (dog)"
+    ],
+    "audiocaps-uWCKXYVzJt0_30": [
+      "Tick-tock",
+      "Tick"
+    ],
+    "audiocaps-uWPRNLnpy7Y_10": [
+      "Accelerating, revving, vroom",
+      "Vehicle",
+      "Tire squeal",
+      "Car",
+      "Race car, auto racing"
+    ],
+    "audiocaps-uXxVebHsGZ8_30": [
+      "Tick-tock",
+      "Speech"
+    ],
+    "audiocaps-uYT5gxnyMWM_50": [
+      "Spray",
+      "Speech"
+    ],
+    "audiocaps-uZesmtKZGSw_250": [
+      "Vehicle",
+      "Speech",
+      "Car",
+      "Race car, auto racing"
+    ],
+    "audiocaps-ucQikcv96gM_150": [
+      "Bird",
+      "Duck"
+    ],
+    "audiocaps-ueri5ZFoY7w_0": [
+      "Motor vehicle (road)",
+      "Bus",
+      "Vehicle"
+    ],
+    "audiocaps-ugHJF0hfYkg_10": [
+      "Propeller, airscrew",
+      "Vehicle",
+      "Helicopter"
+    ],
+    "audiocaps-uiItxDsDMFI_30": [
+      "Sawing",
+      "Wood"
+    ],
+    "audiocaps-uiNuH51lzVY_130": [
+      "Speech",
+      "Stream"
+    ],
+    "audiocaps-uiS58TNyUiw_430": [
+      "Bird",
+      "Speech",
+      "Pigeon, dove"
+    ],
+    "audiocaps-ujMt0-D-x2k_0": [
+      "Snoring"
+    ],
+    "audiocaps-ujjK7WUHxss_30": [
+      "Sheep",
+      "Bleat",
+      "Speech"
+    ],
+    "audiocaps-ukg5L09Wpvo_150": [
+      "Railroad car, train wagon",
+      "Train horn",
+      "Rail transport",
+      "Train",
+      "Clickety-clack"
+    ],
+    "audiocaps-ukxt9I7eMMg_30": [
+      "Speech",
+      "Frying (food)"
+    ],
+    "audiocaps-ul60S8TXDA8_60": [
+      "Beep, bleep"
+    ],
+    "audiocaps-uln8131faVs_30": [
+      "Boat, Water vehicle",
+      "Motorboat, speedboat",
+      "Vehicle",
+      "Speech"
+    ],
+    "audiocaps-un9VQ_lzgZM_5": [
+      "Foghorn",
+      "Vehicle horn, car horn, honking",
+      "Speech"
+    ],
+    "audiocaps-uoGVs9yUqY4_30": [
+      "Bird",
+      "Bird vocalization, bird call, bird song",
+      "Chirp, tweet"
+    ],
+    "audiocaps-uqFtmnhuqA8_30": [
+      "Tick-tock"
+    ],
+    "audiocaps-uqFvD_nXw8I_160": [
+      "Vehicle",
+      "Fixed-wing aircraft, airplane",
+      "Aircraft"
+    ],
+    "audiocaps-uyRfq-jKPpo_50": [
+      "Sink (filling or washing)",
+      "Water tap, faucet",
+      "Water"
+    ],
+    "audiocaps-uyznsufCKbA_170": [
+      "Drill",
+      "Tools",
+      "Power tool"
+    ],
+    "audiocaps-uzQnlJXBbOM_50": [
+      "Telephone",
+      "Speech"
+    ],
+    "audiocaps-v-HKXQkpsD8_30": [
+      "Fire engine, fire truck (siren)",
+      "Emergency vehicle",
+      "Siren"
+    ],
+    "audiocaps-v-g-j2uTByM_30": [
+      "Tick-tock",
+      "Tick"
+    ],
+    "audiocaps-v-wcQf4BDY0_120": [
+      "Dog",
+      "Animal",
+      "Whimper (dog)"
+    ],
+    "audiocaps-v0wPrLBI3hg_30": [
+      "Bird",
+      "Speech",
+      "Pigeon, dove",
+      "Inside, large room or hall"
+    ],
+    "audiocaps-v0x1odnXtP0_210": [
+      "Computer keyboard",
+      "Typing"
+    ],
+    "audiocaps-v25l1jef3JY_0": [
+      "Bee, wasp, etc.",
+      "Insect",
+      "Fly, housefly"
+    ],
+    "audiocaps-v3EwremxU2w_70": [
+      "Domestic animals, pets",
+      "Bow-wow",
+      "Dog",
+      "Animal"
+    ],
+    "audiocaps-v5P-ThUCINM_400": [
+      "Bee, wasp, etc.",
+      "Insect",
+      "Fly, housefly"
+    ],
+    "audiocaps-v5cSxLaHADY_0": [
+      "Crumpling, crinkling"
+    ],
+    "audiocaps-v7Pz4dWmggg_30": [
+      "Speech",
+      "Baby cry, infant cry"
+    ],
+    "audiocaps-v7jJ_S8aAyA_10": [
+      "Motorcycle",
+      "Vehicle",
+      "Outside, rural or natural"
+    ],
+    "audiocaps-v8bbhO8NvPY_30": [
+      "Tick-tock",
+      "Tick"
+    ],
+    "audiocaps-v8vMLTp5Dww_210": [
+      "Motor vehicle (road)",
+      "Rain",
+      "Vehicle",
+      "Car"
+    ],
+    "audiocaps-vBHyYJ8p_L0_2": [
+      "Door",
+      "Vehicle"
+    ],
+    "audiocaps-vBeI4j_kJro_16": [
+      "Speech",
+      "Baby cry, infant cry"
+    ],
+    "audiocaps-vBslzh7saPw_90": [
+      "Motor vehicle (road)",
+      "Jet engine",
+      "Vehicle",
+      "Car passing by"
+    ],
+    "audiocaps-vD6lYD1l0BY_330": [
+      "Steam",
+      "Hiss"
+    ],
+    "audiocaps-vGj1XLJvNrw_0": [
+      "Siren",
+      "Vehicle",
+      "Car"
+    ],
+    "audiocaps-vH4z5OI5aNY_30": [
+      "Accelerating, revving, vroom",
+      "Vehicle",
+      "Speech",
+      "Car"
+    ],
+    "audiocaps-vHZQht-r5fg_10": [
+      "Snoring"
+    ],
+    "audiocaps-vJ7JPEFhyLA_16": [
+      "Boat, Water vehicle",
+      "Wind",
+      "Rowboat, canoe, kayak",
+      "Ocean",
+      "Wind noise (microphone)"
+    ],
+    "audiocaps-vJrjSeP17yE_40": [
+      "Snoring"
+    ],
+    "audiocaps-vJvryTwuAV8_16": [
+      "Burst, pop",
+      "Speech"
+    ],
+    "audiocaps-vK93VuO0yNc_30": [
+      "Bus",
+      "Vehicle",
+      "Speech"
+    ],
+    "audiocaps-vKrYfzleLB8_110": [
+      "Gunshot, gunfire"
+    ],
+    "audiocaps-vMf1dLD6Sng_6": [
+      "Frog"
+    ],
+    "audiocaps-vSeGhaZt-aI_50": [
+      "Sink (filling or washing)",
+      "Water tap, faucet",
+      "Drip",
+      "Speech",
+      "Inside, small room"
+    ],
+    "audiocaps-vVNMuFixN_A_90": [
+      "Waves, surf",
+      "Wind",
+      "Ocean",
+      "Wind noise (microphone)"
+    ],
+    "audiocaps-vVhthZ45k3Y_30": [
+      "Cat",
+      "Domestic animals, pets",
+      "Meow",
+      "Speech",
+      "Animal"
+    ],
+    "audiocaps-vW4x7S1VfQc_150": [
+      "Frying (food)"
+    ],
+    "audiocaps-vXlk0lIQBFo_470": [
+      "Horse",
+      "Speech",
+      "Livestock, farm animals, working animals",
+      "Animal"
+    ],
+    "audiocaps-vYkA3cfXp5Q_30": [
+      "Accelerating, revving, vroom",
+      "Vehicle",
+      "Car"
+    ],
+    "audiocaps-vZAqdHZ81yA_180": [
+      "Motorcycle",
+      "Idling",
+      "Vehicle"
+    ],
+    "audiocaps-vZAw4apG0Es_30": [
+      "Tick-tock",
+      "Tick",
+      "Speech"
+    ],
+    "audiocaps-vZInq2uXuEo_510": [
+      "Tools",
+      "Wood",
+      "Speech"
+    ],
+    "audiocaps-v_OQfEIq_PY_70": [
+      "Drill",
+      "Steam"
+    ],
+    "audiocaps-vaX_J_G3638_130": [
+      "Horse",
+      "Speech",
+      "Animal"
+    ],
+    "audiocaps-vb1fPSD_I4c_30": [
+      "Gurgling",
+      "Speech"
+    ],
+    "audiocaps-vbZ-0lGPneg_30": [
+      "Quack",
+      "Duck",
+      "Speech"
+    ],
+    "audiocaps-vbpKkWvfOu4_560": [
+      "Conversation",
+      "Female speech, woman speaking",
+      "Speech"
+    ],
+    "audiocaps-vbr9mHKc8WM_40": [
+      "Engine",
+      "Vehicle",
+      "Outside, urban or manmade"
+    ],
+    "audiocaps-vcTWN0HCyoY_210": [
+      "Rain",
+      "Thunderstorm",
+      "Rain on surface"
+    ],
+    "audiocaps-vcmWS_mvti8_30": [
+      "Gunshot, gunfire",
+      "Artillery fire"
+    ],
+    "audiocaps-vddP56-ogds_30": [
+      "Water tap, faucet",
+      "Speech"
+    ],
+    "audiocaps-vdoxuJn9lTc_40": [
+      "Burping, eructation",
+      "Speech",
+      "Child speech, kid speaking"
+    ],
+    "audiocaps-vf44CgrjT0A_20": [
+      "Burping, eructation"
+    ],
+    "audiocaps-vf9xf3vMsGM_540": [
+      "Sink (filling or washing)",
+      "Water tap, faucet",
+      "Water",
+      "Speech"
+    ],
+    "audiocaps-vfY_TJq7n_U_130": [
+      "Duck",
+      "Speech",
+      "Animal"
+    ],
+    "audiocaps-vfrWmHgjkjM_10": [
+      "Bee, wasp, etc.",
+      "Insect",
+      "Fly, housefly"
+    ],
+    "audiocaps-vgi3GPTdFt4_50": [
+      "Bird",
+      "Bird vocalization, bird call, bird song",
+      "Chirp, tweet"
+    ],
+    "audiocaps-vh30P49Po6s_30": [
+      "Quack",
+      "Duck"
+    ],
+    "audiocaps-vhIcOufIwo4_30": [
+      "Bird",
+      "Speech",
+      "Pigeon, dove",
+      "Inside, small room"
+    ],
+    "audiocaps-vhJWZhe_qaE_0": [
+      "Toilet flush"
+    ],
+    "audiocaps-vimzuGQvdcU_30": [
+      "Gurgling",
+      "Speech"
+    ],
+    "audiocaps-viuTg1M-dqg_30": [
+      "Water tap, faucet",
+      "Water"
+    ],
+    "audiocaps-vlJS7LN2XyM_30": [
+      "Tick-tock"
+    ],
+    "audiocaps-vlS6YMeWAPo_40": [
+      "Goat",
+      "Sheep",
+      "Livestock, farm animals, working animals",
+      "Animal"
+    ],
+    "audiocaps-vmrxwuAMb2I_40": [
+      "Domestic animals, pets",
+      "Yip",
+      "Dog",
+      "Animal",
+      "Whimper (dog)"
+    ],
+    "audiocaps-vms5XGTDVQc_220": [
+      "Crumpling, crinkling",
+      "Inside, small room"
+    ],
+    "audiocaps-voJh2gJxXhA_50": [
+      "Frog"
+    ],
+    "audiocaps-vofpvUo6NAw_220": [
+      "Crumpling, crinkling",
+      "Inside, small room"
+    ],
+    "audiocaps-vqZuVbG6-HI_130": [
+      "Propeller, airscrew",
+      "Vehicle",
+      "Helicopter"
+    ],
+    "audiocaps-vr8ZXjEBhMQ_150": [
+      "Motorcycle",
+      "Vehicle",
+      "Car"
+    ],
+    "audiocaps-vs65y4qmyBE_340": [
+      "Fire",
+      "Wind",
+      "Wind noise (microphone)"
+    ],
+    "audiocaps-vuUVPzd2FXw_160": [
+      "Dishes, pots, and pans",
+      "Speech"
+    ],
+    "audiocaps-vvdb2UyJQrs_20": [
+      "Laughter",
+      "Speech"
+    ],
+    "audiocaps-vveS8HT7Uog_100": [
+      "Filing (rasp)",
+      "Rub",
+      "Wood"
+    ],
+    "audiocaps-vwqaIHKxLvM_20": [
+      "Waves, surf",
+      "Wind",
+      "Ocean",
+      "Wind noise (microphone)"
+    ],
+    "audiocaps-vx1gfpZnjAM_30": [
+      "Bird",
+      "Bird vocalization, bird call, bird song",
+      "Chirp, tweet"
+    ],
+    "audiocaps-vzceMbkl_Wc_180": [
+      "Sink (filling or washing)",
+      "Water tap, faucet",
+      "Water"
+    ],
+    "audiocaps-vzxHnu-SFEw_80": [
+      "Rub"
+    ],
+    "audiocaps-w-4gHptFNuU_21": [
+      "Motorcycle",
+      "Vehicle",
+      "Air brake"
+    ],
+    "audiocaps-w0xsN8_X18Y_30": [
+      "Rain",
+      "Rain on surface"
+    ],
+    "audiocaps-w1ir-sZ3Im8_90": [
+      "Horse",
+      "Splash, splatter",
+      "Animal"
+    ],
+    "audiocaps-w1mlz3Pe4fU_300": [
+      "Bird",
+      "Bird vocalization, bird call, bird song",
+      "Chirp, tweet"
+    ],
+    "audiocaps-w2JXXIAdUdg_10": [
+      "Snoring",
+      "Speech"
+    ],
+    "audiocaps-w2M4i1mklOA_30": [
+      "Tick-tock",
+      "Tick"
+    ],
+    "audiocaps-w2bYrCVLT60_120": [
+      "Bird",
+      "Duck",
+      "Speech"
+    ],
+    "audiocaps-w2htir_si7g_100": [
+      "Whistling"
+    ],
+    "audiocaps-w34HjHr6gAY_30": [
+      "Beep, bleep",
+      "Speech"
+    ],
+    "audiocaps-w5W_5Kqtc8E_100": [
+      "Boat, Water vehicle",
+      "Motorboat, speedboat",
+      "Vehicle"
+    ],
+    "audiocaps-w6RTHR6AeAg_40": [
+      "Whistling",
+      "Owl"
+    ],
+    "audiocaps-w8hYTIDPWGI_270": [
+      "Domestic animals, pets",
+      "Yip",
+      "Speech",
+      "Dog",
+      "Animal",
+      "Whimper (dog)"
+    ],
+    "audiocaps-w8uLijTqtlU_70": [
+      "Boat, Water vehicle",
+      "Wind",
+      "Sailboat, sailing ship",
+      "Wind noise (microphone)"
+    ],
+    "audiocaps-w9ejUrlz1GM_460": [
+      "Speech",
+      "Crumpling, crinkling",
+      "Inside, small room"
+    ],
+    "audiocaps-w9lpbUn0hPc_30": [
+      "Spray",
+      "Speech"
+    ],
+    "audiocaps-wDVMhEdTiVw_30": [
+      "Trickle, dribble"
+    ],
+    "audiocaps-wEBlkGWVWwE_260": [
+      "Female speech, woman speaking",
+      "Speech",
+      "Child speech, kid speaking"
+    ],
+    "audiocaps-wGKgwOP3h30_30": [
+      "Bird",
+      "Pigeon, dove",
+      "Inside, small room"
+    ],
+    "audiocaps-wIJK3-5y0kA_30": [
+      "Baby cry, infant cry"
+    ],
+    "audiocaps-wIvYjuR3nrg_9": [
+      "Bird",
+      "Pigeon, dove",
+      "Outside, rural or natural"
+    ],
+    "audiocaps-wNZ5thZM7XU_20": [
+      "Toilet flush"
+    ],
+    "audiocaps-wP8ZKrlx3oA_40": [
+      "Rain",
+      "Rain on surface"
+    ],
+    "audiocaps-wPz6QRAkEb4_60": [
+      "Bird",
+      "Bird vocalization, bird call, bird song",
+      "Chirp, tweet"
+    ],
+    "audiocaps-wRBHTgrbiwg_50": [
+      "Bee, wasp, etc.",
+      "Insect",
+      "Cricket",
+      "Fly, housefly"
+    ],
+    "audiocaps-wRV8yMk886E_0": [
+      "Spray",
+      "Speech"
+    ],
+    "audiocaps-wSV_hSdj0F0_10": [
+      "Vehicle",
+      "Vehicle horn, car horn, honking",
+      "Car",
+      "Outside, urban or manmade"
+    ],
+    "audiocaps-wTideSjRFS0_30": [
+      "Sizzle",
+      "Frying (food)"
+    ],
+    "audiocaps-wTjoRj1se3U_390": [
+      "Speech",
+      "Fixed-wing aircraft, airplane",
+      "Aircraft"
+    ],
+    "audiocaps-wUub94P1uq0_10": [
+      "Laughter"
+    ],
+    "audiocaps-wVRxa3BBHaQ_20": [
+      "Insect",
+      "Speech",
+      "Animal"
+    ],
+    "audiocaps-wWVxe57200I_100": [
+      "Bird",
+      "Bird vocalization, bird call, bird song",
+      "Chirp, tweet"
+    ],
+    "audiocaps-w_AAkbZToh8_0": [
+      "Burping, eructation",
+      "Speech"
+    ],
+    "audiocaps-wbHTKEJZyhc_20": [
+      "Speech",
+      "Stream"
+    ],
+    "audiocaps-wdXV3Pv0jiY_11": [
+      "Dishes, pots, and pans"
+    ],
+    "audiocaps-weDbePuc-Xc_40": [
+      "Croak",
+      "Frog"
+    ],
+    "audiocaps-wfHeoPDLMaM_30": [
+      "Quack",
+      "Duck",
+      "Animal"
+    ],
+    "audiocaps-wicG6b_Yyus_30": [
+      "Bus",
+      "Vehicle",
+      "Speech"
+    ],
+    "audiocaps-wjsXBsc7M40_10": [
+      "Spray",
+      "Speech"
+    ],
+    "audiocaps-wl44ppID9ds_30": [
+      "Gurgling"
+    ],
+    "audiocaps-wmTdukran8Y_410": [
+      "Speech",
+      "Sewing machine",
+      "Inside, small room"
+    ],
+    "audiocaps-wnNNcxAPwGQ_0": [
+      "Truck",
+      "Vehicle",
+      "Race car, auto racing"
+    ],
+    "audiocaps-wnpJndXuxLc_50": [
+      "Steam whistle",
+      "Steam",
+      "Hiss"
+    ],
+    "audiocaps-wob-3S4VjMs_140": [
+      "Computer keyboard",
+      "Typing"
+    ],
+    "audiocaps-wqADXCzngMw_340": [
+      "Bus",
+      "Vehicle",
+      "Speech"
+    ],
+    "audiocaps-wqN6IIHw3po_30": [
+      "Rain"
+    ],
+    "audiocaps-wqUmIEzuNz4_30": [
+      "Frog",
+      "Animal"
+    ],
+    "audiocaps-wqZ135_Ssz0_60": [
+      "Bird",
+      "Duck",
+      "Speech",
+      "Goose",
+      "Animal"
+    ],
+    "audiocaps-wqugJOvBkhY_40": [
+      "Crying, sobbing"
+    ],
+    "audiocaps-wsHBIgzs9Fs_50": [
+      "Motorcycle",
+      "Vehicle",
+      "Speech",
+      "Outside, rural or natural"
+    ],
+    "audiocaps-wtDqrBygTcU_30": [
+      "Boat, Water vehicle",
+      "Motorboat, speedboat",
+      "Vehicle",
+      "Speech"
+    ],
+    "audiocaps-wudZTNBtVqc_60": [
+      "Vehicle",
+      "Car",
+      "Outside, urban or manmade",
+      "Car passing by"
+    ],
+    "audiocaps-wulOEFdECWs_10": [
+      "Rain"
+    ],
+    "audiocaps-wvKpEYswXO0_150": [
+      "Sink (filling or washing)",
+      "Water tap, faucet",
+      "Water"
+    ],
+    "audiocaps-wvmLR1nQ1qs_50": [
+      "Railroad car, train wagon",
+      "Train horn",
+      "Rail transport",
+      "Train",
+      "Vehicle",
+      "Outside, urban or manmade"
+    ],
+    "audiocaps-wy1eKjR7KC0_30": [
+      "Emergency vehicle",
+      "Siren",
+      "Police car (siren)"
+    ],
+    "audiocaps-wyjQhK3XMFQ_180": [
+      "Trickle, dribble",
+      "Water"
+    ],
+    "audiocaps-wyllXV6PjKo_30": [
+      "Speech",
+      "Baby cry, infant cry"
+    ],
+    "audiocaps-wz7N8YRy74I_30": [
+      "Speech",
+      "Pigeon, dove",
+      "Outside, rural or natural"
+    ],
+    "audiocaps-wzXPRI7eXOM_50": [
+      "Vehicle",
+      "Fixed-wing aircraft, airplane",
+      "Aircraft"
+    ],
+    "audiocaps-wz_tCSUxOf8_130": [
+      "Applause"
+    ],
+    "audiocaps-x-PeY8Yb8M4_300": [
+      "Stream"
+    ],
+    "audiocaps-x-Yx0rqr1vY_30": [
+      "Croak",
+      "Frog"
+    ],
+    "audiocaps-x-gIWB__rIE_210": [
+      "Cutlery, silverware",
+      "Dishes, pots, and pans"
+    ],
+    "audiocaps-x4a9YGIw4ok_120": [
+      "Toilet flush",
+      "Water"
+    ],
+    "audiocaps-x5cuQjOdM3E_30": [
+      "Cat",
+      "Domestic animals, pets",
+      "Meow",
+      "Speech",
+      "Animal"
+    ],
+    "audiocaps-x5eIC7S0fbg_60": [
+      "Drill"
+    ],
+    "audiocaps-x6iCUDmRpKQ_38": [
+      "Applause"
+    ],
+    "audiocaps-x6ijhqRY38s_250": [
+      "Cutlery, silverware",
+      "Dishes, pots, and pans"
+    ],
+    "audiocaps-x9J_ovgqUcs_500": [
+      "Typing"
+    ],
+    "audiocaps-xBxDz0CFVn0_30": [
+      "Speech",
+      "Stream"
+    ],
+    "audiocaps-xC8kbrKJmco_0": [
+      "Goat",
+      "Speech",
+      "Livestock, farm animals, working animals",
+      "Animal"
+    ],
+    "audiocaps-xDsO5LiaaAY_90": [
+      "Helicopter",
+      "Outside, urban or manmade"
+    ],
+    "audiocaps-xERFUeZONz8_0": [
+      "Motor vehicle (road)",
+      "Ambulance (siren)",
+      "Siren",
+      "Vehicle"
+    ],
+    "audiocaps-xIS6JwaGxuk_10": [
+      "Bark",
+      "Bow-wow",
+      "Speech",
+      "Dog",
+      "Animal"
+    ],
+    "audiocaps-xJSVJj-v8EE_10": [
+      "Motorcycle",
+      "Vehicle",
+      "Inside, large room or hall"
+    ],
+    "audiocaps-xKB8O8LTs6s_70": [
+      "Gunshot, gunfire",
+      "Machine gun"
+    ],
+    "audiocaps-xM4joTqDVp4_160": [
+      "Steam",
+      "Hiss"
+    ],
+    "audiocaps-xMXvkIcaG0Y_30": [
+      "Accelerating, revving, vroom",
+      "Vehicle",
+      "Car",
+      "Heavy engine (low frequency)"
+    ],
+    "audiocaps-xNMovAf3o50_0": [
+      "Rain",
+      "Thunderstorm",
+      "Thunder",
+      "Rain on surface"
+    ],
+    "audiocaps-xO-Q2BlIIPU_30": [
+      "Tick-tock",
+      "Speech"
+    ],
+    "audiocaps-xOZfdgAgJ9o_40": [
+      "Crying, sobbing",
+      "Speech"
+    ],
+    "audiocaps-xPiVrZL4qek_10": [
+      "Toilet flush",
+      "Water"
+    ],
+    "audiocaps-xSKJGCItUWE_10": [
+      "Helicopter",
+      "Speech",
+      "Aircraft"
+    ],
+    "audiocaps-xSN_cBFt-PI_30": [
+      "Tick-tock",
+      "Tick"
+    ],
+    "audiocaps-xV7Mg1QucSc_14": [
+      "Tick-tock",
+      "Speech"
+    ],
+    "audiocaps-xVzetIIzS9c_30": [
+      "Ambulance (siren)",
+      "Emergency vehicle",
+      "Siren"
+    ],
+    "audiocaps-xX2OnECANVI_70": [
+      "Drill",
+      "Tools",
+      "Power tool"
+    ],
+    "audiocaps-xYoIXskAdKg_20": [
+      "Accelerating, revving, vroom",
+      "Vehicle",
+      "Car"
+    ],
+    "audiocaps-xZepNM9qcRA_30": [
+      "Accelerating, revving, vroom",
+      "Vehicle",
+      "Speech"
+    ],
+    "audiocaps-x_l2PIWyXaM_160": [
+      "Bird",
+      "Chirp, tweet",
+      "Speech"
+    ],
+    "audiocaps-xeOp_6mV1DY_60": [
+      "Bird",
+      "Honk",
+      "Duck",
+      "Speech"
+    ],
+    "audiocaps-xfaoyyzw2WU_180": [
+      "Aircraft engine",
+      "Vehicle",
+      "Speech",
+      "Aircraft",
+      "Outside, rural or natural"
+    ],
+    "audiocaps-xfudFO976zE_0": [
+      "Goat",
+      "Animal"
+    ],
+    "audiocaps-xhmRY9yhC7c_20": [
+      "Speech",
+      "Baby cry, infant cry"
+    ],
+    "audiocaps-xjhAnI2q6hM_6": [
+      "Motorboat, speedboat",
+      "Vehicle",
+      "Speech"
+    ],
+    "audiocaps-xjvTpk2Zpr8_70": [
+      "Aircraft engine",
+      "Vehicle",
+      "Fixed-wing aircraft, airplane",
+      "Aircraft"
+    ],
+    "audiocaps-xmdGaCbvhFc_140": [
+      "Water tap, faucet",
+      "Water"
+    ],
+    "audiocaps-xmiUIOhtZyQ_60": [
+      "Burping, eructation"
+    ],
+    "audiocaps-xtWeJ56-U-g_20": [
+      "Beep, bleep"
+    ],
+    "audiocaps-xvDdE3zNf8Y_120": [
+      "Speech",
+      "Crumpling, crinkling",
+      "Inside, small room"
+    ],
+    "audiocaps-xw5cmiqbaUg_160": [
+      "Crying, sobbing",
+      "Baby cry, infant cry"
+    ],
+    "audiocaps-xx3yKzrSOBI_40": [
+      "Motor vehicle (road)",
+      "Emergency vehicle",
+      "Siren",
+      "Police car (siren)",
+      "Speech",
+      "Outside, urban or manmade"
+    ],
+    "audiocaps-xyL9F5VrjkE_20": [
+      "Truck",
+      "Vehicle",
+      "Outside, rural or natural"
+    ],
+    "audiocaps-xyx6eNVEYRY_380": [
+      "Aircraft engine",
+      "Vehicle",
+      "Helicopter",
+      "Speech",
+      "Aircraft"
+    ],
+    "audiocaps-xzKKf9bKNUo_10": [
+      "Snoring"
+    ],
+    "audiocaps-y1saVTXsKwc_80": [
+      "Domestic animals, pets",
+      "Speech",
+      "Dog",
+      "Animal",
+      "Whimper (dog)"
+    ],
+    "audiocaps-y2ZBGpgbhHM_30": [
+      "Canidae, dogs, wolves",
+      "Bird vocalization, bird call, bird song",
+      "Domestic animals, pets",
+      "Chirp, tweet",
+      "Dog",
+      "Animal"
+    ],
+    "audiocaps-y2bVZ7rz-5M_280": [
+      "Ambulance (siren)",
+      "Fire engine, fire truck (siren)",
+      "Emergency vehicle",
+      "Siren"
+    ],
+    "audiocaps-y4MY9mp8-TA_30": [
+      "Vehicle",
+      "Helicopter"
+    ],
+    "audiocaps-y4NpJekTMT8_80": [
+      "Telephone"
+    ],
+    "audiocaps-y4tPJXBKDig_20": [
+      "Sneeze",
+      "Speech"
+    ],
+    "audiocaps-y5WII6cTH7k_40": [
+      "Vibration"
+    ],
+    "audiocaps-y636gklDioE_20": [
+      "Burping, eructation"
+    ],
+    "audiocaps-y682ml90jGw_11": [
+      "Beep, bleep"
+    ],
+    "audiocaps-y8WEcpOlT3I_40": [
+      "Speech",
+      "Sewing machine"
+    ],
+    "audiocaps-y8dSeubCN_I_4": [
+      "Accelerating, revving, vroom",
+      "Vehicle",
+      "Speech",
+      "Car",
+      "Engine starting"
+    ],
+    "audiocaps-yBksF4L5Ics_30": [
+      "Speech",
+      "Baby cry, infant cry"
+    ],
+    "audiocaps-yDoT73BWsdA_10": [
+      "Skidding",
+      "Vehicle",
+      "Tire squeal",
+      "Car",
+      "Race car, auto racing"
+    ],
+    "audiocaps-yFB25fqfU8I_300": [
+      "Waves, surf",
+      "Wind",
+      "Ocean",
+      "Wind noise (microphone)"
+    ],
+    "audiocaps-yHeVV-xeOxQ_130": [
+      "Goat",
+      "Speech",
+      "Animal"
+    ],
+    "audiocaps-yHtbLI6kxAc_30": [
+      "Bird",
+      "Speech",
+      "Pigeon, dove"
+    ],
+    "audiocaps-yI-KvObbDoY_260": [
+      "Rustling leaves"
+    ],
+    "audiocaps-yJ0T_ePmaOo_390": [
+      "Filing (rasp)",
+      "Rub",
+      "Wood"
+    ],
+    "audiocaps-yKKOHg5xlPE_20": [
+      "Door",
+      "Speech"
+    ],
+    "audiocaps-yLCORCnd35Q_0": [
+      "Vehicle",
+      "Fixed-wing aircraft, airplane",
+      "Aircraft"
+    ],
+    "audiocaps-yLy-WycbVVE_30": [
+      "Vehicle horn, car horn, honking",
+      "Speech",
+      "Outside, urban or manmade"
+    ],
+    "audiocaps-yNPcyWWmbUk_40": [
+      "Sawing",
+      "Rub",
+      "Wood"
+    ],
+    "audiocaps-yNtRmrn0io8_210": [
+      "Rain",
+      "Raindrop",
+      "Thunderstorm",
+      "Thunder"
+    ],
+    "audiocaps-yPUYU6t3rwo_370": [
+      "Bee, wasp, etc.",
+      "Insect"
+    ],
+    "audiocaps-yRcOezOVG_s_10": [
+      "Door",
+      "Vehicle",
+      "Car"
+    ],
+    "audiocaps-yRx9txMcBl0_40": [
+      "Tire squeal",
+      "Car",
+      "Race car, auto racing"
+    ],
+    "audiocaps-yT5WfYMRr-U_30": [
+      "Motorboat, speedboat",
+      "Vehicle",
+      "Speech"
+    ],
+    "audiocaps-yTMbYkZ-Vkc_0": [
+      "Vehicle",
+      "Car",
+      "Race car, auto racing"
+    ],
+    "audiocaps-yUsCyVRXMoY_20": [
+      "Drill",
+      "Tools"
+    ],
+    "audiocaps-yVPZ2MNWpms_0": [
+      "Vehicle",
+      "Fixed-wing aircraft, airplane",
+      "Aircraft"
+    ],
+    "audiocaps-yVumC9TGknc_30": [
+      "Tick-tock"
+    ],
+    "audiocaps-yW6FWLSLkx4_40": [
+      "Speech",
+      "Child speech, kid speaking",
+      "Inside, small room"
+    ],
+    "audiocaps-yXrw3GRMZag_40": [
+      "Toilet flush"
+    ],
+    "audiocaps-yYEVLuqEytU_40": [
+      "Goat",
+      "Domestic animals, pets",
+      "Speech",
+      "Livestock, farm animals, working animals",
+      "Animal"
+    ],
+    "audiocaps-yYJksgsxx5U_30": [
+      "Cutlery, silverware",
+      "Dishes, pots, and pans"
+    ],
+    "audiocaps-yZZFDWkYJYs_16": [
+      "Ambulance (siren)",
+      "Emergency vehicle",
+      "Siren",
+      "Police car (siren)"
+    ],
+    "audiocaps-yZmhM1HcsyE_4": [
+      "Boat, Water vehicle",
+      "Motorboat, speedboat",
+      "Vehicle"
+    ],
+    "audiocaps-yZp6xizR0yU_30": [
+      "Goat",
+      "Speech",
+      "Animal"
+    ],
+    "audiocaps-yZrFNS7GFBQ_30": [
+      "Bird",
+      "Pigeon, dove",
+      "Inside, small room"
+    ],
+    "audiocaps-yajyRTUQk3U_400": [
+      "Sizzle",
+      "Frying (food)"
+    ],
+    "audiocaps-ydc0oG9pC7k_0": [
+      "Rain",
+      "Thunderstorm",
+      "Thunder"
+    ],
+    "audiocaps-yeFvk9x0wWI_30": [
+      "Bird",
+      "Bird vocalization, bird call, bird song",
+      "Chirp, tweet"
+    ],
+    "audiocaps-yfdjbS0FjI0_24": [
+      "Train",
+      "Vehicle",
+      "Vehicle horn, car horn, honking",
+      "Outside, urban or manmade"
+    ],
+    "audiocaps-yhQ2Lg-7qDY_130": [
+      "Stir",
+      "Frying (food)"
+    ],
+    "audiocaps-yks4cLgIDMc_170": [
+      "Speech",
+      "Child speech, kid speaking",
+      "Inside, large room or hall"
+    ],
+    "audiocaps-ylpYOorfH4o_410": [
+      "Engine",
+      "Vehicle",
+      "Speech"
+    ],
+    "audiocaps-yswmmRZFItk_0": [
+      "Frog",
+      "Animal"
+    ],
+    "audiocaps-yvpR-9AaJyU_160": [
+      "Vehicle",
+      "Helicopter"
+    ],
+    "audiocaps-z4VCMzobZbI_100": [
+      "Sizzle"
+    ],
+    "audiocaps-z4uELRI6p08_40": [
+      "Bird",
+      "Laughter"
+    ],
+    "audiocaps-z5iUE5h0EPs_30": [
+      "Goat",
+      "Sheep",
+      "Speech",
+      "Livestock, farm animals, working animals",
+      "Animal"
+    ],
+    "audiocaps-z9-3K1PFMjw_30": [
+      "Telephone",
+      "Speech"
+    ],
+    "audiocaps-zALy31PjDl0_21": [
+      "Vehicle",
+      "Vehicle horn, car horn, honking",
+      "Speech",
+      "Outside, urban or manmade"
+    ],
+    "audiocaps-zAYW_RjbHHI_90": [
+      "Motor vehicle (road)",
+      "Vehicle",
+      "Car",
+      "Race car, auto racing"
+    ],
+    "audiocaps-zCrAfDfv6-A_30": [
+      "Whistling"
+    ],
+    "audiocaps-zF8yoL0rkbI_30": [
+      "Bus",
+      "Vehicle",
+      "Speech"
+    ],
+    "audiocaps-zF_jIWfSD-4_410": [
+      "Bus",
+      "Vehicle",
+      "Speech"
+    ],
+    "audiocaps-zO-LSSY92ZM_30": [
+      "Steam",
+      "Hiss"
+    ],
+    "audiocaps-zOZleIRqZm4_80": [
+      "Rustling leaves",
+      "Speech"
+    ],
+    "audiocaps-zPJVrNMPt0A_550": [
+      "Vibration",
+      "Speech",
+      "Inside, large room or hall"
+    ],
+    "audiocaps-zPKXXJn5r3U_30": [
+      "Rain",
+      "Thunderstorm",
+      "Thunder",
+      "Rain on surface"
+    ],
+    "audiocaps-zPX9o1uD_iI_40": [
+      "Railroad car, train wagon",
+      "Train horn",
+      "Rail transport",
+      "Train"
+    ],
+    "audiocaps-zPpG3RD8lSs_20": [
+      "Burst, pop"
+    ],
+    "audiocaps-zRNwZZQwDIU_60": [
+      "Frying (food)"
+    ],
+    "audiocaps-zTLVJCo4WEE_30": [
+      "Insect",
+      "Speech",
+      "Outside, rural or natural"
+    ],
+    "audiocaps-zU-oKUEckKo_60": [
+      "Railroad car, train wagon",
+      "Train horn",
+      "Rail transport",
+      "Train"
+    ],
+    "audiocaps-zVacuqSb4LI_30": [
+      "Railroad car, train wagon",
+      "Train horn",
+      "Rail transport",
+      "Steam whistle",
+      "Train"
+    ],
+    "audiocaps-zY3icUyMdh8_20": [
+      "Bus",
+      "Vehicle",
+      "Air brake"
+    ],
+    "audiocaps-zaIbETo-WtU_440": [
+      "Bee, wasp, etc.",
+      "Insect"
+    ],
+    "audiocaps-zcDwZ6W7E3E_180": [
+      "Motorcycle",
+      "Vehicle",
+      "Speech",
+      "Car"
+    ],
+    "audiocaps-zd93ITwIf_g_70": [
+      "Dishes, pots, and pans"
+    ],
+    "audiocaps-zdYdyF9-m8U_7": [
+      "Waves, surf",
+      "Wind",
+      "Ocean",
+      "Wind noise (microphone)"
+    ],
+    "audiocaps-zfvPRf3ch_Y_290": [
+      "Drill",
+      "Tools",
+      "Speech"
+    ],
+    "audiocaps-zg0X6BnhOLQ_410": [
+      "Frog"
+    ],
+    "audiocaps-zgUgkpk78xU_70": [
+      "Railroad car, train wagon",
+      "Train horn",
+      "Rail transport",
+      "Train"
+    ],
+    "audiocaps-zhx6hoYrHeI_160": [
+      "Vehicle",
+      "Tire squeal"
+    ],
+    "audiocaps-ziUT9IFTkjg_10": [
+      "Rustling leaves"
+    ],
+    "audiocaps-zjTG0gaGCUI_80": [
+      "Aircraft engine",
+      "Vehicle",
+      "Fixed-wing aircraft, airplane",
+      "Aircraft"
+    ],
+    "audiocaps-zk-xJGQU8-4_130": [
+      "Frying (food)"
+    ],
+    "audiocaps-zkKdxzNC97Y_27": [
+      "Door"
+    ],
+    "audiocaps-zl3OnWjr3Y4_140": [
+      "Computer keyboard",
+      "Typing",
+      "Speech"
+    ],
+    "audiocaps-zl9Dqx-j7q4_6": [
+      "Accelerating, revving, vroom",
+      "Vehicle",
+      "Speech",
+      "Car"
+    ],
+    "audiocaps-zliInBdC98Y_30": [
+      "Whimper",
+      "Speech",
+      "Baby cry, infant cry"
+    ],
+    "audiocaps-zn196JcTlq0_30": [
+      "Accelerating, revving, vroom",
+      "Vehicle",
+      "Car"
+    ],
+    "audiocaps-zoKp_laniT8_10": [
+      "Boat, Water vehicle",
+      "Motorboat, speedboat",
+      "Vehicle",
+      "Speech"
+    ],
+    "audiocaps-zofjfKhqLk8_10": [
+      "Wood"
+    ],
+    "audiocaps-zsLxS-uLJTw_20": [
+      "Railroad car, train wagon",
+      "Train horn",
+      "Rail transport",
+      "Train",
+      "Clickety-clack"
+    ],
+    "audiocaps-zuua6-5goWw_30": [
+      "Whistling",
+      "Speech"
+    ],
+    "audiocaps-zvABdOhz9fE_30": [
+      "Door",
+      "Speech"
+    ],
+    "audiocaps-zvmXKyAFq80_10": [
+      "Accelerating, revving, vroom",
+      "Vehicle",
+      "Car"
+    ],
+    "audiocaps-zwOBqeFTgiU_30": [
+      "Baby cry, infant cry"
+    ]
+  }
+}

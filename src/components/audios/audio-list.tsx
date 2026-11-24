@@ -69,6 +69,11 @@ const EMPTY_HINT: Record<SearchMatchFilterV1, string> = {
 };
 
 const RELEVANCE_WORDS = ["low", "fair", "good", "high", "very high"];
+/**
+ * The most bars a result gets when nothing clearly matches the search
+ * (`strongMatch: false`): the best of weak results is still weak ("fair").
+ */
+const WEAK_MATCH_RELEVANCE = 2;
 
 /** A list item, plus why it is in the results when it comes from a search. */
 type Row = AudioListItemV1 & {
@@ -233,6 +238,7 @@ function SearchResults({
   actions,
   recovery,
   empty,
+  subject = `“${q}”`,
 }: {
   q: string;
   match: SearchMatchFilterV1;
@@ -245,6 +251,8 @@ function SearchResults({
   recovery: ListRecovery;
   /** Shown instead of the usual "nothing matches" message. */
   empty?: ReactNode;
+  /** What was searched with, as the "nothing clearly matches" notice names it. */
+  subject?: string;
 }) {
   const rowsQuery = searchQuery(q, match, source, excludeId, sound);
   const { data, status, error, refetch, isPlaceholderData } = useQuery(rowsQuery);
@@ -257,9 +265,11 @@ function SearchResults({
     );
   }
   const best = data.data[0]?.score ?? 0;
+  // Relative to the best result, which gets every bar only when it clearly matches.
+  const top = data.strongMatch === false ? WEAK_MATCH_RELEVANCE : RELEVANCE_WORDS.length;
   const rows: Row[] = data.data.map((hit) => ({
     ...hit,
-    relevance: best > 0 ? Math.min(5, Math.max(1, Math.round((hit.score / best) * 5))) : 1,
+    relevance: best > 0 ? Math.min(top, Math.max(1, Math.round((hit.score / best) * top))) : 1,
   }));
 
   if (rows.length === 0 && !searching) {
@@ -282,15 +292,26 @@ function SearchResults({
       </EmptyResults>
     );
   }
+  // `strongMatch` is missing from an API that predates it: treat its results as matches.
+  const weak = data.strongMatch === false && !searching;
   // Keyed by the search so the scroll position resets with it.
   return (
-    <AudioTable
-      key={JSON.stringify(rowsQuery.queryKey)}
-      kind="search"
-      rows={rows}
-      actions={actions}
-      dimmed={searching}
-    />
+    <>
+      {weak && (
+        <p className="flex items-center gap-2 border-t px-6 py-3 text-sm text-muted-foreground">
+          <CircleAlertIcon aria-hidden="true" className="size-4 shrink-0" />
+          Nothing clearly matches {subject}
+          {source ? ` in ${SOURCE_LABEL[source]}` : ""}. These are the closest clips.
+        </p>
+      )}
+      <AudioTable
+        key={JSON.stringify(rowsQuery.queryKey)}
+        kind="search"
+        rows={rows}
+        actions={actions}
+        dimmed={searching}
+      />
+    </>
   );
 }
 
@@ -347,6 +368,7 @@ function TranscriptResults({
       source={view.source}
       excludeId={excludeId}
       sound={sound}
+      subject={what}
       actions={actions}
       recovery={recovery}
       empty={
@@ -756,7 +778,10 @@ function AudioRow({
   );
 }
 
-/** Five bars, filled by how this result ranks next to the best one. */
+/**
+ * Five bars, filled by how this result ranks next to the best one (at most
+ * WEAK_MATCH_RELEVANCE when nothing clearly matches).
+ */
 function RelevanceMeter({ level }: { level: number }) {
   return (
     <span
