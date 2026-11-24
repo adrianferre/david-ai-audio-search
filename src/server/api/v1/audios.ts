@@ -64,7 +64,9 @@ export function toAudioDetailV1(record: AudioRecord): AudioDetailV1 {
 }
 
 export function toAudioSearchResultV1(hit: AudioSearchHit): AudioSearchResultV1 {
-  return { ...toAudioListItemV1(hit.record), score: hit.score, matches: hit.matches };
+  const item = toAudioListItemV1(hit.record);
+  // Show the caption that explains the match, not always the first one.
+  return { ...item, text: hit.caption ?? item.text, score: hit.score, matches: hit.matches };
 }
 
 export function toSimilarAudioV1(hit: SimilarAudioHit): SimilarAudioV1 {

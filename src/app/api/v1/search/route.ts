@@ -13,7 +13,7 @@ const MAX_LIMIT = 100;
 
 const querySchema = z.object({
   q: z.string().trim().min(1).max(200),
-  match: z.enum(["all", "transcript", "sound"]).default("all"),
+  match: z.enum(["all", "text", "sound"]).default("all"),
   limit: z.coerce.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
 });
 
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     return apiError(400, "invalid_request", "Invalid query parameters", z.flattenError(parsed.error).fieldErrors);
   }
   const { q, match, limit } = parsed.data;
-  const signals: SearchMatch[] = match === "all" ? ["transcript", "sound"] : [match];
+  const signals: SearchMatch[] = match === "all" ? ["text", "sound"] : [match];
 
   let vectors;
   try {

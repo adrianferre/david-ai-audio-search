@@ -27,14 +27,15 @@ CREATE TABLE IF NOT EXISTS audios (
   -- scripts/embed-catalog.mts fills them; NULL means "not embedded yet".
   -- What the clip sounds like: embedding of the waveform. Every clip.
   audio_embedding  vector(768),
-  -- What is said: embedding of the transcript. LibriSpeech only; AudioCaps captions
-  -- are deliberately not indexed (sounds are found from the audio alone).
+  -- The clip's text: embedding of the transcript (LibriSpeech) or of all the
+  -- captions joined (AudioCaps).
   text_embedding   vector(768),
   -- Model that produced both vectors.
   embedding_model  text,
-  -- Full-text index of the transcript, for exact words.
+  -- Full-text index of the same text, for exact words (migrations/002_search_captions.sql).
+  -- `metadata->>'captions'` is the JSON array as text; the parser splits it into words.
   search_text      tsvector GENERATED ALWAYS AS
-                     (to_tsvector('english', coalesce(metadata->>'transcript', ''))) STORED
+                     (to_tsvector('english', coalesce(metadata->>'transcript', metadata->>'captions', ''))) STORED
 );
 
 -- Matches the ORDER BY of the list endpoint: LibriSpeech first, then AudioCaps, each by id.

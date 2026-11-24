@@ -1,12 +1,13 @@
 /**
  * Fills the search vectors of the `audios` table (src/server/db/schema.sql):
- * `audio_embedding` for every clip and `text_embedding` for LibriSpeech transcripts.
+ * `audio_embedding` from the waveform and `text_embedding` from the clip's text
+ * (the LibriSpeech transcript, or the AudioCaps captions).
  *
  *   node --env-file=.env.local scripts/embed-catalog.mts [--limit N]
  *
  * It WRITES TO THE SHARED PRODUCTION DATABASE and spends AI Gateway credits
- * (about $5 for the whole catalog). It only touches rows whose `audio_embedding`
- * is NULL, so it can be stopped and re-run.
+ * (about $5 for the whole catalog). It only computes the vectors a row is
+ * missing, so it can be stopped and re-run.
  *
  * Needs `ffmpeg` on the PATH: the model takes WAV or MP3, the store holds FLAC.
  */
@@ -19,12 +20,19 @@ import { embed } from "ai";
 import {
   EMBEDDING_DIMENSIONS,
   EMBEDDING_MODEL,
-  toTranscriptDocument,
+  toTextDocument,
 } from "../src/server/search/embedding-config.ts";
 
 const CONCURRENCY = 24;
 
-type Row = { id: string; blob_pathname: string; transcript: string | null };
+type Row = {
+  id: string;
+  blob_pathname: string;
+  transcript: string | null;
+  captions: string[] | null;
+  needs_audio: boolean;
+  needs_text: boolean;
+};
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -83,10 +91,15 @@ async function embedAudio(wav: Buffer): Promise<string> {
   return checked(embedding);
 }
 
-async function embedTranscript(transcript: string): Promise<string> {
+/** The text a clip is found by: its transcript, or all its captions as one text. */
+function textOf(row: Row): string {
+  return row.transcript ?? (row.captions ?? []).join(". ");
+}
+
+async function embedText(text: string): Promise<string> {
   const { embedding } = await embed({
     model: EMBEDDING_MODEL,
-    value: toTranscriptDocument(transcript),
+    value: toTextDocument(text),
     dimensions: EMBEDDING_DIMENSIONS,
     maxRetries: 5,
   });
@@ -94,14 +107,16 @@ async function embedTranscript(transcript: string): Promise<string> {
 }
 
 async function embedRow(row: Row): Promise<void> {
+  const text = textOf(row);
   const [audioVector, textVector] = await Promise.all([
-    readFlac(row.blob_pathname).then(flacToWav).then(embedAudio),
-    row.transcript ? embedTranscript(row.transcript) : null,
+    row.needs_audio ? readFlac(row.blob_pathname).then(flacToWav).then(embedAudio) : null,
+    row.needs_text && text ? embedText(text) : null,
   ]);
+  // NULL means "not computed in this run": keep what the row already has.
   await sql`
     UPDATE audios
-    SET audio_embedding = ${audioVector}::vector,
-        text_embedding = ${textVector}::vector,
+    SET audio_embedding = coalesce(${audioVector}::vector, audio_embedding),
+        text_embedding = coalesce(${textVector}::vector, text_embedding),
         embedding_model = ${EMBEDDING_MODEL}
     WHERE id = ${row.id}
   `;
@@ -117,9 +132,13 @@ function parseLimit(): number | null {
 
 const limit = parseLimit();
 const rows = (await sql`
-  SELECT id, blob_pathname, metadata->>'transcript' AS transcript
+  SELECT id, blob_pathname,
+         metadata->>'transcript' AS transcript,
+         metadata->'captions' AS captions,
+         audio_embedding IS NULL AS needs_audio,
+         text_embedding IS NULL AS needs_text
   FROM audios
-  WHERE audio_embedding IS NULL
+  WHERE audio_embedding IS NULL OR text_embedding IS NULL
   ORDER BY id
   LIMIT ${limit}
 `) as Row[];
@@ -146,8 +165,10 @@ async function worker(): Promise<void> {
 
 await Promise.all(Array.from({ length: CONCURRENCY }, worker));
 
-const [{ missing }] = await sql`SELECT count(*)::int AS missing FROM audios WHERE audio_embedding IS NULL`;
-console.log(`Done. ${failed.length} failed in this run; ${missing} clips still without a vector.`);
+const [{ missing }] = await sql`
+  SELECT count(*)::int AS missing FROM audios WHERE audio_embedding IS NULL OR text_embedding IS NULL
+`;
+console.log(`Done. ${failed.length} failed in this run; ${missing} clips still missing a vector.`);
 if (failed.length > 0) {
   console.log("Run the script again to retry the failed clips.");
   process.exitCode = 1;

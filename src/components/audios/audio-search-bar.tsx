@@ -3,13 +3,14 @@
 import { AudioWaveformIcon, SearchIcon, XIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { SearchMatchFilterV1 } from "@/lib/api/v1/types";
 import { cn } from "@/lib/utils";
 
 const MATCH_OPTIONS: { value: SearchMatchFilterV1; label: string; hint: string }[] = [
-  { value: "all", label: "All", hint: "What is said and what it sounds like" },
-  { value: "transcript", label: "Said", hint: "Only what is said in the audio" },
-  { value: "sound", label: "Sounds like", hint: "Only what the audio sounds like" },
+  { value: "all", label: "All", hint: "Matches the words and the sound" },
+  { value: "text", label: "Words", hint: "Matches the transcript or the captions" },
+  { value: "sound", label: "Sound", hint: "Matches what the audio itself sounds like" },
 ];
 
 export function AudioSearchBar({
@@ -39,7 +40,7 @@ export function AudioSearchBar({
           type="search"
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
-          placeholder="Search what is said or what it sounds like: “thank you”, “dog barking”"
+          placeholder="Search by words or by sound: “thank you”, “dog barking”"
           aria-label="Search audios"
           maxLength={200}
           autoComplete="off"
@@ -76,27 +77,31 @@ export function AudioSearchBar({
           </Button>
         </div>
       ) : (
-        <div
-          role="group"
-          aria-label="Match on"
-          className="flex h-9 items-center gap-0.5 rounded-lg border p-0.5"
-        >
-          {MATCH_OPTIONS.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              title={option.hint}
-              aria-pressed={match === option.value}
-              onClick={() => onMatchChange(option.value)}
-              className={cn(
-                "h-full rounded-md px-2.5 text-sm font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
-                match === option.value && "bg-muted text-foreground",
-              )}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
+        <TooltipProvider delay={300}>
+          <div
+            role="group"
+            aria-label="Match on"
+            className="flex h-9 items-center gap-0.5 rounded-lg border p-0.5"
+          >
+            {MATCH_OPTIONS.map((option) => (
+              <Tooltip key={option.value}>
+                <TooltipTrigger
+                  type="button"
+                  aria-pressed={match === option.value}
+                  aria-description={option.hint}
+                  onClick={() => onMatchChange(option.value)}
+                  className={cn(
+                    "h-full rounded-md px-2.5 text-sm font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
+                    match === option.value && "bg-muted text-foreground",
+                  )}
+                >
+                  {option.label}
+                </TooltipTrigger>
+                <TooltipContent side="bottom">{option.hint}</TooltipContent>
+              </Tooltip>
+            ))}
+          </div>
+        </TooltipProvider>
       )}
     </div>
   );

@@ -47,30 +47,34 @@ The table is described in [`src/server/db/schema.sql`](src/server/db/schema.sql)
 
 ## Search
 
-One search box answers two different questions about a clip: what is **said** in it and
-what it **sounds like**. Both use the same model, `google/gemini-embedding-2`, which puts
-text and audio in one vector space. It is called through the
+One search box answers two different questions about a clip: what its **text** says (the
+transcript of a LibriSpeech clip, the captions of an AudioCaps clip) and what it **sounds
+like**. Both use the same model, `google/gemini-embedding-2`, which puts text and audio in one
+vector space. It is called through the
 [Vercel AI Gateway](https://vercel.com/docs/ai-gateway).
 
 Each clip has up to three things to match against, all in the `audios` table:
 
 | Column | Built from | Answers |
 | --- | --- | --- |
-| `search_text` (full-text index) | The LibriSpeech transcript | Exact words: "hello", "thank you" |
-| `text_embedding` (pgvector) | The LibriSpeech transcript | Meaning: "question about pricing" |
+| `search_text` (full-text index) | The transcript, or the captions | Exact words: "hello", "thank you" |
+| `text_embedding` (pgvector) | The transcript, or all the captions joined | Meaning: "question about pricing" |
 | `audio_embedding` (pgvector) | The waveform, every clip | Sounds: "dog barking", "coughing", and search by example |
 
 - **Text search** embeds the query once per signal (one gateway request) and scores every clip
-  on "said" (transcript vector, plus a bonus when the transcript contains every word of the
-  query) and on "sounds like" (audio vector). Raw similarities are not comparable: text-to-text
+  on its text (text vector, plus a bonus when the text contains every word of the query) and
+  on "sounds like" (audio vector). Raw similarities are not comparable: text-to-text
   and text-to-audio sit on different scales, and both shift from query to query. So each is
   turned into a z-score, how far the clip stands above the catalog's average for that query.
   A clip's score is its best signal, and clips below 3 standard deviations are dropped. Each
-  result says why it matched: `transcript` ("Said"), `sound` ("Sounds like") or both.
+  result says why it matched: `text` (shown as "Said" for a transcript, "Caption" for captions),
+  `sound` ("Sounds like") or both.
 - **Search by example** ("Find similar" on any clip) returns the nearest neighbours of that clip's
   audio vector. It needs no model call: the vector is already stored.
-- **AudioCaps captions are not indexed.** Sounds are found from the audio alone, so a caption
-  shown under a result is a way to check the result, not the reason it matched.
+- **Captions are indexed as text.** A sound query such as "dog barking" can match an AudioCaps
+  clip through its captions, its audio, or both. The "Sounds like" filter (`match=sound`) uses
+  the audio alone, which is what finds sounds in clips nobody has described. A clip has several
+  captions; a result shows the one that shares most words with the query.
 - **Speech also matches "sounds like".** The audio vector carries the spoken words as well as
   the acoustics, so a clip where someone says "raining" can appear next to clips of rain.
 - **The cut-off trims, it doesn't judge.** Nearest-neighbour search always has a nearest clip,
@@ -90,7 +94,7 @@ brew install ffmpeg      # once
 pnpm embed-catalog       # add `--limit 20` for a trial run
 ```
 
-The schema change is in [`src/server/db/migrations/001_search.sql`](src/server/db/migrations/001_search.sql).
+The schema changes are in [`src/server/db/migrations/`](src/server/db/migrations/).
 The model, vector size and text formats are in
 [`src/server/search/embedding-config.ts`](src/server/search/embedding-config.ts), shared by the
 script and the app. Changing any of them means embedding the catalog again.
@@ -158,13 +162,13 @@ The audio's FLAC (`audio/flac`), streamed from the private Blob store. Supports 
 
 ### `GET /api/v1/search`
 
-Text search over what is said and what the audio sounds like. Returns the best matches, most
+Text search over each audio's text (transcript or captions) and what it sounds like. Returns the best matches, most
 relevant first. There is no pagination: it is a ranked top list.
 
 | Query param | Default | Rules |
 | --- | --- | --- |
 | `q` | required | 1–200 characters |
-| `match` | `all` | `all`, `transcript` (what is said) or `sound` (what it sounds like) |
+| `match` | `all` | `all`, `text` (transcripts and captions) or `sound` (the audio alone) |
 | `limit` | `50` | integer 1–100 |
 
 ```json
@@ -172,7 +176,7 @@ relevant first. There is no pagination: it is a ranked top list.
   "data": [
     { "id": "audiocaps-...", "source": "audiocaps", "title": "YouTube ... @ 30s",
       "text": "A dog barks and a man speaks", "durationSeconds": 10,
-      "score": 5.65, "matches": ["sound"] }
+      "score": 8.27, "matches": ["text", "sound"] }
   ]
 }
 ```

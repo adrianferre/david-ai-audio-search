@@ -17,13 +17,13 @@ export const EMBEDDING_DIMENSIONS = 768;
  * (it has no `taskType` setting; the task goes in the text).
  * https://ai.google.dev/gemini-api/docs/embeddings
  */
-export function toTranscriptDocument(transcript: string): string {
+export function toTextDocument(text: string): string {
   // LibriSpeech transcripts are upper case.
-  return `title: none | text: ${transcript.toLowerCase()}`;
+  return `title: none | text: ${text.toLowerCase()}`;
 }
 
-/** A search query compared against transcript vectors. */
-export function toTranscriptQuery(query: string): string {
+/** A search query compared against text vectors (transcripts and captions). */
+export function toTextQuery(query: string): string {
   return `task: search result | query: ${query}`;
 }
 

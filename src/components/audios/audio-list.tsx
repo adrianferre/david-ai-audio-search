@@ -31,10 +31,18 @@ const SOURCE_LABEL: Record<AudioSource, string> = {
   audiocaps: "AudioCaps",
 };
 
-const MATCH_LABEL: Record<SearchMatchV1, { label: string; title: string }> = {
-  transcript: { label: "Said", title: "Matches what is said (the transcript)" },
-  sound: { label: "Sounds like", title: "Matches what the audio sounds like" },
+/** A text match is on the transcript (LibriSpeech) or on the captions (AudioCaps). */
+const TEXT_MATCH_LABEL: Record<AudioSource, { label: string; title: string }> = {
+  librispeech: { label: "Said", title: "Matches what is said (the transcript)" },
+  audiocaps: { label: "Caption", title: "Matches the captions that describe the audio" },
 };
+const SOUND_MATCH_LABEL = { label: "Sounds like", title: "Matches what the audio sounds like" };
+
+function matchLabel(match: SearchMatchV1, source: AudioSource) {
+  return match === "text" ? TEXT_MATCH_LABEL[source] : SOUND_MATCH_LABEL;
+}
+
+const FILTER_LABEL: Record<SearchMatchV1, string> = { text: "Words", sound: "Sound" };
 
 /** What the list shows: the whole catalog, a text search, or the audios similar to one. */
 export type AudioListView =
@@ -180,8 +188,8 @@ function SearchResults({
       {rows && rows.length === 0 && !searching && (
         <ListMessage>
           Nothing in the catalog matches “{q}”
-          {match === "all" ? "." : ` under “${MATCH_LABEL[match].label}”. Try “All”.`} Search by the
-          words that are said, or describe a sound.
+          {match === "all" ? "." : ` under “${FILTER_LABEL[match]}”. Try “All”.`} Search by words, or
+          describe a sound.
         </ListMessage>
       )}
       {rows && rows.length > 0 && <AudioRows rows={rows} actions={actions} dimmed={searching} />}
@@ -360,15 +368,18 @@ function AudioRow({
           </span>
           <span className="truncate text-sm font-medium">{audio.title}</span>
           <span className="ml-auto flex shrink-0 items-center gap-1.5">
-            {audio.matches?.map((match) => (
-              <span
-                key={match}
-                title={MATCH_LABEL[match].title}
-                className="rounded border px-1.5 py-0.5 text-[0.7rem] font-medium text-muted-foreground"
-              >
-                {MATCH_LABEL[match].label}
-              </span>
-            ))}
+            {audio.matches?.map((match) => {
+              const { label, title } = matchLabel(match, audio.source);
+              return (
+                <span
+                  key={match}
+                  title={title}
+                  className="rounded border px-1.5 py-0.5 text-[0.7rem] font-medium text-muted-foreground"
+                >
+                  {label}
+                </span>
+              );
+            })}
             {audio.similarity !== undefined && (
               <span className="rounded border px-1.5 py-0.5 text-[0.7rem] font-medium text-muted-foreground tabular-nums">
                 {Math.round(audio.similarity * 100)}% similar

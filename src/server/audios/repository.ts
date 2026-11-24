@@ -106,16 +106,17 @@ function toVector(embedding: number[] | undefined): string | null {
  * still stand out a little).
  */
 const MIN_Z_SCORE = 3;
-/** Added when the transcript contains every word of the query: worth one clear match. */
+/** Added when the clip's text contains every word of the query: worth one clear match. */
 const EXACT_WORDS_BONUS = 3;
 
 /**
  * Text search over two signals:
- *  - what is said: `vectors.transcript` against the transcript vectors, plus
- *    full-text search on the transcript for exact words,
+ *  - its text (transcript or captions): `vectors.text` against the text vectors,
+ *    plus full-text search for exact words,
  *  - what it sounds like: `vectors.sound` against the audio vectors.
- * A clip's score is its best signal, not the sum: speech shows up in both (the
- * audio vector carries the spoken words too), so adding them would count it twice.
+ * A clip's score is its best signal, not the sum: the two overlap (the audio
+ * vector carries the spoken words too, and captions describe the sound), so
+ * adding them would count the same evidence twice.
  * A signal whose vector is missing is skipped.
  *
  * It scores every clip: fine for a few thousand rows. At a much larger scale,
@@ -133,44 +134,54 @@ export async function searchAudios({
 }): Promise<AudioSearchHit[]> {
   const rows = await getSql()`
     WITH q AS (
-      SELECT ${toVector(vectors.transcript)}::vector AS transcript_vector,
+      SELECT ${toVector(vectors.text)}::vector AS text_vector,
              ${toVector(vectors.sound)}::vector AS sound_vector,
-             websearch_to_tsquery('english', ${query}) AS words
+             websearch_to_tsquery('english', ${query}) AS words,
+             -- Any of the query's words, to pick the caption to show.
+             replace(plainto_tsquery('english', ${query})::text, '&', '|')::tsquery AS any_word
     ),
     scored AS (
       SELECT a.id,
-             (q.transcript_vector IS NOT NULL AND a.search_text @@ q.words) AS has_words,
-             (s.said - avg(s.said) OVER ()) / nullif(stddev_samp(s.said) OVER (), 0) AS said_z,
+             (q.text_vector IS NOT NULL AND a.search_text @@ q.words) AS has_words,
+             (s.text - avg(s.text) OVER ()) / nullif(stddev_samp(s.text) OVER (), 0) AS text_z,
              (s.sound - avg(s.sound) OVER ()) / nullif(stddev_samp(s.sound) OVER (), 0) AS sound_z
       FROM audios a
       CROSS JOIN q
       CROSS JOIN LATERAL (
-        SELECT 1 - (a.text_embedding <=> q.transcript_vector) AS said,
+        SELECT 1 - (a.text_embedding <=> q.text_vector) AS text,
                1 - (a.audio_embedding <=> q.sound_vector) AS sound
       ) s
     ),
     signals AS (
       SELECT id,
              CASE
-               WHEN has_words THEN ${EXACT_WORDS_BONUS}::float8 + greatest(said_z, 0)
-               WHEN said_z >= ${MIN_Z_SCORE}::float8 THEN said_z
+               WHEN has_words THEN ${EXACT_WORDS_BONUS}::float8 + greatest(text_z, 0)
+               WHEN text_z >= ${MIN_Z_SCORE}::float8 THEN text_z
                ELSE 0
-             END AS said,
+             END AS text,
              CASE WHEN sound_z >= ${MIN_Z_SCORE}::float8 THEN sound_z ELSE 0 END AS sound
       FROM scored
     )
     SELECT a.id, a.source, a.file_name, a.blob_pathname, a.duration_seconds, a.sample_rate, a.channels,
-           a.metadata, greatest(g.said, g.sound)::float8 AS score, g.said > 0 AS said, g.sound > 0 AS sound
+           a.metadata, greatest(g.text, g.sound)::float8 AS score, g.text > 0 AS text, g.sound > 0 AS sound,
+           (
+             SELECT caption
+             FROM jsonb_array_elements_text(a.metadata->'captions') WITH ORDINALITY AS c(caption, position)
+             ORDER BY ts_rank(to_tsvector('english', caption), q.any_word) DESC, position
+             LIMIT 1
+           ) AS caption
     FROM signals g
     JOIN audios a USING (id)
-    WHERE g.said > 0 OR g.sound > 0
+    CROSS JOIN q
+    WHERE g.text > 0 OR g.sound > 0
     ORDER BY score DESC, a.id
     LIMIT ${limit}
   `;
   return rows.map((row) => ({
     record: toRecord(row),
     score: row.score as number,
-    matches: [...(row.said ? ["transcript" as const] : []), ...(row.sound ? ["sound" as const] : [])],
+    matches: [...(row.text ? ["text" as const] : []), ...(row.sound ? ["sound" as const] : [])],
+    caption: (row.caption as string | null) ?? null,
   }));
 }
 

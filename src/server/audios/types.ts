@@ -40,14 +40,22 @@ export type AudioCapsRecord = AudioFileInfo &
 
 export type AudioRecord = LibriSpeechRecord | AudioCapsRecord;
 
-/** Why a search result matched: what is said (transcript) or what it sounds like (audio). */
-export type SearchMatch = "transcript" | "sound";
+/**
+ * Why a search result matched: its text (the transcript of a LibriSpeech clip,
+ * the captions of an AudioCaps clip) or what it sounds like (the audio).
+ */
+export type SearchMatch = "text" | "sound";
 
 export type AudioSearchHit = {
   record: AudioRecord;
   /** Relevance, higher is better. Only comparable within one result list. */
   score: number;
   matches: SearchMatch[];
+  /**
+   * AudioCaps only: the caption that shares most words with the query (the first
+   * one when none does). A clip has several captions and any of them can match.
+   */
+  caption: string | null;
 };
 
 export type SimilarAudioHit = {

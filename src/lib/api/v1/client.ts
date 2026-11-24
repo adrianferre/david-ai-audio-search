@@ -52,7 +52,7 @@ export function fetchAudio(
   return getJson(`${BASE}/audios/${encodeURIComponent(id)}`, signal);
 }
 
-/** Text search: what is said, what it sounds like, or both (`match: "all"`). */
+/** Text search over each audio's text, its sound, or both (`match: "all"`). */
 export function searchAudios(params: {
   q: string;
   match: SearchMatchFilterV1;

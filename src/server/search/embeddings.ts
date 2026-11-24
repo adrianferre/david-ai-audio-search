@@ -8,14 +8,14 @@ import {
   EMBEDDING_DIMENSIONS,
   EMBEDDING_MODEL,
   toSoundQuery,
-  toTranscriptQuery,
+  toTextQuery,
 } from "./embedding-config";
 
 /** The query as a vector, once per signal it is compared against. */
 export type QueryVectors = Partial<Record<SearchMatch, number[]>>;
 
 const FORMAT: Record<SearchMatch, (query: string) => string> = {
-  transcript: toTranscriptQuery,
+  text: toTextQuery,
   sound: toSoundQuery,
 };
 
