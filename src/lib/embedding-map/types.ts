@@ -46,6 +46,7 @@ export type EmbeddingMapClip = {
   bookTitle?: string;
   chapterId?: string;
   speakerId?: string;
+  speakerName?: string;
   sex?: "F" | "M";
   // Common Voice (self-reported)
   gender?: "F" | "M";

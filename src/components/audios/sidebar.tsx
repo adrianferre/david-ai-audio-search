@@ -25,16 +25,18 @@ export function Sidebar({
   onSourceChange: (source: AudioSource | null) => void;
 }) {
   const { data } = useQuery(datasetsQuery());
-  const counts = new Map(data?.data.map((dataset) => [dataset.source, dataset.count]));
+  const datasets = new Map(data?.data.map((dataset) => [dataset.source, dataset]));
   const total = data?.data.reduce((sum, dataset) => sum + dataset.count, 0);
 
-  const items: { value: AudioSource | null; label: string; swatch: string; count?: number }[] = [
+  const items: { value: AudioSource | null; label: string; split?: string; swatch: string; count?: number }[] = [
     { value: null, label: "All", swatch: "bg-foreground", count: total },
     ...FILTER_ORDER.map((value) => ({
       value,
       label: SOURCE_LABEL[value],
+      // Which split the catalog holds: a lab checks it against its own eval sets.
+      split: datasets.get(value)?.split,
       swatch: SOURCE_SWATCH_CLASS[value],
-      count: counts.get(value),
+      count: datasets.get(value)?.count,
     })),
   ];
 
@@ -62,12 +64,19 @@ export function Sidebar({
                 aria-pressed={active}
                 onClick={() => onSourceChange(item.value)}
                 className={cn(
-                  "-ml-px flex h-[34px] items-center gap-2.5 border-l-2 pr-1 pl-3.5 text-left text-sm font-medium outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
+                  "-ml-px flex min-h-[34px] items-center py-1 gap-2.5 border-l-2 pr-1 pl-3.5 text-left text-sm font-medium outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
                   active ? "border-foreground text-foreground" : "border-transparent text-muted-foreground",
                 )}
               >
                 <span aria-hidden="true" className={cn("size-2 shrink-0 rounded-[2px]", item.swatch)} />
-                <span className="flex-1">{item.label}</span>
+                <span className="flex min-w-0 flex-1 flex-col">
+                  {item.label}
+                  {item.split && (
+                    <span className="text-[11.5px] leading-[14px] font-normal text-muted-foreground">
+                      {item.split} split
+                    </span>
+                  )}
+                </span>
                 <span className="text-[0.8rem] font-normal text-muted-foreground tabular-nums">
                   {item.count?.toLocaleString()}
                 </span>

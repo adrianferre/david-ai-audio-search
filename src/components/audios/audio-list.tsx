@@ -75,6 +75,8 @@ type Row = AudioListItemV1 & {
   matches?: SearchMatchV1[];
   /** 1 to 5, relative to the best result of the same search. */
   relevance?: number;
+  /** The search's own score (see `RelevanceMeter`). */
+  score?: number;
   similarity?: number;
 };
 
@@ -290,6 +292,7 @@ function SearchResults({
       rows={rows}
       actions={actions}
       dimmed={searching}
+      exactScores={match === "exact"}
     />
   );
 }
@@ -493,7 +496,7 @@ function useColumns(kind: TableKind, width: number) {
     ...(matched ? ["168px"] : []),
     ...(waveform ? ["128px"] : []),
     "112px", // dataset
-    ...(score ? ["64px"] : []),
+    ...(score ? ["84px"] : []),
     "40px", // length
     "32px", // find similar
   ];
@@ -550,6 +553,7 @@ function AudioTable({
   tail = null,
   onEndReached,
   dimmed = false,
+  exactScores = false,
 }: {
   kind: TableKind;
   rows: Row[];
@@ -558,6 +562,8 @@ function AudioTable({
   onEndReached?: () => void;
   /** The rows are stale: newer results are loading. */
   dimmed?: boolean;
+  /** A Words search: scores are text-match ranks, not z-scores. */
+  exactScores?: boolean;
 }) {
   const { ref: tableRef, width } = useWidth();
   const columns = useColumns(kind, width);
@@ -610,6 +616,7 @@ function AudioTable({
                     audio={row}
                     columns={columns}
                     kind={kind}
+                    exactScores={exactScores}
                     checked={selection.checked.has(row.id)}
                     checkDisabled={selection.locked}
                     onCheckedChange={(value, shift) => toggleRow(item.index, value, shift)}
@@ -635,6 +642,7 @@ function AudioRow({
   audio,
   columns,
   kind,
+  exactScores,
   checked,
   checkDisabled,
   onCheckedChange,
@@ -647,6 +655,7 @@ function AudioRow({
   audio: Row;
   columns: ReturnType<typeof useColumns>;
   kind: TableKind;
+  exactScores: boolean;
   /** Picked for download. */
   checked: boolean;
   /** A download is running: the selection is locked. */
@@ -724,7 +733,7 @@ function AudioRow({
       <DatasetTag source={audio.source} className="justify-self-start" />
       {columns.score &&
         (kind === "search" ? (
-          <RelevanceMeter level={audio.relevance ?? 1} />
+          <RelevanceMeter level={audio.relevance ?? 1} score={audio.score ?? 0} exact={exactScores} />
         ) : (
           <span className="text-[0.8rem] tabular-nums" title="Cosine similarity of the sound, at most 1">
             {audio.similarity?.toFixed(3)}
@@ -761,22 +770,44 @@ export function relevanceLevel(score: number, best: number) {
   return best > 0 ? Math.min(5, Math.max(1, Math.round((score / best) * 5))) : 1;
 }
 
-/** Five bars, filled by how this result ranks next to the best one. */
-export function RelevanceMeter({ level }: { level: number }) {
+/**
+ * Five bars, filled by how this result ranks next to the best one, and the
+ * score itself: how many standard deviations the clip stands above the
+ * catalog's average for this query (Words searches rank by text match instead).
+ */
+export function RelevanceMeter({
+  level,
+  score,
+  exact = false,
+}: {
+  level: number;
+  score: number;
+  /** A Words search: `score` is a text-match rank, not a z-score. */
+  exact?: boolean;
+}) {
+  const figure = exact ? score.toFixed(2) : score.toFixed(1);
+  const explanation = exact
+    ? `Text-match rank ${figure} (more and closer occurrences of the words rank higher). The bars compare it with the best result.`
+    : `z = ${figure}: standard deviations above the catalog’s average for this query (results start at 3). The bars compare it with the best result.`;
   return (
     <span
       role="img"
-      aria-label={`Relevance: ${RELEVANCE_WORDS[level - 1]}`}
-      title="How well it matches, next to the best result"
-      className="relative z-10 flex h-4 items-end gap-[3px]"
+      aria-label={`Relevance: ${RELEVANCE_WORDS[level - 1]}, ${exact ? "rank" : "z"} ${figure}`}
+      title={explanation}
+      className="relative z-10 flex h-4 items-end gap-2"
     >
-      {[6, 8, 10, 12, 14].map((height, i) => (
-        <span
-          key={height}
-          className={cn("w-1 rounded-[1px]", i < level ? "bg-foreground" : "bg-waveform-muted")}
-          style={{ height }}
-        />
-      ))}
+      <span aria-hidden="true" className="flex h-4 items-end gap-[3px]">
+        {[6, 8, 10, 12, 14].map((height, i) => (
+          <span
+            key={height}
+            className={cn("w-1 rounded-[1px]", i < level ? "bg-foreground" : "bg-waveform-muted")}
+            style={{ height }}
+          />
+        ))}
+      </span>
+      <span aria-hidden="true" className="font-mono text-[11.5px] leading-none text-muted-foreground tabular-nums">
+        {figure}
+      </span>
     </span>
   );
 }

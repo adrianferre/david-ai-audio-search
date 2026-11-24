@@ -55,6 +55,16 @@ type AudioFileInfoV1 = {
   fileName: string;
   sampleRate: number;
   channels: number;
+} & DatasetFactsV1;
+
+/** Facts that hold for every clip of a dataset (the `datasets` table). */
+type DatasetFactsV1 = {
+  /** The split the catalog took from the dataset: `dev-clean` (LibriSpeech), `val` (AudioCaps), `dev` (Common Voice). */
+  split: string;
+  /** What the audio was before it was stored as 16 kHz mono FLAC: `FLAC`, `MP3` or `YouTube audio`. */
+  originalFormat: string;
+  /** The original audio was lossy (MP3, YouTube): compression artefacts may remain. */
+  lossyOrigin: boolean;
 };
 
 export type LibriSpeechMetadataV1 = AudioFileInfoV1 & {
@@ -70,6 +80,11 @@ export type AudioCapsMetadataV1 = AudioFileInfoV1 & {
   startTime: number;
   captions: string[];
   audiocapIds: number[];
+  /**
+   * The AudioSet labels of the clip's YouTube segment (AudioCaps clips are AudioSet segments),
+   * e.g. `["Sneeze", "Speech"]`. Empty when the segment has none.
+   */
+  audioSetLabels: string[];
 };
 
 /** Crowd-sourced speech: an anonymous volunteer reading a prompted sentence. */
@@ -95,7 +110,7 @@ export type AudioListResponseV1 = PaginatedResponse<AudioListItemV1>;
 export type DatasetV1 = {
   source: AudioSource;
   count: number;
-};
+} & DatasetFactsV1;
 
 export type DatasetsResponseV1 = DataResponse<DatasetV1[]>;
 export type AudioDetailResponseV1 = DataResponse<AudioDetailV1>;

@@ -44,15 +44,15 @@ export const COLOUR_BY_OPTIONS: { value: ColourBy; label: string }[] = [
   { value: "accent", label: "Accent" },
 ];
 
-/** Which clips a colouring applies to, for the legend's title. */
+/** The legend's title: which clips a colouring applies to, and how their value was given. */
 const SCOPE: Record<ColourBy, string | null> = {
   dataset: null,
-  family: SOURCE_LABEL.audiocaps,
-  book: SOURCE_LABEL.librispeech,
-  speaker: SOURCE_LABEL.librispeech,
-  sex: "speech",
-  age: SOURCE_LABEL.commonvoice,
-  accent: SOURCE_LABEL.commonvoice,
+  family: `${SOURCE_LABEL.audiocaps} only`,
+  book: `${SOURCE_LABEL.librispeech} only`,
+  speaker: `${SOURCE_LABEL.librispeech} only`,
+  sex: "Speech only",
+  age: `${SOURCE_LABEL.commonvoice} only · self-reported`,
+  accent: `${SOURCE_LABEL.commonvoice} only · self-reported, free text`,
 };
 
 export type ColourGroup = { label: string; color: string; count: number; other?: boolean };
@@ -126,12 +126,12 @@ export function colouringOf(clips: readonly EmbeddingMapClip[], by: ColourBy): C
     case "book":
       return { by, scope, ...largest(clips, "librispeech", (c) => c.bookTitle, (b) => b, "books") };
     case "speaker": {
-      const sex = new Map(clips.map((c) => [c.speakerId, c.sex]));
-      return {
-        by,
-        scope,
-        ...largest(clips, "librispeech", (c) => c.speakerId, (s) => `Speaker ${s} · ${sex.get(s) ?? "?"}`, "speakers"),
+      const speakers = new Map(clips.map((c) => [c.speakerId, c]));
+      const label = (id: string) => {
+        const { speakerName, sex } = speakers.get(id) ?? {};
+        return `${speakerName ?? `Speaker ${id}`} · ${sex ?? "?"}`;
       };
+      return { by, scope, ...largest(clips, "librispeech", (c) => c.speakerId, label, "speakers") };
     }
     case "sex":
       clips.forEach((clip, i) => {
@@ -147,7 +147,9 @@ export function colouringOf(clips: readonly EmbeddingMapClip[], by: ColourBy): C
       });
       return { by, scope, groupOf, groups: counted(AGE_GROUPS.map((g) => g.label), AGE_COLORS) };
     case "accent":
-      return { by, scope, ...largest(clips, "commonvoice", (c) => c.accent, (a) => a, "accents") };
+      // Free text: "United States English" and "United States English, Floridian" are two
+      // answers, not two accents, so the rest is counted as answers.
+      return { by, scope, ...largest(clips, "commonvoice", (c) => c.accent, (a) => a, "answers") };
   }
 }
 

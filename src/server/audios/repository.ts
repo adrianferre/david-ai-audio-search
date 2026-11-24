@@ -4,7 +4,14 @@ import { z } from "zod";
 
 import { getSql } from "@/server/db";
 
-import type { AudioRecord, AudioSearchHit, AudioSource, SearchMatch, SimilarAudioHit } from "./types";
+import type {
+  AudioRecord,
+  AudioSearchHit,
+  AudioSource,
+  DatasetRecord,
+  SearchMatch,
+  SimilarAudioHit,
+} from "./types";
 
 // Columns of the `audios` table (schema: src/server/db/schema.sql).
 const speakerSchema = z.object({ id: z.string(), sex: z.string().nullable(), name: z.string().nullable() });
@@ -40,6 +47,7 @@ const rowSchema = z.discriminatedUnion("source", [
       startTime: z.number(),
       captions: z.array(z.string()),
       audiocapIds: z.array(z.number()),
+      audioSetLabels: z.array(z.string()).default([]),
     }),
   }),
   z.object({
@@ -117,10 +125,37 @@ export async function listAudios({
   return { items: rows.map(toRecord), total: total as number };
 }
 
-/** How many audios each dataset has. A dataset with none is left out. */
-export async function countAudiosBySource(): Promise<{ source: AudioSource; count: number }[]> {
-  const rows = await getSql()`SELECT source, count(*)::int AS count FROM audios GROUP BY source`;
-  return rows.map((row) => ({ source: row.source as AudioSource, count: row.count as number }));
+// Columns of the `datasets` table (migrations/005_datasets.sql).
+const datasetRowSchema = z.object({
+  source: z.enum(["librispeech", "audiocaps", "commonvoice"]),
+  split: z.string(),
+  original_format: z.string(),
+  lossy_origin: z.boolean(),
+});
+
+function toDataset(row: unknown): DatasetRecord {
+  const r = datasetRowSchema.parse(row);
+  return { source: r.source, split: r.split, originalFormat: r.original_format, lossyOrigin: r.lossy_origin };
+}
+
+/** Every dataset of the catalog with how many audios it has (0 when none yet). */
+export async function listDatasets(): Promise<(DatasetRecord & { count: number })[]> {
+  const rows = await getSql()`
+    SELECT d.source, d.split, d.original_format, d.lossy_origin, count(a.id)::int AS count
+    FROM datasets d
+    LEFT JOIN audios a ON a.source = d.source
+    GROUP BY d.source
+  `;
+  return rows.map((row) => ({ ...toDataset(row), count: row.count as number }));
+}
+
+/** Every dataset of the catalog, by source: what the details of its audios quote. */
+export async function getDatasets(): Promise<Map<AudioSource, DatasetRecord>> {
+  const rows = await getSql()`SELECT source, split, original_format, lossy_origin FROM datasets`;
+  return new Map(rows.map((row) => {
+    const dataset = toDataset(row);
+    return [dataset.source, dataset];
+  }));
 }
 
 export async function getAudio(id: string): Promise<AudioRecord | null> {

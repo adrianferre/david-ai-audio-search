@@ -20,10 +20,12 @@ export function clipFacts(clip: EmbeddingMapClip): string {
       const labels = (clip.soundLabels ?? []).filter((label) => label !== "Speech").slice(0, 2);
       return [clip.soundFamily, labels.join(", ")].filter(Boolean).join(" · ");
     }
-    case "librispeech":
-      return [clip.bookTitle, clip.speakerId && `Speaker ${clip.speakerId}${clip.sex ? ` (${clip.sex})` : ""}`]
-        .filter(Boolean)
-        .join(" · ");
+    case "librispeech": {
+      // As the list and the details panel name the reader: "read by John Rose", "John Rose · male · #1272".
+      const sex = clip.sex === "F" ? "female" : clip.sex === "M" ? "male" : null;
+      const reader = clip.speakerId && [clip.speakerName ?? "Speaker", sex, `#${clip.speakerId}`].filter(Boolean).join(" · ");
+      return [clip.bookTitle, reader].filter(Boolean).join(" · ");
+    }
     case "commonvoice":
       return (
         [clip.gender === "F" ? "Female" : clip.gender === "M" ? "Male" : null, clip.age, clip.accent]
@@ -33,8 +35,21 @@ export function clipFacts(clip: EmbeddingMapClip): string {
   }
 }
 
-/** The white card next to the hovered dot. */
-export function HoverCard({ clip, at, size }: { clip: EmbeddingMapClip; at: MapPoint; size: Size }) {
+/**
+ * The white card next to the hovered dot. `text` replaces the clip's own when
+ * it is a search result: the caption the list shows for it.
+ */
+export function HoverCard({
+  clip,
+  text = clip.text,
+  at,
+  size,
+}: {
+  clip: EmbeddingMapClip;
+  text?: string;
+  at: MapPoint;
+  size: Size;
+}) {
   const width = 284;
   const left = at[0] + 14 + width > size.width - 8 ? at[0] - width - 14 : at[0] + 14;
   const top = clamp(at[1] - 24, 8, size.height - 170);
@@ -51,8 +66,10 @@ export function HoverCard({ clip, at, size }: { clip: EmbeddingMapClip; at: MapP
         </span>
       </div>
       <Waveform peaks={clip.waveformPeaks} bars={64} height={28} barWidth={2} gap={2} />
-      <p className="line-clamp-2 text-[0.85rem] leading-[19px] font-medium">{displayText(clip)}</p>
-      <p className="truncate text-xs text-muted-foreground">{clipFacts(clip)}</p>
+      <p className="line-clamp-2 text-[0.85rem] leading-[19px] font-medium">
+        {displayText({ source: clip.source, text })}
+      </p>
+      <p className="line-clamp-2 text-xs leading-[17px] text-muted-foreground">{clipFacts(clip)}</p>
     </div>
   );
 }
@@ -143,7 +160,7 @@ export function AnchorLabel({ text, at, size }: { text: string; at: MapPoint; si
 
 /** What the colours mean, with each group's size. */
 export function Legend({ colouring, outsideCount }: { colouring: Colouring; outsideCount: number }) {
-  const title = colouring.scope ? `${colouring.scope} only` : "Every clip";
+  const title = colouring.scope ?? "Every clip";
   return (
     <div className="absolute top-16 left-3 flex max-w-[250px] flex-col gap-1.5 rounded-xl border bg-card/95 px-3 py-2.5 shadow-[0_2px_6px_rgba(26,26,25,0.05)]">
       <span className="text-[11.5px] font-medium text-muted-foreground">{title}</span>

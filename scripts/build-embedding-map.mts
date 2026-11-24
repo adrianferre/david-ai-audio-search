@@ -34,6 +34,7 @@ type ExportPoint = {
   bookTitle?: string;
   chapterId?: string;
   speakerId?: string;
+  speakerName?: string;
   sex?: "F" | "M";
   gender?: string;
   age?: string;
@@ -86,6 +87,7 @@ const clips: EmbeddingMapClip[] = points.map((p) => {
   if (p.bookTitle) clip.bookTitle = p.bookTitle;
   if (p.chapterId) clip.chapterId = p.chapterId;
   if (p.speakerId) clip.speakerId = p.speakerId;
+  if (p.speakerName) clip.speakerName = p.speakerName;
   if (p.sex) clip.sex = p.sex;
   const gender = genderOf(p.gender);
   if (gender) clip.gender = gender;
@@ -162,3 +164,4 @@ const data: EmbeddingMapV1 = {
 const json = JSON.stringify(data);
 await writeFile(OUT, json);
 console.info(`Wrote ${OUT.pathname}: ${clips.length.toLocaleString()} clips, ${(json.length / 1024 / 1024).toFixed(2)} MB`);
+

@@ -25,7 +25,7 @@ import { downloadAudioFile, exportAudios, fetchAudio } from "@/lib/api/v1/client
 import type { AudioDetailV1 } from "@/lib/api/v1/types";
 import { chooseSaveTarget, formatBytes, type SaveTarget, saveStream } from "@/lib/save-file";
 
-import { DatasetTag, displayText, displayTitle } from "./datasets";
+import { datasetWithSplit, DatasetTag, displayText, displayTitle } from "./datasets";
 import type { ReferenceClip } from "./queries";
 import { type AudioPlayer, playbackOf } from "./use-audio-player";
 import { formatClock, SeekableWaveform } from "./waveform";
@@ -297,7 +297,8 @@ function ClipHeading({ audio }: { audio: AudioDetailV1 }) {
 function ClipPlayer({ audio, player }: { audio: AudioDetailV1; player: AudioPlayer }) {
   const playback = playbackOf(player, audio.id);
   const playing = playback?.status === "playing" || playback?.status === "loading";
-  const { sampleRate, channels } = audio.metadata;
+  const { sampleRate, channels, originalFormat, lossyOrigin } = audio.metadata;
+  const origin = lossyOrigin && originalFormat ? ` · from ${originalFormat}` : "";
 
   return (
     <div className="flex flex-col gap-3.5 rounded-2xl border border-hairline bg-background p-[18px]">
@@ -325,12 +326,12 @@ function ClipPlayer({ audio, player }: { audio: AudioDetailV1; player: AudioPlay
             <PlayIcon className="ml-0.5 fill-current" />
           )}
         </IconButton>
-        <span className="text-[0.8rem] tabular-nums">
+        <span className="shrink-0 text-[0.8rem] whitespace-nowrap tabular-nums">
           {formatClock(playback?.currentTime ?? 0)}
           <span className="text-muted-foreground"> / {formatClock(audio.durationSeconds)}</span>
         </span>
-        <span className="ml-auto text-xs text-muted-foreground">
-          {sampleRate / 1000} kHz · {channels === 1 ? "mono" : `${channels} channels`} · FLAC
+        <span className="ml-auto text-right text-xs text-muted-foreground">
+          {sampleRate / 1000} kHz · {channels === 1 ? "mono" : `${channels} channels`} · FLAC{origin}
         </span>
       </div>
     </div>
@@ -375,11 +376,14 @@ function DownloadMenu({ id, download }: { id: string; download: ReturnType<typeo
 function Section({
   title,
   copy,
+  note,
   children,
 }: {
   title: string;
   /** The section's text, for a copy button beside the title. */
   copy?: { text: string; label: string };
+  /** A line under the content: where it comes from, how to read it. */
+  note?: string;
   children: ReactNode;
 }) {
   return (
@@ -389,6 +393,7 @@ function Section({
         {copy && <CopyButton text={copy.text} label={copy.label} className={REVEAL_ON_HOVER} />}
       </div>
       {children}
+      {note && <p className="text-xs leading-[17px] text-muted-foreground">{note}</p>}
     </section>
   );
 }
@@ -413,9 +418,26 @@ function ClipText({ audio }: { audio: AudioDetailV1 }) {
       </Section>
     );
   }
+  // The dataset's text, unchanged: it is the label a model would be trained or scored on.
+  const { transcript } = audio.metadata;
+  if (audio.source === "commonvoice") {
+    return (
+      <Section
+        title="Prompted sentence"
+        copy={{ text: transcript, label: "Copy sentence" }}
+        note="The sentence the speaker was asked to read, as written. Other volunteers’ votes (Details) check that the recording matches it."
+      >
+        <p className="text-[0.95rem] leading-6">{transcript}</p>
+      </Section>
+    );
+  }
   return (
-    <Section title="Transcript" copy={{ text: displayText(audio), label: "Copy transcript" }}>
-      <p className="text-[0.95rem] leading-6">{displayText(audio)}</p>
+    <Section
+      title="Transcript"
+      copy={{ text: transcript, label: "Copy transcript" }}
+      note="As in LibriSpeech: upper case, no punctuation."
+    >
+      <p className="text-[0.95rem] leading-6 break-words">{transcript}</p>
     </Section>
   );
 }
@@ -436,8 +458,9 @@ function ClipFacts({ audio }: { audio: AudioDetailV1 }) {
       break;
     }
     case "audiocaps": {
-      const { youtubeUrl, youtubeId, startTime, audiocapIds } = audio.metadata;
+      const { youtubeUrl, youtubeId, startTime, audiocapIds, audioSetLabels = [] } = audio.metadata;
       facts.push(
+        { label: "AudioSet labels", value: audioSetLabels.length > 0 ? audioSetLabels.join(", ") : "—" },
         {
           label: "Source",
           copy: youtubeUrl,
@@ -461,10 +484,11 @@ function ClipFacts({ audio }: { audio: AudioDetailV1 }) {
     }
     case "commonvoice": {
       const { speaker, upVotes, downVotes, locale, clipId } = audio.metadata;
-      const gender = speaker.gender?.split("_")[0] ?? null;
+      const gender = speaker.gender?.split("_")[0].replaceAll("-", " ") ?? null;
       facts.push(
         { label: "Speaker", value: `Anonymous ${speaker.clientId.slice(0, 8)}` },
-        { label: "About", value: [gender, speaker.age].filter(Boolean).join(" · ") || "—" },
+        { label: "Gender", value: gender ?? "—" },
+        { label: "Age", value: speaker.age ?? "—" },
         { label: "Accent", value: speaker.accent ?? "—" },
         { label: "Votes", value: `${upVotes} up · ${downVotes} down` },
         { label: "Language", value: locale },
@@ -473,13 +497,24 @@ function ClipFacts({ audio }: { audio: AudioDetailV1 }) {
       break;
     }
   }
+  const { split, originalFormat, lossyOrigin } = audio.metadata;
   facts.push(
     { label: "Length", value: `${audio.durationSeconds.toFixed(1)} s` },
+    { label: "Dataset", value: datasetWithSplit(audio.source, split) },
+    // Missing from an API older than the `datasets` table.
+    { label: "Original audio", value: originalFormat ? `${originalFormat}${lossyOrigin ? " (lossy)" : ""}` : "—" },
     { label: "File", value: audio.metadata.fileName },
   );
 
   return (
-    <Section title="Details">
+    <Section
+      title="Details"
+      note={
+        audio.source === "commonvoice"
+          ? "Gender, age and accent are self-reported by the speaker; the accent is free text."
+          : undefined
+      }
+    >
       <dl className="grid grid-cols-[7rem_minmax(0,1fr)] text-[0.8rem] leading-[18px]">
         {facts.map((fact) => {
           const copy = fact.copy ?? (typeof fact.value === "string" && fact.value !== "—" ? fact.value : null);
@@ -487,7 +522,7 @@ function ClipFacts({ audio }: { audio: AudioDetailV1 }) {
             <div key={fact.label} className="group/reveal contents">
               <dt className="border-t border-hairline py-2.5 text-muted-foreground">{fact.label}</dt>
               <dd className="flex min-w-0 items-center gap-2 border-t border-hairline py-2.5">
-                <span className="truncate">{fact.value}</span>
+                <span className="min-w-0 break-words">{fact.value}</span>
                 {copy && (
                   <CopyButton
                     text={copy}

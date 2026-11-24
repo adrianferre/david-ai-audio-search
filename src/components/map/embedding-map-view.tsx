@@ -3,14 +3,15 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { type ReactNode, useMemo, useState } from "react";
 
-import type { SearchMatchV1 } from "@/lib/api/v1/types";
+import type { AudioSource, SearchMatchV1 } from "@/lib/api/v1/types";
 import { EMBEDDING_MAP_URL, type EmbeddingMapClip, type EmbeddingMapV1 } from "@/lib/embedding-map/types";
 import { cn } from "@/lib/utils";
 
 import { matchLabel, RelevanceMeter, relevanceLevel } from "../audios/audio-list";
-import { displayText } from "../audios/datasets";
+import { displayText, SOURCE_LABEL } from "../audios/datasets";
 import {
   type AudioListView,
+  datasetsQuery,
   fileQuery,
   searchesTranscript,
   searchQuery,
@@ -41,8 +42,12 @@ const embeddingMapQuery = () =>
     staleTime: Infinity,
   });
 
-/** A result of the current view (a search, or a search with a clip) as a point of the map. */
-type Hit = { index: number; id: string; score?: number; similarity?: number; matches?: SearchMatchV1[] };
+/**
+ * A result of the current view (a search, or a search with a clip) as a point
+ * of the map. `text` is the one the list shows: for AudioCaps, the caption that
+ * explains the match, not always the first.
+ */
+type Hit = { index: number; id: string; text: string; score?: number; similarity?: number; matches?: SearchMatchV1[] };
 
 /**
  * The results of the list's current view, from the same queries (and cache
@@ -61,8 +66,8 @@ function useViewHits(view: AudioListView, indexOf: ReadonlyMap<string, number>):
   const file = useQuery(fileQuery(view.kind === "file" && view.match === "sound" ? view.example : null, source));
   const words = useTranscriptSearch(view);
 
-  const scored = (data: { id: string; score: number; matches: SearchMatchV1[] }[] | undefined) =>
-    data?.map((hit) => ({ id: hit.id, score: hit.score, matches: hit.matches })) ?? [];
+  const scored = (data: { id: string; text: string; score: number; matches: SearchMatchV1[] }[] | undefined) =>
+    data?.map((hit) => ({ id: hit.id, text: hit.text, score: hit.score, matches: hit.matches })) ?? [];
   const raw: Omit<Hit, "index">[] =
     view.kind === "browse"
       ? []
@@ -74,6 +79,7 @@ function useViewHits(view: AudioListView, indexOf: ReadonlyMap<string, number>):
             : []
           : ((view.kind === "similar" ? similar.data : file.data)?.data.map((hit) => ({
               id: hit.id,
+              text: hit.text,
               similarity: hit.similarity,
             })) ?? []);
   return raw.flatMap((hit) => {
@@ -196,6 +202,9 @@ function LoadedMap({
   const colouring = useMemo(() => colouringOf(clips, colourBy), [clips, colourBy]);
   const hits = useViewHits(view, indexOf);
   const linked = hits.slice(0, LINKED_RESULTS);
+  const hitText = useMemo(() => new Map(hits.map((hit) => [hit.index, hit.text])), [hits]);
+  // Words ranks by text match: no z-scores, no cut-off.
+  const exactScores = view.kind !== "browse" && view.match === "exact";
   const selectedIndex = selectedId ? (indexOf.get(selectedId) ?? null) : null;
 
   // The selected clip's nearest neighbours: the same request as "Find similar sound".
@@ -315,7 +324,9 @@ function LoadedMap({
   const mapLabel = shownMap === "audio" ? "Audio map" : "Text map";
   const focusNote =
     hits.length > 0 && hits[0].score !== undefined
-      ? `${hits.length} results over the z ≥ 3 cut-off · the rest dimmed`
+      ? exactScores
+        ? `${hits.length} results with every word · the rest dimmed`
+        : `${hits.length} results over the z ≥ 3 cut-off · the rest dimmed`
       : hits.length > 0
         ? `${hits.length} closest clips · the rest dimmed`
         : checkedIndices.length > 0
@@ -328,7 +339,7 @@ function LoadedMap({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-6 pb-6 xl:overflow-hidden">
-      <StatTiles data={data} />
+      <StatTiles data={data} source={view.source} />
       <div className="flex flex-col gap-4 xl:min-h-0 xl:flex-1 xl:flex-row">
         <div className="relative h-[600px] shrink-0 overflow-hidden rounded-[14px] border bg-background xl:h-auto xl:min-h-[420px] xl:flex-1">
           <Scatter
@@ -363,7 +374,12 @@ function LoadedMap({
                 />
                 {place.anchor && anchorText && <AnchorLabel text={anchorText} at={place.anchor} size={size} />}
                 {hovered !== null && hovered !== selectedIndex && (
-                  <HoverCard clip={clips[hovered]} at={place.clip(hovered)} size={size} />
+                  <HoverCard
+                    clip={clips[hovered]}
+                    text={hitText.get(hovered)}
+                    at={place.clip(hovered)}
+                    size={size}
+                  />
                 )}
               </>
             )}
@@ -470,6 +486,7 @@ function LoadedMap({
                 view={view}
                 hits={linked}
                 total={hits.length}
+                exactScores={exactScores}
                 clips={clips}
                 hovered={hovered}
                 onHover={setHovered}
@@ -495,14 +512,30 @@ function LoadedMap({
   );
 }
 
-function StatTiles({ data }: { data: EmbeddingMapV1 }) {
-  const example = data.examples.find((e) => e.precisionAt10 !== null);
+/**
+ * The catalog in figures, for the dataset the sidebar filters on (or all of
+ * them). The neighbour figure is measured on the 768-d vectors, not on the map.
+ */
+function StatTiles({ data, source }: { data: EmbeddingMapV1; source: AudioSource | null }) {
+  const datasets = useQuery(datasetsQuery()).data?.data;
+  const split = datasets?.find((dataset) => dataset.source === source)?.split ?? "—";
+  const clips = source ? data.clips.filter((clip) => clip.source === source) : data.clips;
+  const hours = clips.reduce((sum, clip) => sum + clip.durationSeconds, 0) / 3600;
   const tiles: [string, string][] = [
-    [data.clips.length.toLocaleString(), `clips · ${data.totalDurationHours.toFixed(1)} h of audio`],
+    [clips.length.toLocaleString(), `clips · ${hours.toFixed(1)} h of audio`],
+    source
+      ? [split, `${SOURCE_LABEL[source]} split`]
+      : [
+          String(datasets?.length ?? "—"),
+          datasets ? `datasets · ${datasets.map((dataset) => dataset.split).join(", ")} splits` : "datasets",
+        ],
     [`${data.dimensions}-d`, "one space for text and audio"],
-    ["3", "datasets · speech and sounds"],
-    [`${Math.round(data.stats.speechNeighborsOfSpeech)}%`, "of a speech clip’s neighbours are speech"],
-    ...(example ? [[`${Math.round(example.precisionAt10! * 100)}%`, `P@10 for “${example.query}”`] as [string, string]] : []),
+    source
+      ? [
+          `${Math.round(data.stats.sameDatasetNeighbors[source])}%`,
+          `of a ${SOURCE_LABEL[source]} clip’s 10 nearest neighbours are ${SOURCE_LABEL[source]}`,
+        ]
+      : [`${Math.round(data.stats.speechNeighborsOfSpeech)}%`, "of a speech clip’s 10 nearest neighbours are speech"],
   ];
   return (
     <dl className="grid shrink-0 grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-2.5">
@@ -562,6 +595,7 @@ function MapResults({
   view,
   hits,
   total,
+  exactScores,
   clips,
   hovered,
   onHover,
@@ -570,6 +604,7 @@ function MapResults({
   view: AudioListView;
   hits: Hit[];
   total: number;
+  exactScores: boolean;
   clips: readonly EmbeddingMapClip[];
   hovered: number | null;
   onHover: (index: number | null) => void;
@@ -613,7 +648,9 @@ function MapResults({
               >
                 <span className="font-mono text-[11.5px] text-muted-foreground tabular-nums">{rank + 1}</span>
                 <span className="flex min-w-0 flex-col gap-1">
-                  <span className="truncate text-[0.8rem] leading-[18px] font-medium">{displayText(clip)}</span>
+                  <span className="truncate text-[0.8rem] leading-[18px] font-medium">
+                    {displayText({ source: clip.source, text: hit.text })}
+                  </span>
                   {hit.matches && (
                     <span className="flex gap-1">
                       {hit.matches.map((match) => {
@@ -632,7 +669,7 @@ function MapResults({
                   )}
                 </span>
                 {hit.score !== undefined ? (
-                  <RelevanceMeter level={relevanceLevel(hit.score, best)} />
+                  <RelevanceMeter level={relevanceLevel(hit.score, best)} score={hit.score} exact={exactScores} />
                 ) : (
                   <span className="font-mono text-xs tabular-nums" title="Cosine similarity of the sound, at most 1">
                     {hit.similarity?.toFixed(3)}

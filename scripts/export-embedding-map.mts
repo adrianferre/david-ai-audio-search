@@ -4,21 +4,17 @@
  * vectors) with its 10 nearest neighbours, five example queries with their real
  * results, and the numbers the design prompt quotes.
  *
- *   node --env-file=.env.local scripts/export-embedding-map.mts [--labels <file>]
+ *   node --env-file=.env.local scripts/export-embedding-map.mts
  *
  * READ-ONLY on the shared production database (read-only transactions). It
  * makes one AI Gateway request (the 5 queries, a fraction of a cent) and 5 GET
  * requests to the public search API.
  *
- * AudioCaps clips are AudioSet segments: their labels come from AudioSet's
- * unbalanced_train_segments.csv (~100 MB, streamed, not kept). `--labels <file>`
- * reuses a JSON of the shape `{ labels: { [clipId]: string[] } }` instead.
+ * AudioCaps clips are AudioSet segments: their labels are in the catalog
+ * (`metadata.audioSetLabels`, filled by scripts/import-audioset-labels.mts).
  * AudioSet labels are CC BY 4.0 (Google).
  */
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { createInterface } from "node:readline";
-import { Readable } from "node:stream";
-import type { ReadableStream as NodeReadableStream } from "node:stream/web";
+import { mkdir, writeFile } from "node:fs/promises";
 
 import { neon } from "@neondatabase/serverless";
 import { embedMany } from "ai";
@@ -33,7 +29,6 @@ import {
 
 const OUT = new URL("../design/embedding-map/", import.meta.url);
 const SEARCH_API = "https://david-ai-audio-search.vercel.app/api/v1/search";
-const AUDIOSET_CSV = "http://storage.googleapis.com/us_audioset/youtube_corpus/v1/csv";
 
 const QUERIES = ["dog barking", "baby crying", "someone sneezing", "thank you", "question about pricing"];
 const NEIGHBORS = 10;
@@ -91,6 +86,7 @@ type Clip = {
   bookTitle?: string;
   chapterId?: string;
   speakerId?: string;
+  speakerName?: string;
   sex?: "F" | "M";
   gender?: string;
   age?: string;
@@ -103,14 +99,6 @@ type Clip = {
 function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is not set. Run with --env-file=.env.local`);
-  return value;
-}
-
-function argument(name: string): string | null {
-  const index = process.argv.indexOf(name);
-  if (index === -1) return null;
-  const value = process.argv[index + 1];
-  if (!value) throw new Error(`${name} needs a value`);
   return value;
 }
 
@@ -168,49 +156,7 @@ function dot(a: Float32Array, b: Float32Array): number {
 }
 
 // ---------------------------------------------------------------------------
-// 2. AudioSet labels
-
-async function lines(url: string): Promise<AsyncIterable<string>> {
-  const response = await fetch(url);
-  if (!response.ok || !response.body) throw new Error(`GET ${url}: ${response.status}`);
-  return createInterface({
-    input: Readable.fromWeb(response.body as NodeReadableStream<Uint8Array>),
-    crlfDelay: Infinity,
-  });
-}
-
-/** AudioSet labels of each AudioCaps clip, matched on `youtubeId,startTime`. */
-async function downloadLabels(clips: Clip[]): Promise<Record<string, string[]>> {
-  const bySegment = new Map(
-    clips.filter((c) => c.source === "audiocaps").map((c) => [`${c.youtubeId},${c.startTime}`, c.id]),
-  );
-  const names = new Map<string, string>();
-  for await (const line of await lines(`${AUDIOSET_CSV}/class_labels_indices.csv`)) {
-    const match = /^\d+,([^,]+),"?(.*?)"?$/.exec(line);
-    if (match) names.set(match[1], match[2]);
-  }
-  const labels: Record<string, string[]> = {};
-  for await (const line of await lines(`${AUDIOSET_CSV}/unbalanced_train_segments.csv`)) {
-    if (line.startsWith("#")) continue;
-    // YTID, start_seconds, end_seconds, "mid1,mid2,..."
-    const [youtubeId, start] = line.split(/,\s*/, 2);
-    const id = bySegment.get(`${youtubeId},${Number(start)}`);
-    if (!id) continue;
-    labels[id] = line
-      .slice(line.indexOf('"'))
-      .replaceAll('"', "")
-      .split(",")
-      .map((mid) => names.get(mid.trim()) ?? mid.trim());
-  }
-  return labels;
-}
-
-async function audioSetLabels(clips: Clip[]): Promise<Record<string, string[]>> {
-  const file = argument("--labels");
-  if (file) return (JSON.parse(await readFile(file, "utf8")) as { labels: Record<string, string[]> }).labels;
-  console.log("Downloading AudioSet labels (~100 MB, streamed)…");
-  return downloadLabels(clips);
-}
+// 2. Sound families
 
 function soundFamily(labels: string[]): string {
   return SOUND_FAMILIES.find(([, pattern]) => labels.some((l) => pattern.test(l)))?.[0] ?? OTHER_FAMILY;
@@ -224,7 +170,7 @@ function toClip(row: Row): Clip {
   const peaks = row.waveform_peaks?.map((p) => round(p, 3)) ?? null;
   const base = { id: row.id, source: row.source, durationSeconds: round(row.duration_seconds, 2), waveformPeaks: peaks };
   if (row.source === "librispeech") {
-    const speaker = m.speaker as { id: string; sex: string | null };
+    const speaker = m.speaker as { id: string; sex: string | null; name: string | null };
     const chapter = m.chapter as { id: string; bookTitle: string | null };
     return {
       ...base,
@@ -232,15 +178,22 @@ function toClip(row: Row): Clip {
       bookTitle: chapter.bookTitle ?? undefined,
       chapterId: chapter.id,
       speakerId: speaker.id,
+      speakerName: speaker.name ?? undefined,
       sex: speaker.sex === "F" || speaker.sex === "M" ? speaker.sex : undefined,
     };
   }
   if (row.source === "audiocaps") {
     const captions = m.captions as string[];
+    const labels = (m.audioSetLabels as string[] | undefined) ?? [];
     return {
       ...base,
       text: captions[0],
       captions,
+      ...(labels.length > 0 && {
+        soundLabels: labels,
+        soundFamily: soundFamily(labels),
+        hasSpeech: labels.includes("Speech"),
+      }),
       youtubeId: m.youtubeId as string,
       startTime: m.startTime as number,
     };
@@ -609,14 +562,9 @@ const audioVectors = rows.map((r) => toUnitVector(r.audio_embedding));
 const textVectors = rows.map((r) => toUnitVector(r.text_embedding));
 const n = clips.length;
 
-const labels = await audioSetLabels(clips);
-const unlabelled = clips.filter((c) => c.source === "audiocaps" && !labels[c.id]).map((c) => c.id);
-if (unlabelled.length > 0) console.warn(`${unlabelled.length} AudioCaps clips have no AudioSet labels`);
-for (const clip of clips) {
-  if (clip.source !== "audiocaps" || !labels[clip.id]) continue;
-  clip.soundLabels = labels[clip.id];
-  clip.soundFamily = soundFamily(clip.soundLabels);
-  clip.hasSpeech = clip.soundLabels.includes("Speech");
+const unlabelled = clips.filter((c) => c.source === "audiocaps" && !c.soundLabels).length;
+if (unlabelled > 0) {
+  console.warn(`${unlabelled} AudioCaps clips have no AudioSet labels (run \`pnpm import-audioset-labels\`)`);
 }
 
 console.log("Similarities…");
@@ -789,6 +737,7 @@ const points = clips.map((c, i) => ({
   bookTitle: c.bookTitle,
   chapterId: c.chapterId,
   speakerId: c.speakerId,
+  speakerName: c.speakerName,
   sex: c.sex,
   gender: c.gender,
   age: c.age,
