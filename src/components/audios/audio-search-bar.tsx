@@ -11,7 +11,7 @@ import {
   UploadIcon,
   XIcon,
 } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
@@ -23,6 +23,8 @@ import { cn } from "@/lib/utils";
 
 import { displayText } from "./datasets";
 import type { AudioExample, ReferenceClip } from "./queries";
+import type { RecentSearch } from "./recent-searches";
+import { recentOptionId, RecentSearchesPopover } from "./recent-searches-popover";
 import { formatClock, Waveform } from "./waveform";
 
 /** Reading an attached audio file, or why it couldn't be used. */
@@ -96,6 +98,10 @@ export function AudioSearchBar({
   onAttachFile,
   onClearExample,
   recorder,
+  recentSearches,
+  onPickRecent,
+  onClearRecent,
+  onCommitQuery,
 }: {
   query: string;
   onQueryChange: (query: string) => void;
@@ -116,14 +122,39 @@ export function AudioSearchBar({
   onAttachFile: (file: File) => void;
   onClearExample: () => void;
   recorder: RecorderControls;
+  /** The latest searches, newest first, offered while the empty input has focus. */
+  recentSearches: readonly RecentSearch[];
+  onPickRecent: (entry: RecentSearch) => void;
+  onClearRecent: () => void;
+  /** The typed query is done (Enter, or leaving the input): worth keeping as a recent search. */
+  onCommitQuery: () => void;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [inputFocused, setInputFocused] = useState(false);
+  // Escape hides the recent searches until the input is focused or typed in again.
+  const [recentDismissed, setRecentDismissed] = useState(false);
+  const [activeRecent, setActiveRecent] = useState(-1);
+  const recentListId = useId();
+  // The input unmounts without a blur event when a chip or the recorder replaces
+  // it. Read the real focus: Strict Mode detaches and reattaches refs on mount.
+  const setInputNode = useCallback((node: HTMLInputElement | null) => {
+    inputRef.current = node;
+    setInputFocused(node !== null && node === document.activeElement);
+  }, []);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const reading = exampleStatus?.kind === "reading";
   const recording = recorder.status !== "idle";
   const error = exampleStatus?.kind === "error" ? exampleStatus.message : null;
   // A file, a recording, or a "similar to" clip replaces the text input until its X clears it.
   const chip = reading || example !== null || similarTo !== null;
+  const recentOpen =
+    inputFocused && !recentDismissed && query === "" && recentSearches.length > 0;
+  const activeIndex = recentOpen && activeRecent < recentSearches.length ? activeRecent : -1;
+
+  const pickRecent = (entry: RecentSearch) => {
+    setActiveRecent(-1);
+    onPickRecent(entry);
+  };
 
   // The X that cleared the chip unmounts with it, so hand focus to the input that comes back.
   const focusInputWhenShown = useRef(false);
@@ -138,7 +169,7 @@ export function AudioSearchBar({
     <div className="flex flex-col gap-2">
       <div
         className={cn(
-          "flex h-13 items-center gap-2 rounded-[14px] border bg-card pr-1.5 pl-4 shadow-[0_1px_2px_rgba(26,26,25,0.04)] transition-shadow",
+          "relative flex h-13 items-center gap-2 rounded-[14px] border bg-card pr-1.5 pl-4 shadow-[0_1px_2px_rgba(26,26,25,0.04)] transition-shadow",
           recording
             ? "border-foreground shadow-[0_0_0_4px_rgba(26,26,25,0.06)]"
             : "border-input focus-within:border-foreground focus-within:shadow-[0_0_0_4px_rgba(26,26,25,0.06)]",
@@ -266,10 +297,53 @@ export function AudioSearchBar({
             ) : (
               <>
                 <input
-                  ref={inputRef}
+                  ref={setInputNode}
                   type="search"
+                  role="combobox"
+                  aria-expanded={recentOpen}
+                  aria-controls={recentOpen ? recentListId : undefined}
+                  aria-autocomplete="none"
+                  aria-activedescendant={
+                    activeIndex >= 0 ? recentOptionId(recentListId, activeIndex) : undefined
+                  }
                   value={query}
-                  onChange={(event) => onQueryChange(event.target.value)}
+                  onChange={(event) => {
+                    setRecentDismissed(false);
+                    setActiveRecent(-1);
+                    onQueryChange(event.target.value);
+                  }}
+                  onFocus={() => {
+                    setInputFocused(true);
+                    setRecentDismissed(false);
+                    setActiveRecent(-1);
+                  }}
+                  onBlur={() => {
+                    setInputFocused(false);
+                    if (query.trim()) onCommitQuery();
+                  }}
+                  onKeyDown={(event) => {
+                    if (recentOpen && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+                      event.preventDefault();
+                      const count = recentSearches.length;
+                      setActiveRecent(
+                        event.key === "ArrowDown"
+                          ? (activeIndex + 1) % count
+                          : activeIndex <= 0
+                            ? count - 1
+                            : activeIndex - 1,
+                      );
+                    } else if (event.key === "Enter") {
+                      if (activeIndex >= 0) {
+                        event.preventDefault();
+                        pickRecent(recentSearches[activeIndex]);
+                      } else if (query.trim()) {
+                        onCommitQuery();
+                      }
+                    } else if (event.key === "Escape" && recentOpen) {
+                      event.preventDefault();
+                      setRecentDismissed(true);
+                    }
+                  }}
                   placeholder="Describe a sound or what’s said, like “dog barking”"
                   aria-label="Search the catalog"
                   maxLength={200}
@@ -373,6 +447,16 @@ export function AudioSearchBar({
               </TooltipContent>
             </Tooltip>
           </>
+        )}
+        {recentOpen && !recording && (
+          <RecentSearchesPopover
+            id={recentListId}
+            entries={recentSearches}
+            activeIndex={activeIndex}
+            onActiveIndexChange={setActiveRecent}
+            onPick={pickRecent}
+            onClear={onClearRecent}
+          />
         )}
       </div>
       {error ? (
