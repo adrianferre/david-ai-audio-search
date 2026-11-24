@@ -138,8 +138,10 @@ Each clip has up to three things to match against, all in the `audios` table:
 - **The cut-off trims; the top score judges.** Nearest-neighbour search always has a nearest clip,
   so a query with no good answer in the catalog still returns a handful of weak results. When
   the best of them scores under 5, the response says so (`strongMatch: false`) and the list
-  opens with "Nothing clearly matches". In the evaluation that flags 10 of 11 queries without an
-  answer and 3.5% of those with one.
+  opens with "Nothing clearly matches", unless it scores at least 4 and its text is close to the
+  query in absolute terms (text cosine ≥ 0.735): a query that fits many clips can't stand far above
+  them. In the evaluation that flags 10 of 11 queries without an answer and 0.5% of those with one
+  (3.5% with the score alone).
 - **No vector index.** With about 3,300 clips an exact scan takes a few milliseconds and returns
   the true nearest neighbours. An HNSW index is the next step at a much larger scale.
 
@@ -335,7 +337,8 @@ deviations (plus bonuses for exact words and the exact phrase); compare it only 
 shows it next to the relevance bars in the list, which compare it with the best result. With `source`, clips
 are still scored against the whole catalog, so a score doesn't change with the filter. Clips that
 don't stand out, or score under half of the best result returned, are left out, so the list is often shorter than `limit`.
-`strongMatch` is `false` when the best result scores under 5: nothing clearly matches, and the
+`strongMatch` is `false` when the best result scores under 5, unless it scores at least 4 and the
+best text match's cosine to the query is at least 0.735: nothing clearly matches, and the
 results are only the closest clips (an empty list is never a strong match). It is only judged for
 typed queries: with an example's sound (`soundOf`, a WAV body) it is `true` whenever there are results.
 Returns `503 search_unavailable` when the embedding model can't be reached.

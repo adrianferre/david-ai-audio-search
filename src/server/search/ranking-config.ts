@@ -59,8 +59,8 @@ export const STRONG_MATCH_SCORE = 5;
  * from STRONG_MATCH_MIN_SCORE also counts as a clear match when the best text
  * match is this close in absolute terms (raw cosine of the text vectors). In
  * the evaluation the queries without an answer reach at most 0.724 (bar one
- * already over 5), and the rule clears about two thirds of the answerable
- * queries the score alone flags. Tied to the embedding model and the query
+ * already over 5), and the rule clears about six in seven of the answerable
+ * queries the score alone flags (3.5% flagged → 0.5%). Tied to the embedding model and the query
  * format (embedding-config.ts): recalibrate with `pnpm eval` when either changes.
  */
 export const STRONG_MATCH_TEXT_COSINE = 0.735;
