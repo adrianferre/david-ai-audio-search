@@ -12,13 +12,15 @@ import {
   MIN_Z_SCORE,
 } from "@/server/search/ranking-config";
 
-import type {
-  AudioRecord,
-  AudioSearchHit,
-  AudioSource,
-  DatasetRecord,
-  SearchMatch,
-  SimilarAudioHit,
+import {
+  ANY_LENGTH,
+  type AudioRecord,
+  type AudioSearchHit,
+  type AudioSource,
+  type DatasetRecord,
+  type DurationRange,
+  type SearchMatch,
+  type SimilarAudioHit,
 } from "./types";
 
 // Columns of the `audios` table (schema: src/server/db/schema.sql).
@@ -106,17 +108,21 @@ export type AudioPage = { items: AudioRecord[]; total: number };
 
 /**
  * LibriSpeech first, then the rest (AudioCaps, then Common Voice) by id.
- * With `source`, only that dataset (and `total` counts only it).
+ * With `source`, only that dataset, and with `duration`, only the audios of that
+ * length (`total` counts only those).
  */
 export async function listAudios({
   offset,
   limit,
   source = null,
+  duration = ANY_LENGTH,
 }: {
   offset: number;
   limit: number;
   source?: AudioSource | null;
+  duration?: DurationRange;
 }): Promise<AudioPage> {
+  const { min, max } = duration;
   const sql = getSql();
   // One round trip and one snapshot (REPEATABLE READ; the default READ COMMITTED
   // gives each statement its own), so `total` always matches the page.
@@ -125,11 +131,19 @@ export async function listAudios({
       sql`
         SELECT id, source, file_name, blob_pathname, duration_seconds, sample_rate, channels, waveform_peaks, metadata
         FROM audios
-        WHERE ${source}::text IS NULL OR source = ${source}
+        WHERE (${source}::text IS NULL OR source = ${source})
+          AND (${min}::float8 IS NULL OR duration_seconds >= ${min})
+          AND (${max}::float8 IS NULL OR duration_seconds <= ${max})
         ORDER BY (CASE source WHEN 'librispeech' THEN 0 ELSE 1 END), id
         LIMIT ${limit} OFFSET ${offset}
       `,
-      sql`SELECT count(*)::int AS total FROM audios WHERE ${source}::text IS NULL OR source = ${source}`,
+      sql`
+        SELECT count(*)::int AS total
+        FROM audios
+        WHERE (${source}::text IS NULL OR source = ${source})
+          AND (${min}::float8 IS NULL OR duration_seconds >= ${min})
+          AND (${max}::float8 IS NULL OR duration_seconds <= ${max})
+      `,
     ],
     { readOnly: true, isolationLevel: "RepeatableRead" },
   );
@@ -149,15 +163,36 @@ function toDataset(row: unknown): DatasetRecord {
   return { source: r.source, split: r.split, originalFormat: r.original_format, lossyOrigin: r.lossy_origin };
 }
 
-/** Every dataset of the catalog with how many audios it has (0 when none yet). */
-export async function listDatasets(): Promise<(DatasetRecord & { count: number })[]> {
+export type DatasetSummary = DatasetRecord & {
+  count: number;
+  durationSeconds: { min: number; max: number } | null;
+};
+
+/**
+ * Every dataset of the catalog with how many audios it has (0 when none yet), or
+ * how many of `duration`'s length, and the length of its shortest and longest
+ * audio (of all of them, whatever `duration`).
+ */
+export async function listDatasets(duration: DurationRange = ANY_LENGTH): Promise<DatasetSummary[]> {
+  const { min, max } = duration;
   const rows = await getSql()`
-    SELECT d.source, d.split, d.original_format, d.lossy_origin, count(a.id)::int AS count
+    SELECT d.source, d.split, d.original_format, d.lossy_origin,
+           count(a.id) FILTER (
+             WHERE (${min}::float8 IS NULL OR a.duration_seconds >= ${min})
+               AND (${max}::float8 IS NULL OR a.duration_seconds <= ${max})
+           )::int AS count,
+           min(a.duration_seconds)::float8 AS min_duration,
+           max(a.duration_seconds)::float8 AS max_duration
     FROM datasets d
     LEFT JOIN audios a ON a.source = d.source
     GROUP BY d.source
   `;
-  return rows.map((row) => ({ ...toDataset(row), count: row.count as number }));
+  return rows.map((row) => ({
+    ...toDataset(row),
+    count: row.count as number,
+    durationSeconds:
+      row.min_duration === null ? null : { min: row.min_duration as number, max: row.max_duration as number },
+  }));
 }
 
 /** Every dataset of the catalog, by source: what the details of its audios quote. */
@@ -219,10 +254,11 @@ export type AudioSearchResult = {
  * `soundIsExample` says the sound vector is a clip's (`soundOf`, or an uploaded
  * clip's), not the typed query's, so the stricter typed-sound cut-off doesn't apply.
  * Results below MIN_SHARE_OF_BEST of the best one are dropped.
- * With `source`, only that dataset's clips are returned, and `exclude` (an
- * audio's id) is left out: the clip searched with, which would come first.
- * Both are still scored against the whole catalog, so a score means the same
- * with or without them; the best result is the best of those returned.
+ * With `source`, only that dataset's clips are returned, with `duration` only
+ * the clips of that length, and `exclude` (an audio's id) is left out: the clip
+ * searched with, which would come first. All are still scored against the whole
+ * catalog, so a score means the same with or without them; the best result is
+ * the best of those returned.
  *
  * It scores every clip: fine for a few thousand rows. At a much larger scale,
  * take the top candidates per signal from a vector index and estimate the
@@ -235,6 +271,7 @@ export async function searchAudios({
   soundIsExample = soundOf !== null,
   limit,
   source = null,
+  duration = ANY_LENGTH,
   exclude = null,
 }: {
   query: string;
@@ -243,8 +280,10 @@ export async function searchAudios({
   soundIsExample?: boolean;
   limit: number;
   source?: AudioSource | null;
+  duration?: DurationRange;
   exclude?: string | null;
 }): Promise<AudioSearchResult> {
+  const { min, max } = duration;
   const soundMinZ = vectors.text && !soundIsExample ? MIN_TYPED_SOUND_Z_SCORE : MIN_Z_SCORE;
   const rows = await getSql()`
     WITH q AS (
@@ -304,6 +343,8 @@ export async function searchAudios({
       JOIN audios a USING (id)
       WHERE (g.text > 0 OR g.sound > 0)
         AND (${source}::text IS NULL OR a.source = ${source})
+        AND (${min}::float8 IS NULL OR a.duration_seconds >= ${min})
+        AND (${max}::float8 IS NULL OR a.duration_seconds <= ${max})
         AND (${exclude}::text IS NULL OR a.id <> ${exclude})
     )
     SELECT a.id, a.source, a.file_name, a.blob_pathname, a.duration_seconds, a.sample_rate, a.channels, a.waveform_peaks,
@@ -347,14 +388,17 @@ export async function searchAudiosByExactWords({
   query,
   limit,
   source = null,
+  duration = ANY_LENGTH,
   exclude = null,
 }: {
   query: string;
   limit: number;
   source?: AudioSource | null;
+  duration?: DurationRange;
   /** An audio's id to leave out: the clip searched with. */
   exclude?: string | null;
 }): Promise<AudioSearchHit[]> {
+  const { min, max } = duration;
   const rows = await getSql()`
     WITH q AS (
       SELECT websearch_to_tsquery('simple', ${query}) AS words,
@@ -383,6 +427,8 @@ export async function searchAudiosByExactWords({
     ) t
     WHERE t.doc @@ q.words
       AND (${source}::text IS NULL OR a.source = ${source})
+      AND (${min}::float8 IS NULL OR a.duration_seconds >= ${min})
+      AND (${max}::float8 IS NULL OR a.duration_seconds <= ${max})
       AND (${exclude}::text IS NULL OR a.id <> ${exclude})
     ORDER BY score DESC, a.id
     LIMIT ${limit}
@@ -397,14 +443,17 @@ export async function searchAudiosByExactWords({
 
 /**
  * Search by example: the clips whose audio vector is nearest to the one of
- * `id`, most similar first, from `source` only when it is set. Returns null when
- * `id` doesn't exist, and an empty list when it has no vector yet.
+ * `id`, most similar first, from `source` only when it is set and of
+ * `duration`'s length. Returns null when `id` doesn't exist, and an empty list
+ * when it has no vector yet.
  */
 export async function findSimilarAudios(
   id: string,
   limit: number,
   source: AudioSource | null = null,
+  duration: DurationRange = ANY_LENGTH,
 ): Promise<SimilarAudioHit[] | null> {
+  const { min, max } = duration;
   const sql = getSql();
   const [found, rows] = await sql.transaction(
     [
@@ -418,6 +467,8 @@ export async function findSimilarAudios(
           AND a.audio_embedding IS NOT NULL
           AND example.audio_embedding IS NOT NULL
           AND (${source}::text IS NULL OR a.source = ${source})
+          AND (${min}::float8 IS NULL OR a.duration_seconds >= ${min})
+          AND (${max}::float8 IS NULL OR a.duration_seconds <= ${max})
         ORDER BY a.audio_embedding <=> example.audio_embedding, a.id
         LIMIT ${limit}
       `,
@@ -445,13 +496,16 @@ export async function getAudios(ids: string[]): Promise<AudioRecord[]> {
 
 /**
  * Search by an outside example: the clips whose audio vector is nearest to
- * `vector` (an embedded audio file), most similar first, from `source` only when it is set.
+ * `vector` (an embedded audio file), most similar first, from `source` only when
+ * it is set and of `duration`'s length.
  */
 export async function findAudiosNearVector(
   vector: number[],
   limit: number,
   source: AudioSource | null = null,
+  duration: DurationRange = ANY_LENGTH,
 ): Promise<SimilarAudioHit[]> {
+  const { min, max } = duration;
   const rows = await getSql()`
     WITH q AS (SELECT ${toVector(vector)}::vector AS v)
     SELECT a.id, a.source, a.file_name, a.blob_pathname, a.duration_seconds, a.sample_rate, a.channels, a.waveform_peaks,
@@ -460,6 +514,8 @@ export async function findAudiosNearVector(
     CROSS JOIN q
     WHERE a.audio_embedding IS NOT NULL
       AND (${source}::text IS NULL OR a.source = ${source})
+      AND (${min}::float8 IS NULL OR a.duration_seconds >= ${min})
+      AND (${max}::float8 IS NULL OR a.duration_seconds <= ${max})
     ORDER BY a.audio_embedding <=> q.v, a.id
     LIMIT ${limit}
   `;

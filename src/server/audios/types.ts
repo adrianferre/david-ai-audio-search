@@ -75,6 +75,12 @@ export type AudioRecord = LibriSpeechRecord | AudioCapsRecord | CommonVoiceRecor
 /** The dataset an audio comes from. */
 export type AudioSource = AudioRecord["source"];
 
+/** Clip lengths in seconds, both ends included. A null end is open. */
+export type DurationRange = { min: number | null; max: number | null };
+
+/** No length filter. */
+export const ANY_LENGTH: DurationRange = { min: null, max: null };
+
 /** A row of the `datasets` table: facts that hold for every clip of a dataset. */
 export type DatasetRecord = {
   source: AudioSource;

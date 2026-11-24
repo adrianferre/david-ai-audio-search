@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import type { SimilarAudiosResponseV1 } from "@/lib/api/v1/types";
 import { apiError, internalError } from "@/server/api/errors";
-import { sourceQuerySchema } from "@/server/api/source-filter";
+import { catalogFilterQuerySchema, durationRange } from "@/server/api/source-filter";
 import { toSimilarAudioV1 } from "@/server/api/v1/audios";
 import { readWavBody } from "@/server/api/wav-body";
 import { findAudiosNearVector } from "@/server/audios/repository";
@@ -14,10 +14,10 @@ const MAX_LIMIT = 100;
 
 const querySchema = z.object({
   limit: z.coerce.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
-}).extend(sourceQuerySchema.shape);
+}).extend(catalogFilterQuerySchema.shape);
 
 /**
- * POST /api/v1/search/audio?limit=50&source=audiocaps with a WAV body (`Content-Type: audio/wav`).
+ * POST /api/v1/search/audio?limit=50&source=audiocaps&minDuration=5 with a WAV body (`Content-Type: audio/wav`).
  * Search by an outside example: the audios that sound most like the uploaded
  * clip. The clip is embedded and discarded, never stored.
  */
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
 
   let hits;
   try {
-    hits = await findAudiosNearVector(vector, parsed.data.limit, parsed.data.source);
+    hits = await findAudiosNearVector(vector, parsed.data.limit, parsed.data.source, durationRange(parsed.data));
   } catch (error) {
     return internalError(error);
   }

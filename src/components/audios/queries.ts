@@ -24,6 +24,7 @@ import {
   type AudioListResponseV1,
   type AudioSearchResponseV1,
   type AudioSource,
+  type DurationRangeV1,
   MAX_SEARCH_QUERY_LENGTH,
   type SearchMatchFilterV1,
   type SimilarAudiosResponseV1,
@@ -47,21 +48,26 @@ export type SearchResultsData = AudioSearchResponseV1 & { hasMore: boolean };
  * select-all checkbox),
  * so both read the same cache entries instead of fetching twice.
  */
-export const catalogQuery = (source: AudioSource | null) =>
+export const catalogQuery = (source: AudioSource | null, duration: DurationRangeV1) =>
   infiniteQueryOptions({
-    queryKey: ["v1", "audios", { pageSize: PAGE_SIZE, source }],
+    queryKey: ["v1", "audios", { pageSize: PAGE_SIZE, source, duration }],
     queryFn: ({ pageParam, signal }) =>
-      fetchAudios({ page: pageParam, pageSize: PAGE_SIZE, source, signal }),
+      fetchAudios({ page: pageParam, pageSize: PAGE_SIZE, source, duration, signal }),
     initialPageParam: 1,
     getNextPageParam: (lastPage) => lastPage.pagination.nextPage ?? undefined,
   });
 
-/** Every dataset with its number of audios, for the sidebar. */
-export const datasetsQuery = () =>
+/**
+ * Every dataset with its number of audios (of `duration`'s length) and its
+ * shortest and longest one, for the sidebar.
+ */
+export const datasetsQuery = (duration: DurationRangeV1) =>
   queryOptions({
-    queryKey: ["v1", "datasets"],
-    queryFn: ({ signal }) => fetchDatasets(signal),
+    queryKey: ["v1", "datasets", { duration }],
+    queryFn: ({ signal }) => fetchDatasets(duration, signal),
     staleTime: 10 * 60 * 1000,
+    // The counts of the previous length stay on screen while the new ones load.
+    placeholderData: keepPreviousData,
   });
 
 /**
@@ -80,6 +86,7 @@ export const searchQuery = (
   q: string,
   match: SearchMatchFilterV1,
   source: AudioSource | null,
+  duration: DurationRangeV1,
   excludeId: string | null = null,
   sound: ClipSound | null = null,
 ) => {
@@ -95,13 +102,14 @@ export const searchQuery = (
         q,
         match,
         source,
+        duration,
         limit,
         ...(sound && { sound: soundOf ?? `file:${wav!.id}` }),
         ...(excludeId && { exclude: excludeId }),
       },
     ],
     queryFn: ({ signal }) =>
-      searchAudios({ q, match, source, limit, soundOf, wav: wav?.wav ?? null, exclude: excludeId, signal }),
+      searchAudios({ q, match, source, duration, limit, soundOf, wav: wav?.wav ?? null, exclude: excludeId, signal }),
     // Keep the previous results on screen while the next query loads.
     placeholderData: keepPreviousData,
     select: cutToLimit,
@@ -117,10 +125,10 @@ function cutToLimit(response: AudioSearchResponseV1): SearchResultsData {
   };
 }
 
-export const similarQuery = (id: string, source: AudioSource | null) =>
+export const similarQuery = (id: string, source: AudioSource | null, duration: DurationRangeV1) =>
   queryOptions({
-    queryKey: ["v1", "audio", id, "similar", { limit: RESULTS_LIMIT, source }],
-    queryFn: ({ signal }) => fetchSimilarAudios({ id, source, limit: RESULTS_LIMIT, signal }),
+    queryKey: ["v1", "audio", id, "similar", { limit: RESULTS_LIMIT, source, duration }],
+    queryFn: ({ signal }) => fetchSimilarAudios({ id, source, duration, limit: RESULTS_LIMIT, signal }),
   });
 
 /**
@@ -142,11 +150,15 @@ export type AudioExample = {
   trimmed: boolean;
 };
 
-export const fileQuery = (example: AudioExample | null, source: AudioSource | null) =>
+export const fileQuery = (
+  example: AudioExample | null,
+  source: AudioSource | null,
+  duration: DurationRangeV1,
+) =>
   queryOptions({
-    queryKey: ["v1", "search", "audio", example?.id ?? "", { limit: RESULTS_LIMIT, source }],
+    queryKey: ["v1", "search", "audio", example?.id ?? "", { limit: RESULTS_LIMIT, source, duration }],
     queryFn: ({ signal }) =>
-      searchByAudioFile({ wav: example!.wav, source, limit: RESULTS_LIMIT, signal }),
+      searchByAudioFile({ wav: example!.wav, source, duration, limit: RESULTS_LIMIT, signal }),
     enabled: example !== null,
     // The result for a given file never changes.
     staleTime: Infinity,
@@ -165,13 +177,14 @@ export type ReferenceClip = {
 /**
  * What the list shows: the whole catalog, a text search, the audios similar to
  * one of the catalog, or the audios like the user's own file or recording. Each
- * from one dataset when `source` is set (the sidebar's filter).
+ * from one dataset when `source` is set, and of `duration`'s length (the
+ * sidebar's filters).
  *
  * A search with a clip compares its sound (`match: "sound"`, the default) or
  * what's said in it: its transcript, searched like typed text by its exact
  * words (`"exact"`) or its meaning (`"text"`).
  */
-export type AudioListView = { source: AudioSource | null } & (
+export type AudioListView = { source: AudioSource | null; duration: DurationRangeV1 } & (
   | { kind: "browse" }
   | { kind: "search"; q: string; match: SearchMatchFilterV1 }
   | { kind: "similar"; reference: ReferenceClip; match: ClipMatch }
@@ -269,7 +282,7 @@ export function useTranscriptSearch(view: AudioListView): {
         : { kind: "file", example: clip.example };
   const searchable = clip !== null && transcript.isSuccess && (q !== "" || clip.match === "all");
   const search = useQuery({
-    ...searchQuery(q, clip?.match ?? "text", view.source, excludeId, sound),
+    ...searchQuery(q, clip?.match ?? "text", view.source, view.duration, excludeId, sound),
     enabled: searchable,
   });
   return { transcript, search, q, excludeId, sound, searchable };
@@ -283,17 +296,24 @@ export function useListView(view: AudioListView): {
   rows: readonly { id: string; durationSeconds: number }[];
   summary: string;
 } {
-  const { source } = view;
-  const catalog = useInfiniteQuery({ ...catalogQuery(source), enabled: view.kind === "browse" });
+  const { source, duration } = view;
+  const catalog = useInfiniteQuery({ ...catalogQuery(source, duration), enabled: view.kind === "browse" });
   const search = useQuery({
-    ...searchQuery(view.kind === "search" ? view.q : "", view.kind === "search" ? view.match : "all", source),
+    ...searchQuery(
+      view.kind === "search" ? view.q : "",
+      view.kind === "search" ? view.match : "all",
+      source,
+      duration,
+    ),
     enabled: view.kind === "search",
   });
   const similar = useQuery({
-    ...similarQuery(view.kind === "similar" ? view.reference.id : "", source),
+    ...similarQuery(view.kind === "similar" ? view.reference.id : "", source, duration),
     enabled: view.kind === "similar" && view.match === "sound",
   });
-  const file = useQuery(fileQuery(view.kind === "file" && view.match === "sound" ? view.example : null, source));
+  const file = useQuery(
+    fileQuery(view.kind === "file" && view.match === "sound" ? view.example : null, source, duration),
+  );
   const words = useTranscriptSearch(view);
   const byWords = searchesTranscript(view);
 

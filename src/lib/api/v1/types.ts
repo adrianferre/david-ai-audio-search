@@ -9,6 +9,15 @@ export const AUDIO_SOURCES = ["librispeech", "audiocaps", "commonvoice"] as cons
 
 export type AudioSource = (typeof AUDIO_SOURCES)[number];
 
+/**
+ * A range of clip lengths, in seconds, both ends included: the `minDuration`
+ * and `maxDuration` query parameters of every endpoint that takes `source`.
+ * A null end is open: no shortest or no longest length.
+ */
+export type DurationRangeV1 = { min: number | null; max: number | null };
+
+export const ANY_DURATION: DurationRangeV1 = { min: null, max: null };
+
 export type Pagination = {
   page: number;
   pageSize: number;
@@ -120,10 +129,16 @@ export type AudioDetailV1 =
 
 export type AudioListResponseV1 = PaginatedResponse<AudioListItemV1>;
 
-/** One dataset of the catalog and how many audios it has (`GET /api/v1/datasets`). */
+/**
+ * One dataset of the catalog and how many audios it has (`GET /api/v1/datasets`).
+ * With `minDuration`/`maxDuration`, `count` is of the audios of that length only;
+ * `durationSeconds` is always of the whole dataset.
+ */
 export type DatasetV1 = {
   source: AudioSource;
   count: number;
+  /** The shortest and the longest audio of the dataset. Null while it has none. */
+  durationSeconds: { min: number; max: number } | null;
 } & DatasetFactsV1;
 
 export type DatasetsResponseV1 = DataResponse<DatasetV1[]>;

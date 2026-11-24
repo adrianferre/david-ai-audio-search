@@ -5,7 +5,7 @@ import { AudioLinesIcon } from "lucide-react";
 import { type DragEvent, useEffect, useRef, useState } from "react";
 
 import { ApiError, fetchRemoteAudio } from "@/lib/api/v1/client";
-import type { AudioSource, SearchMatchFilterV1 } from "@/lib/api/v1/types";
+import { ANY_DURATION, type AudioSource, type DurationRangeV1, type SearchMatchFilterV1 } from "@/lib/api/v1/types";
 import { MAX_EXAMPLE_SECONDS, toExampleClip, UnreadableAudioError } from "@/lib/audio/to-wav";
 import { useMicrophoneRecorder } from "@/lib/audio/use-microphone-recorder";
 
@@ -13,6 +13,7 @@ import { AudioDetailPanel } from "./audio-detail-panel";
 import { AudioList } from "./audio-list";
 import { AudioSearchBar, type ExampleStatus, parseLink, type TranscriptLine } from "./audio-search-bar";
 import { displayText, SOURCE_LABEL } from "./datasets";
+import { describeDuration } from "./duration-filter";
 import {
   type AudioExample,
   type AudioListView,
@@ -69,6 +70,7 @@ function hasFiles(event: DragEvent) {
 
 export function AudioBrowser() {
   const [source, setSource] = useState<AudioSource | null>(null);
+  const [duration, setDuration] = useState<DurationRangeV1>(ANY_DURATION);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [match, setMatch] = useState<SearchMatchFilterV1>("all");
@@ -98,12 +100,12 @@ export function AudioBrowser() {
   const searchQuery = query.trim() === "" || parseLink(debouncedQuery) ? "" : debouncedQuery;
 
   const view: AudioListView = example
-    ? { kind: "file", example, source, match: clipMatch }
+    ? { kind: "file", example, source, duration, match: clipMatch }
     : similarTo
-      ? { kind: "similar", reference: similarTo, source, match: clipMatch }
+      ? { kind: "similar", reference: similarTo, source, duration, match: clipMatch }
       : searchQuery
-        ? { kind: "search", q: searchQuery, match, source }
-        : { kind: "browse", source };
+        ? { kind: "search", q: searchQuery, match, source, duration }
+        : { kind: "browse", source, duration };
   const { summary } = useListView(view);
   const { transcript } = useTranscriptSearch(view);
   const transcriptLine: TranscriptLine | null =
@@ -127,28 +129,28 @@ export function AudioBrowser() {
   useEffect(() => {
     if (!settledText) return;
     const timeout = setTimeout(
-      () => remember({ kind: "text", q: settledText, match, source }),
+      () => remember({ kind: "text", q: settledText, match, source, duration }),
       TEXT_SEARCH_SETTLED_MS,
     );
     return () => clearTimeout(timeout);
-  }, [settledText, match, source, remember]);
+  }, [settledText, match, source, duration, remember]);
 
   // A search with a clip is kept as it stands, and saved again as it changes:
-  // its match, its dataset filter, and the transcript once it is in.
+  // its match, its dataset and length filters, and the transcript once it is in.
   const spoken = view.kind !== "browse" && view.kind !== "search" && view.match !== "sound" && transcript.isSuccess
     ? transcript.data.text
     : undefined;
   useEffect(() => {
     if (similarTo) {
-      remember({ kind: "similar", reference: similarTo, source, match: clipMatch, transcript: spoken });
+      remember({ kind: "similar", reference: similarTo, source, duration, match: clipMatch, transcript: spoken });
     } else if (example) {
-      remember({ kind: "audio", example, source, match: clipMatch, transcript: spoken });
+      remember({ kind: "audio", example, source, duration, match: clipMatch, transcript: spoken });
     }
-  }, [similarTo, example, source, clipMatch, spoken, remember]);
+  }, [similarTo, example, source, duration, clipMatch, spoken, remember]);
 
   const commitQuery = () => {
     const q = query.trim();
-    if (q && !similarTo && !example) remember({ kind: "text", q, match, source });
+    if (q && !similarTo && !example) remember({ kind: "text", q, match, source, duration });
   };
 
   useEffect(
@@ -272,12 +274,20 @@ export function AudioBrowser() {
     void searchWithAudio({ url: url.href }, linkName(url), "link");
   };
 
-  /** Runs a recent search again, with the dataset filter it ran with. */
+  /** Runs a recent search again, with the dataset and length filters it ran with. */
   const rerun = (entry: RecentSearch) => {
     setSource(entry.source);
+    // Saved before the length filter existed: any length.
+    setDuration(entry.duration ?? ANY_DURATION);
     // The user's clip was transcribed already: don't send it to the model again.
     if (entry.kind === "audio" && entry.transcript !== undefined) {
-      const { queryKey } = transcriptQuery({ kind: "file", example: entry.example, source: null, match: "all" });
+      const { queryKey } = transcriptQuery({
+        kind: "file",
+        example: entry.example,
+        source: null,
+        duration: ANY_DURATION,
+        match: "all",
+      });
       if (queryClient.getQueryData(queryKey) === undefined) {
         queryClient.setQueryData(queryKey, { data: { text: entry.transcript, generated: true } });
       }
@@ -351,18 +361,21 @@ export function AudioBrowser() {
     ) : (
       `${{ all: "Like", exact: "Says what’s in", text: "Means what’s in", sound: "Sounds like" }[view.match]} your ${view.example.source}`
     );
-  const scope = source && view.kind !== "browse" ? `${SOURCE_LABEL[source]} only` : null;
+  const scope = [
+    source && view.kind !== "browse" ? `${SOURCE_LABEL[source]} only` : null,
+    describeDuration(duration),
+  ];
 
   return (
     <div className="relative flex min-h-0 flex-1" {...dropHandlers}>
-      <Sidebar source={source} onSourceChange={setSource} />
+      <Sidebar source={source} onSourceChange={setSource} duration={duration} onDurationChange={setDuration} />
       <main className="flex min-w-0 flex-1 flex-col">
         <header className="flex shrink-0 flex-col gap-4 px-6 pt-7 pb-4">
           <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             {/* truncate clips overflow; the padding keeps Besley's descenders (g, y, p) inside it. */}
             <h1 className="-mb-2 min-w-0 truncate pb-2 font-serif text-[32px] leading-10 tracking-[-0.64px]">{title}</h1>
             <p aria-live="polite" className="text-[0.8rem] text-muted-foreground tabular-nums">
-              {[scope, summary].filter(Boolean).join(" · ")}
+              {[...scope, summary].filter(Boolean).join(" · ")}
             </p>
           </div>
           <AudioSearchBar
@@ -438,6 +451,7 @@ export function AudioBrowser() {
               onClipMatch: setClipMatch,
               onClearSearch: () => setQuery(""),
               onClearSource: () => setSource(null),
+              onClearDuration: () => setDuration(ANY_DURATION),
             }}
           />
           <SelectionBar selection={selection} />
