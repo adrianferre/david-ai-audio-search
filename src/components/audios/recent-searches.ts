@@ -30,6 +30,66 @@ type ClipSearchState = {
   transcript?: string;
 };
 
+/**
+ * A search offered above the recent ones, always: a slice of the catalog a
+ * speech team would ask for, which the sample answers well. Its `label` says
+ * what it looks for. Not stored, and Clear leaves it.
+ */
+export type SuggestedSearch = RecentSearch & { label: string };
+
+export const SUGGESTED_SEARCHES: readonly SuggestedSearch[] = [
+  {
+    // AudioCaps clips where people talk over other sounds: speech in noisy settings.
+    id: "suggested-noisy-speech",
+    at: 0,
+    label: "People talking in a noisy crowd",
+    kind: "text",
+    q: "people talking in a noisy crowd",
+    match: "all",
+    source: "audiocaps",
+  },
+  {
+    // A Common Voice speaker with an Indian accent: half of the 10 clips that sound most like
+    // them have that accent too, against 12% of the sample.
+    id: "suggested-indian-accent",
+    at: 0,
+    label: "Indian-accented English, more like this speaker",
+    kind: "similar",
+    match: "sound",
+    source: "commonvoice",
+    reference: {
+      id: "commonvoice-common_voice_en_17292485",
+      source: "commonvoice",
+      title: "Speaker b11cb747 · male, twenties, India and South Asia (India, Pakistan, Sri Lanka)",
+      text: "Wandering years, in which a journeyman went from place to place after his Lekrjahre, to acquire further experience.",
+      durationSeconds: 7.416,
+      waveformPeaks: [
+        0.021, 0.057, 0.069, 0.089, 0.038, 0.758, 0.86, 0.753, 0.721, 0.816, 0.924, 0.797, 0.319, 0.159, 0.58, 0.702,
+        0.39, 0.335, 0.558, 0.943, 0.647, 0.633, 0.492, 0.776, 0.693, 0.366, 0.613, 0.586, 0.644, 0.396, 0.608, 0.738,
+        0.534, 0.535, 0.31, 0.643, 0.69, 0.382, 0.2, 0.081, 0.681, 0.927, 0.939, 0.559, 0.331, 0.622, 0.913, 0.978, 1,
+        0.769, 0.844, 0.881, 0.762, 0.274, 0.681, 0.716, 0.725, 0.287, 0.139, 0.104, 0.05, 0.04, 0.023, 0.023,
+      ],
+    },
+  },
+];
+
+/**
+ * Whether `search` is one of the suggestions as offered (same match and dataset
+ * filter), so it isn't added to the recent searches as well.
+ */
+export function isSuggested(search: NewRecentSearch | RecentSearch): boolean {
+  return SUGGESTED_SEARCHES.some((suggested) => {
+    if (suggested.kind !== search.kind || suggested.source !== search.source) return false;
+    if (suggested.kind === "text" && search.kind === "text") {
+      return suggested.match === search.match && normalize(suggested.q) === normalize(search.q);
+    }
+    if (suggested.kind === "similar" && search.kind === "similar") {
+      return suggested.reference.id === search.reference.id && suggested.match === (search.match ?? "sound");
+    }
+    return false;
+  });
+}
+
 /** A search as `remember` takes it: its id and time are added. */
 export type NewRecentSearch = RecentSearch extends infer S
   ? S extends RecentSearch
@@ -177,6 +237,8 @@ export function useRecentSearches(): {
   }, [entries, loaded]);
 
   const remember = useCallback((search: NewRecentSearch) => {
+    // A suggestion stays where it is, above the recent searches.
+    if (isSuggested(search)) return;
     setEntries((current) => {
       const entry = { ...search, id: crypto.randomUUID(), at: Date.now() } as RecentSearch;
       const older = refines(current[0], search) ? current.slice(1) : current;
@@ -185,6 +247,7 @@ export function useRecentSearches(): {
   }, []);
 
   const promote = useCallback((entry: RecentSearch) => {
+    if (isSuggested(entry)) return;
     setEntries((current) => [
       { ...entry, at: Date.now() },
       ...current.filter((e) => e.id !== entry.id && !repeats(e, entry)),

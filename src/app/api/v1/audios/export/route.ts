@@ -5,7 +5,7 @@ import { z } from "zod";
 import { type AudioExportManifestV1, exportFileName, MAX_EXPORT_IDS } from "@/lib/api/v1/types";
 import { apiError, internalError } from "@/server/api/errors";
 import { toAudioDetailV1 } from "@/server/api/v1/audios";
-import { getAudios } from "@/server/audios/repository";
+import { getAudios, getDatasets } from "@/server/audios/repository";
 import { type AudioFileResponse, getAudioFile } from "@/server/audios/storage";
 import type { AudioRecord } from "@/server/audios/types";
 
@@ -40,9 +40,9 @@ export async function POST(request: NextRequest) {
   }
   const { ids } = parsed.data;
 
-  let records;
+  let records, datasets;
   try {
-    records = await getAudios(ids);
+    [records, datasets] = await Promise.all([getAudios(ids), getDatasets()]);
   } catch (error) {
     return internalError(error);
   }
@@ -56,7 +56,8 @@ export async function POST(request: NextRequest) {
   const manifest: AudioExportManifestV1 = {
     exportedAt: now.toISOString(),
     count: records.length,
-    audios: records.map(toAudioDetailV1),
+    // Every audio has its dataset's row (foreign key on audios.source).
+    audios: records.map((record) => toAudioDetailV1(record, datasets.get(record.source)!)),
   };
   const zip = downloadZip(zipEntries(records, manifest, now, request.signal));
 

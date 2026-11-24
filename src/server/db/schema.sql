@@ -8,11 +8,23 @@
 -- pgvector, for the embedding columns.
 CREATE EXTENSION IF NOT EXISTS vector;
 
+-- One row per dataset (migrations/005_datasets.sql): facts that hold for every clip of it.
+CREATE TABLE IF NOT EXISTS datasets (
+  source          text PRIMARY KEY,
+  -- The split the catalog took from the dataset: 'dev-clean', 'val', 'dev'.
+  split           text NOT NULL,
+  -- What the audio was before it became the stored FLAC: 'FLAC', 'MP3', 'YouTube audio'.
+  original_format text NOT NULL,
+  -- The original audio was lossy: compression artefacts may remain in the FLAC.
+  lossy_origin    boolean NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS audios (
   -- "C" collation: byte-wise ordering, the same on every server locale.
   id               text COLLATE "C" PRIMARY KEY,
   -- 'commonvoice' added by migrations/003_commonvoice.sql.
-  source           text NOT NULL CHECK (source IN ('librispeech', 'audiocaps', 'commonvoice')),
+  source           text NOT NULL CHECK (source IN ('librispeech', 'audiocaps', 'commonvoice'))
+                     REFERENCES datasets (source),
   file_name        text NOT NULL,
   -- Pathname of the FLAC in the private Vercel Blob store.
   blob_pathname    text NOT NULL,
@@ -20,7 +32,8 @@ CREATE TABLE IF NOT EXISTS audios (
   sample_rate      integer NOT NULL,
   channels         smallint NOT NULL,
   -- Dataset-specific fields (LibriSpeechMetadata / AudioCapsMetadata / CommonVoiceMetadata in
-  -- src/server/audios/types.ts).
+  -- src/server/audios/types.ts). AudioCaps rows also hold `audioSetLabels`, the AudioSet labels
+  -- of their YouTube segment, filled by scripts/import-audioset-labels.mts.
   metadata         jsonb NOT NULL,
   updated_at       timestamptz NOT NULL DEFAULT now(),
   -- Waveform overview (migrations/004_waveform_peaks.sql): 64 peak levels from 0 to 1

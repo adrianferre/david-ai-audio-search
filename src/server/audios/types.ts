@@ -32,6 +32,8 @@ export type AudioCapsMetadata = {
   startTime: number;
   captions: string[];
   audiocapIds: number[];
+  /** AudioSet labels of the clip's YouTube segment (scripts/import-audioset-labels.mts). Empty when it has none. */
+  audioSetLabels: string[];
 };
 
 /**
@@ -65,6 +67,17 @@ export type AudioRecord = LibriSpeechRecord | AudioCapsRecord | CommonVoiceRecor
 
 /** The dataset an audio comes from. */
 export type AudioSource = AudioRecord["source"];
+
+/** A row of the `datasets` table: facts that hold for every clip of a dataset. */
+export type DatasetRecord = {
+  source: AudioSource;
+  /** The split the catalog took from the dataset, e.g. `dev-clean`. */
+  split: string;
+  /** What the audio was before it became the stored FLAC: `FLAC`, `MP3`, `YouTube audio`. */
+  originalFormat: string;
+  /** The original audio was lossy: compression artefacts may remain in the FLAC. */
+  lossyOrigin: boolean;
+};
 
 /**
  * Why a search result matched: its text (the transcript of a LibriSpeech or

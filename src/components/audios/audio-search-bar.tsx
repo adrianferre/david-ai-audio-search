@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
 
 import { displayText } from "./datasets";
 import type { AudioExample, ClipMatch, ReferenceClip } from "./queries";
-import type { RecentSearch } from "./recent-searches";
+import { type RecentSearch, SUGGESTED_SEARCHES } from "./recent-searches";
 import { recentOptionId, RecentSearchesPopover } from "./recent-searches-popover";
 import { formatClock, Waveform } from "./waveform";
 
@@ -182,9 +182,10 @@ export function AudioSearchBar({
   const spoken = byWords && transcript.status === "success" && transcript.text !== "" ? transcript.text : null;
   const transcribing = byWords && transcript.status === "pending";
   const nobodySpeaks = byWords && transcript.status === "success" && transcript.text === "";
-  const recentOpen =
-    inputFocused && !recentDismissed && !hideRecent && query === "" && recentSearches.length > 0;
-  const activeIndex = recentOpen && activeRecent < recentSearches.length ? activeRecent : -1;
+  // The suggestions come first, then the recent searches: arrow keys go through both.
+  const offered: readonly RecentSearch[] = [...SUGGESTED_SEARCHES, ...recentSearches];
+  const recentOpen = inputFocused && !recentDismissed && !hideRecent && query === "" && offered.length > 0;
+  const activeIndex = recentOpen && activeRecent < offered.length ? activeRecent : -1;
 
   const pickRecent = (entry: RecentSearch) => {
     setActiveRecent(-1);
@@ -381,7 +382,7 @@ export function AudioSearchBar({
                   onKeyDown={(event) => {
                     if (recentOpen && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
                       event.preventDefault();
-                      const count = recentSearches.length;
+                      const count = offered.length;
                       setActiveRecent(
                         event.key === "ArrowDown"
                           ? (activeIndex + 1) % count
@@ -392,7 +393,7 @@ export function AudioSearchBar({
                     } else if (event.key === "Enter") {
                       if (activeIndex >= 0) {
                         event.preventDefault();
-                        pickRecent(recentSearches[activeIndex]);
+                        pickRecent(offered[activeIndex]);
                       } else if (typedLink) {
                         // The link stays in the box until its file is searched, so a link
                         // that fails can be fixed and sent again.
@@ -498,6 +499,7 @@ export function AudioSearchBar({
         {recentOpen && !recording && (
           <RecentSearchesPopover
             id={recentListId}
+            suggested={SUGGESTED_SEARCHES}
             entries={recentSearches}
             activeIndex={activeIndex}
             onActiveIndexChange={setActiveRecent}

@@ -6,7 +6,7 @@ import type {
   AudioSearchResultV1,
   SimilarAudioV1,
 } from "@/lib/api/v1/types";
-import type { AudioRecord, AudioSearchHit, SimilarAudioHit } from "@/server/audios/types";
+import type { AudioRecord, AudioSearchHit, DatasetRecord, SimilarAudioHit } from "@/server/audios/types";
 
 /** Common Voice stores gender as e.g. `female_feminine`; show the first word. */
 function genderLabel(gender: string | null): string | null {
@@ -20,8 +20,12 @@ function titleOf(record: AudioRecord): string {
       const reader = record.speaker.name ?? `speaker ${record.speaker.id}`;
       return `${book} · read by ${reader}`;
     }
-    case "audiocaps":
-      return `YouTube ${record.youtubeId} @ ${record.startTime}s`;
+    case "audiocaps": {
+      // The AudioSet labels say what the clip is; the YouTube segment says where it's from.
+      const labels = record.audioSetLabels.join(", ");
+      const segment = `YouTube ${record.youtubeId} @ ${record.startTime}s`;
+      return labels ? `${labels} · ${segment}` : segment;
+    }
     case "commonvoice": {
       const { clientId, age, gender, accent } = record.speaker;
       const about = [genderLabel(gender), age, accent].filter(Boolean).join(", ");
@@ -42,11 +46,15 @@ export function toAudioListItemV1(record: AudioRecord): AudioListItemV1 {
   };
 }
 
-export function toAudioDetailV1(record: AudioRecord): AudioDetailV1 {
+/** `dataset` is the record's own (`getDatasets()`): its split and original format. */
+export function toAudioDetailV1(record: AudioRecord, dataset: DatasetRecord): AudioDetailV1 {
   const file = {
     fileName: record.fileName,
     sampleRate: record.sampleRate,
     channels: record.channels,
+    split: dataset.split,
+    originalFormat: dataset.originalFormat,
+    lossyOrigin: dataset.lossyOrigin,
   };
   switch (record.source) {
     case "librispeech":
@@ -74,6 +82,7 @@ export function toAudioDetailV1(record: AudioRecord): AudioDetailV1 {
           startTime: record.startTime,
           captions: record.captions,
           audiocapIds: record.audiocapIds,
+          audioSetLabels: record.audioSetLabels,
           ...file,
         },
       };

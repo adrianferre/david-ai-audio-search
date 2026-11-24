@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-24T21:58:49.503Z",
+ "generatedAt": "2026-11-24T23:03:02.214Z",
  "model": "google/gemini-embedding-2",
  "ranking": {
   "minZ": 3,
@@ -8,6 +8,8 @@
   "exactPhraseBonus": 1.5,
   "minShareOfBest": 0.5,
   "strongMatchScore": 5,
+  "strongMatchMinScore": 4,
+  "strongMatchTextCosine": 0.735,
   "limit": 50
  },
  "catalog": {
@@ -11124,7 +11126,7 @@
   },
   "strongMatch": [
    {
-    "threshold": 4,
+    "rule": "Top score under 4.0",
     "negativeFlagged": 0.36363636363636365,
     "positiveFlagged": 0.002297970126388357,
     "positiveFlaggedBySet": {
@@ -11135,7 +11137,7 @@
     }
    },
    {
-    "threshold": 4.5,
+    "rule": "Top score under 4.5",
     "negativeFlagged": 0.7272727272727273,
     "positiveFlagged": 0.00995787054768288,
     "positiveFlaggedBySet": {
@@ -11146,7 +11148,7 @@
     }
    },
    {
-    "threshold": 5,
+    "rule": "Top score under 5.0",
     "negativeFlagged": 0.9090909090909091,
     "positiveFlagged": 0.035235541937954806,
     "positiveFlaggedBySet": {
@@ -11157,7 +11159,7 @@
     }
    },
    {
-    "threshold": 5.5,
+    "rule": "Top score under 5.5",
     "negativeFlagged": 0.9090909090909091,
     "positiveFlagged": 0.09919571045576407,
     "positiveFlaggedBySet": {
@@ -11168,7 +11170,7 @@
     }
    },
    {
-    "threshold": 6,
+    "rule": "Top score under 6.0",
     "negativeFlagged": 1,
     "positiveFlagged": 0.18575258521639218,
     "positiveFlaggedBySet": {
@@ -11176,6 +11178,17 @@
      "fragment": 0.016,
      "paraphrase": 0.2153846153846154,
      "concept": 0.0297029702970297
+    }
+   },
+   {
+    "rule": "Production: under 5.0, unless from 4.0 with a text cosine ≥ 0.735",
+    "negativeFlagged": 0.9090909090909091,
+    "positiveFlagged": 0.00497893527384144,
+    "positiveFlaggedBySet": {
+     "caption": 0.004225352112676056,
+     "fragment": 0,
+     "paraphrase": 0.03076923076923077,
+     "concept": 0
     }
    }
   ]
@@ -21462,44 +21475,15 @@
    }
   ]
  },
- "live": {
-  "parity": {
-   "queries": 20,
-   "top10Overlap": 1,
-   "identicalLists": 20,
-   "maxScoreDiff": 0.000011616105034306656,
-   "similarIdentical": 20,
-   "similarChecked": 20
-  },
-  "latency": {
-   "GET /api/v1/search (text, match=all)": {
-    "n": 20,
-    "p50": 884.0119169999962,
-    "p95": 978.3835830000025,
-    "errors": 0
-   },
-   "GET /api/v1/audios/{id}/similar": {
-    "n": 20,
-    "p50": 219.8074590000033,
-    "p95": 256.85816600000544,
-    "errors": 0
-   },
-   "POST /api/v1/search/audio (5 s WAV)": {
-    "n": 8,
-    "p50": 1362.020292000001,
-    "p95": 1604.013042000006,
-    "errors": 0
-   }
-  }
- },
+ "live": null,
  "database": {
   "similarMs": {
-   "p50": 16.524,
-   "max": 17.456
+   "p50": 15.922,
+   "max": 16.674
   },
   "searchMs": {
-   "p50": 106.852,
-   "max": 118.734
+   "p50": 103.43,
+   "max": 109.066
   }
  },
  "cost": {
@@ -21508,8 +21492,8 @@
   "audioSearchTokensPer10s": 320,
   "audioSearchUsdPer10s": 0.00208,
   "queryEmbeddingMs": {
-   "p50": 560.2119170000078,
-   "p95": 821.0189169999794
+   "p50": 534.5915839999798,
+   "p95": 1617.6110409999965
   },
   "pricing": {
    "input": "0.0000002",

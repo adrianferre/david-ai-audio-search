@@ -1,13 +1,13 @@
 # Retrieval evaluation
 
-Generated 2026-11-24T21:58:49.503Z by `pnpm eval` (scripts/eval/run.mts). Do not edit by hand.
+Generated 2026-11-24T23:03:02.214Z by `pnpm eval` (scripts/eval/run.mts). Do not edit by hand.
 
-Catalog: 426 audiocaps, 200 commonvoice, 2703 librispeech. Model `google/gemini-embedding-2`. Ranking: cut-off z ≥ 3 (typed sound next to text: 4), exact-words bonus 3 (+1.5 for the phrase as typed), results under 0.5 × the best dropped, strong match from 5, limit 50.
+Catalog: 426 audiocaps, 200 commonvoice, 2703 librispeech. Model `google/gemini-embedding-2`. Ranking: cut-off z ≥ 3 (typed sound next to text: 4), exact-words bonus 3 (+1.5 for the phrase as typed), results under 0.5 × the best dropped, strong match from 5 (from 4 with a text cosine ≥ 0.735), limit 50.
 Queries: 11 negative, 2130 caption, 250 fragment, 130 paraphrase, 101 concept, 419 example, 300 speaker. Method and caveats: [eval/README.md](README.md).
 
 Numbers are percentages, mean over queries, with a 95% bootstrap interval in brackets. R@K = a relevant clip in the top K.
 
-**Parity with the live API:** 20 text queries, top-10 overlap 100.0%, identical lists 20/20, max score difference 0.0000; /similar identical 20/20.
+**Parity with the live API:** skipped (--skip-live).
 
 ## 1. Production search, by query set
 
@@ -140,15 +140,16 @@ The share-of-best cut-off on production (results under share × the best result 
 
 Answerability: AUC of the top result's score for queries with vs without an answer = **0.985** (1 = the top score alone tells them apart). Top score p10/p50/p90: with an answer 5.51/7.83/12.06, without 3.65/4.26/4.70.
 
-"Nothing clearly matches" (the API's `strongMatch: false`, top score under the threshold), share of queries flagged:
+"Nothing clearly matches" (the API's `strongMatch: false`), share of queries flagged by each rule:
 
-| Top score under | Negative queries | Queries with an answer | caption | fragment | paraphrase | concept |
+| Flagged when | Negative queries | Queries with an answer | caption | fragment | paraphrase | concept |
 | --- | --- | --- | --- | --- | --- | --- |
-| 4.0 | 36.4 | 0.2 | 0.2 | 0.0 | 1.5 | 0.0 |
-| 4.5 | 72.7 | 1.0 | 1.0 | 0.0 | 3.1 | 0.0 |
-| 5.0 (production) | 90.9 | 3.5 | 3.9 | 0.0 | 6.2 | 0.0 |
-| 5.5 | 90.9 | 9.9 | 11.2 | 0.4 | 13.1 | 2.0 |
-| 6.0 | 100.0 | 18.6 | 21.1 | 1.6 | 21.5 | 3.0 |
+| Top score under 4.0 | 36.4 | 0.2 | 0.2 | 0.0 | 1.5 | 0.0 |
+| Top score under 4.5 | 72.7 | 1.0 | 1.0 | 0.0 | 3.1 | 0.0 |
+| Top score under 5.0 | 90.9 | 3.5 | 3.9 | 0.0 | 6.2 | 0.0 |
+| Top score under 5.5 | 90.9 | 9.9 | 11.2 | 0.4 | 13.1 | 2.0 |
+| Top score under 6.0 | 100.0 | 18.6 | 21.1 | 1.6 | 21.5 | 3.0 |
+| Production: under 5.0, unless from 4.0 with a text cosine ≥ 0.735 | 90.9 | 0.5 | 0.4 | 0.0 | 3.1 | 0.0 |
 
 | Negative query | Results | Top score | Top results |
 | --- | --- | --- | --- |
@@ -187,7 +188,7 @@ Not like for like: a different pool (426 val clips, plus 2,903 speech clips in t
 - Raw cosine, text query vs text vectors: p10/p50/p90 = 0.537/0.587/0.640; text query vs audio vectors: 0.328/0.481/0.566.
 - Speech clips in the sound-only top 10 for sound-concept queries: 24.4% (speech is 87.2% of the catalog).
 - Paraphrases that share no content word with their transcript (n = 76): production R@10 98.7 <sub>[96.1–100.0]</sub>, MRR 97.0 <sub>[93.1–100.0]</sub>.
-- Database time (EXPLAIN ANALYZE, exact scan of 3329 clips): /similar p50 16.5 ms (max 17.5), text search p50 106.9 ms (max 118.7).
+- Database time (EXPLAIN ANALYZE, exact scan of 3329 clips): /similar p50 15.9 ms (max 16.7), text search p50 103.4 ms (max 109.1).
 
 ## 7. Failures of production search (relevant clip not in the top 10)
 
@@ -204,12 +205,6 @@ Caption failures: 48.4% have a top result with the same AudioSet sound label as 
 
 ## 8. Latency and cost
 
-| Endpoint (client-side, from this machine) | n | p50 ms | p95 ms | errors |
-| --- | --- | --- | --- | --- |
-| GET /api/v1/search (text, match=all) | 20 | 884 | 978 | 0 |
-| GET /api/v1/audios/{id}/similar | 20 | 220 | 257 | 0 |
-| POST /api/v1/search/audio (5 s WAV) | 8 | 1362 | 1604 | 0 |
-
-- Query embedding through the AI Gateway (2 vectors, one request): p50 560 ms, p95 821 ms.
+- Query embedding through the AI Gateway (2 vectors, one request): p50 535 ms, p95 1618 ms.
 - A text search embeds 10 tokens: $2.00 per million searches. A 10 s audio search embeds 320 tokens: $2.08 per thousand. (Gateway list prices: {"input":"0.0000002","audio_input_token_cost":"0.0000065"}.)
 - This run embedded 0 new tokens.

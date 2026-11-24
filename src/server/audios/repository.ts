@@ -6,13 +6,20 @@ import { getSql } from "@/server/db";
 import {
   EXACT_PHRASE_BONUS,
   EXACT_WORDS_BONUS,
+  isStrongMatch,
   MIN_SHARE_OF_BEST,
   MIN_TYPED_SOUND_Z_SCORE,
   MIN_Z_SCORE,
-  STRONG_MATCH_SCORE,
 } from "@/server/search/ranking-config";
 
-import type { AudioRecord, AudioSearchHit, AudioSource, SearchMatch, SimilarAudioHit } from "./types";
+import type {
+  AudioRecord,
+  AudioSearchHit,
+  AudioSource,
+  DatasetRecord,
+  SearchMatch,
+  SimilarAudioHit,
+} from "./types";
 
 // Columns of the `audios` table (schema: src/server/db/schema.sql).
 const speakerSchema = z.object({ id: z.string(), sex: z.string().nullable(), name: z.string().nullable() });
@@ -48,6 +55,7 @@ const rowSchema = z.discriminatedUnion("source", [
       startTime: z.number(),
       captions: z.array(z.string()),
       audiocapIds: z.array(z.number()),
+      audioSetLabels: z.array(z.string()).default([]),
     }),
   }),
   z.object({
@@ -125,10 +133,37 @@ export async function listAudios({
   return { items: rows.map(toRecord), total: total as number };
 }
 
-/** How many audios each dataset has. A dataset with none is left out. */
-export async function countAudiosBySource(): Promise<{ source: AudioSource; count: number }[]> {
-  const rows = await getSql()`SELECT source, count(*)::int AS count FROM audios GROUP BY source`;
-  return rows.map((row) => ({ source: row.source as AudioSource, count: row.count as number }));
+// Columns of the `datasets` table (migrations/005_datasets.sql).
+const datasetRowSchema = z.object({
+  source: z.enum(["librispeech", "audiocaps", "commonvoice"]),
+  split: z.string(),
+  original_format: z.string(),
+  lossy_origin: z.boolean(),
+});
+
+function toDataset(row: unknown): DatasetRecord {
+  const r = datasetRowSchema.parse(row);
+  return { source: r.source, split: r.split, originalFormat: r.original_format, lossyOrigin: r.lossy_origin };
+}
+
+/** Every dataset of the catalog with how many audios it has (0 when none yet). */
+export async function listDatasets(): Promise<(DatasetRecord & { count: number })[]> {
+  const rows = await getSql()`
+    SELECT d.source, d.split, d.original_format, d.lossy_origin, count(a.id)::int AS count
+    FROM datasets d
+    LEFT JOIN audios a ON a.source = d.source
+    GROUP BY d.source
+  `;
+  return rows.map((row) => ({ ...toDataset(row), count: row.count as number }));
+}
+
+/** Every dataset of the catalog, by source: what the details of its audios quote. */
+export async function getDatasets(): Promise<Map<AudioSource, DatasetRecord>> {
+  const rows = await getSql()`SELECT source, split, original_format, lossy_origin FROM datasets`;
+  return new Map(rows.map((row) => {
+    const dataset = toDataset(row);
+    return [dataset.source, dataset];
+  }));
 }
 
 export async function getAudio(id: string): Promise<AudioRecord | null> {
@@ -157,8 +192,9 @@ function toVector(embedding: number[] | undefined): string | null {
 export type AudioSearchResult = {
   hits: AudioSearchHit[];
   /**
-   * The best result scores at least STRONG_MATCH_SCORE: something clearly
-   * matches the query. Not judged (true) when the sound is an example's: the
+   * Something clearly matches the query: the best result scores at least
+   * STRONG_MATCH_SCORE, or scores lower but its text is close to the query in
+   * absolute terms (isStrongMatch in ranking-config.ts). Not judged (true) when the sound is an example's: the
    * threshold is calibrated on typed queries, and a clip's nearest sounds
    * stand out on another scale.
    */
@@ -233,6 +269,7 @@ export async function searchAudios({
                to_tsvector('simple', a.metadata->>'transcript'),
                to_tsvector('simple', a.metadata->'captions')
              ) @@ q.phrase) AS has_phrase,
+             s.text AS text_cosine,
              (s.text - avg(s.text) OVER ()) / nullif(stddev_samp(s.text) OVER (), 0) AS text_z,
              (s.sound - avg(s.sound) OVER ()) / nullif(stddev_samp(s.sound) OVER (), 0) AS sound_z
       FROM audios a
@@ -243,7 +280,7 @@ export async function searchAudios({
       ) s
     ),
     signals AS (
-      SELECT id,
+      SELECT id, text_cosine,
              CASE
                WHEN has_words OR has_phrase
                  THEN ${EXACT_WORDS_BONUS}::float8
@@ -257,7 +294,9 @@ export async function searchAudios({
     ),
     matched AS (
       SELECT g.id, greatest(g.text, g.sound)::float8 AS score, g.text > 0 AS text, g.sound > 0 AS sound,
-             max(greatest(g.text, g.sound)) OVER ()::float8 AS best
+             max(greatest(g.text, g.sound)) OVER ()::float8 AS best,
+             -- How close the best text match is in absolute terms, for strongMatch.
+             max(g.text_cosine) FILTER (WHERE g.text > 0) OVER ()::float8 AS best_text_cosine
       FROM signals g
       JOIN audios a USING (id)
       WHERE (g.text > 0 OR g.sound > 0)
@@ -265,7 +304,7 @@ export async function searchAudios({
         AND (${exclude}::text IS NULL OR a.id <> ${exclude})
     )
     SELECT a.id, a.source, a.file_name, a.blob_pathname, a.duration_seconds, a.sample_rate, a.channels, a.waveform_peaks,
-           a.metadata, m.score, m.text, m.sound, m.best,
+           a.metadata, m.score, m.text, m.sound, m.best, m.best_text_cosine,
            (
              SELECT caption
              FROM jsonb_array_elements_text(a.metadata->'captions') WITH ORDINALITY AS c(caption, position)
@@ -286,7 +325,9 @@ export async function searchAudios({
       matches: [...(row.text ? ["text" as const] : []), ...(row.sound ? ["sound" as const] : [])],
       caption: (row.caption as string | null) ?? null,
     })),
-    strongMatch: rows.length > 0 && (soundIsExample || (rows[0].best as number) >= STRONG_MATCH_SCORE),
+    strongMatch: rows.length > 0 && (
+      soundIsExample || isStrongMatch(rows[0].best as number, rows[0].best_text_cosine as number | null)
+    ),
   };
 }
 
