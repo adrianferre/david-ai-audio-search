@@ -1,23 +1,14 @@
+import { AudioBrowser } from "@/components/audios/audio-browser";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function Home() {
   return (
-    <div className="flex flex-1 flex-col">
-      <header className="flex items-center justify-end p-4">
+    <div className="flex h-dvh flex-col">
+      <header className="flex shrink-0 items-center justify-between border-b px-4 py-3">
+        <h1 className="text-lg font-semibold tracking-tight">AI Audio Search</h1>
         <ThemeToggle />
       </header>
-      <main className="flex flex-1 flex-col items-center justify-center gap-3 px-6 pb-24 text-center">
-        <h1 className="text-4xl font-semibold tracking-tight">
-          AI Audio Search
-        </h1>
-        <p className="max-w-md text-muted-foreground">
-          Project scaffolded. Start building in{" "}
-          <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-sm">
-            src/app/page.tsx
-          </code>
-          .
-        </p>
-      </main>
+      <AudioBrowser />
     </div>
   );
 }

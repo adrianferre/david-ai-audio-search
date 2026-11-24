@@ -1,0 +1,58 @@
+"use client";
+
+import { useQuery } from "@tanstack/react-query";
+import { XIcon } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { fetchAudio } from "@/lib/api/v1/client";
+
+export function AudioDetailPanel({
+  id,
+  onClose,
+}: {
+  id: string;
+  onClose: () => void;
+}) {
+  const { data, status, error, refetch } = useQuery({
+    queryKey: ["v1", "audio", id],
+    queryFn: ({ signal }) => fetchAudio(id, signal),
+  });
+
+  return (
+    <aside
+      className="flex w-[min(40rem,45%)] shrink-0 flex-col border-l"
+      aria-label="Audio details"
+    >
+      <div className="flex h-10 shrink-0 items-center gap-2 border-b pr-2 pl-4">
+        <h2 className="truncate font-mono text-sm">{id}</h2>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="ml-auto"
+          aria-label="Close details"
+          onClick={onClose}
+        >
+          <XIcon />
+        </Button>
+      </div>
+      <div className="min-h-0 flex-1 overflow-auto p-4">
+        {status === "pending" && (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        )}
+        {status === "error" && (
+          <div className="flex items-center gap-3 text-sm">
+            <span className="text-destructive">{error.message}</span>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>
+              Retry
+            </Button>
+          </div>
+        )}
+        {status === "success" && (
+          <pre className="font-mono text-xs break-words whitespace-pre-wrap">
+            {JSON.stringify(data, null, 2)}
+          </pre>
+        )}
+      </div>
+    </aside>
+  );
+}
