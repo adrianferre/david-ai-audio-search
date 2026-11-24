@@ -98,12 +98,20 @@ function repeats(entry: RecentSearch, next: NewRecentSearch): boolean {
 }
 
 /**
+ * How soon after the newest search a longer or shorter query counts as typing
+ * on, not as a search of its own. Long enough to pause, read a few results and
+ * go on; short enough that "dog" today doesn't replace yesterday's "dog barking".
+ */
+const REFINE_WINDOW_MS = 30_000;
+
+/**
  * Whether `next` refines `latest`, the newest search, so it takes its place:
  * typing on ("dog", "dog bark", "dog barking"), or changing its match or
  * dataset right after.
  */
 function refines(latest: RecentSearch | undefined, next: NewRecentSearch): boolean {
   if (latest?.kind !== "text" || next.kind !== "text") return false;
+  if (Date.now() - latest.at > REFINE_WINDOW_MS) return false;
   const a = normalize(latest.q);
   const b = normalize(next.q);
   return a.startsWith(b) || b.startsWith(a);
