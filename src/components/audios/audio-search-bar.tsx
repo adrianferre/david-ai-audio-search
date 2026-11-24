@@ -43,30 +43,39 @@ export type RecorderControls = {
   onCancel: () => void;
 };
 
+// The filters, in this order. `exact` and `text` keep their API names (see `SearchMatchFilterV1`).
 const MATCH_OPTIONS: { value: SearchMatchFilterV1; label: string; hint: string }[] = [
-  { value: "all", label: "All", hint: "Matches what’s said, the captions, and the sound" },
-  { value: "text", label: "Words", hint: "Matches the transcripts and the captions only" },
-  { value: "sound", label: "Sound", hint: "Matches what the clips sound like only" },
+  { value: "all", label: "All", hint: "Matches the words, their meaning, and the sound" },
+  { value: "exact", label: "Words", hint: "Matches the exact words in the transcripts and captions" },
+  { value: "text", label: "Meaning", hint: "Matches the meaning of the transcripts and captions" },
+  { value: "sound", label: "Sound", hint: "Matches what the clips sound like" },
 ];
 
 const MATCH_EXPLANATION: Record<SearchMatchFilterV1, ReactNode> = {
   all: (
     <>
-      <b className="font-medium text-foreground">All</b> matches what’s said, the captions, and what
-      the clip sounds like. Use <b className="font-medium text-foreground">Words</b> or{" "}
+      <b className="font-medium text-foreground">All</b> matches the words, their meaning, and what the clip
+      sounds like. Use <b className="font-medium text-foreground">Words</b>,{" "}
+      <b className="font-medium text-foreground">Meaning</b> or{" "}
       <b className="font-medium text-foreground">Sound</b> to narrow it.
+    </>
+  ),
+  exact: (
+    <>
+      <b className="font-medium text-foreground">Words</b> finds the transcripts and captions that contain every
+      word as typed. Use “quotes” for a phrase, <i>or</i> for either word, and -word to leave one out.
     </>
   ),
   text: (
     <>
-      <b className="font-medium text-foreground">Words</b> matches the transcripts and the captions,
-      not the sound.
+      <b className="font-medium text-foreground">Meaning</b> matches what the transcripts and captions mean, even
+      in other words, not the sound.
     </>
   ),
   sound: (
     <>
-      <b className="font-medium text-foreground">Sound</b> matches what the clips sound like, not
-      their words.
+      <b className="font-medium text-foreground">Sound</b> matches what the clips sound like, not their
+      words.
     </>
   ),
 };

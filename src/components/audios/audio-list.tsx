@@ -50,7 +50,18 @@ function matchLabel(match: SearchMatchV1, source: AudioSource) {
   return match === "text" ? TEXT_MATCH_LABEL[source] : SOUND_MATCH_LABEL;
 }
 
-const FILTER_LABEL: Record<SearchMatchV1, string> = { text: "Words", sound: "Sound" };
+const FILTER_LABEL: Record<Exclude<SearchMatchFilterV1, "all">, string> = {
+  exact: "Words",
+  text: "Meaning",
+  sound: "Sound",
+};
+
+const EMPTY_HINT: Record<SearchMatchFilterV1, string> = {
+  all: "Try other words, describe the sound, or search with an audio file.",
+  exact: "Words only finds the words as typed, in transcripts and captions. Meaning also finds other ways of saying it.",
+  text: "Meaning only looks at transcripts and captions. The sound itself may still match.",
+  sound: "Sound only looks at what the clips sound like. Their words may still match.",
+};
 
 const RELEVANCE_WORDS = ["low", "fair", "good", "high", "very high"];
 
@@ -236,13 +247,7 @@ function SearchResults({
     return (
       <EmptyResults
         title={`Nothing matches “${q}”${match === "all" ? "" : ` under ${FILTER_LABEL[match]}`}${where}`}
-        message={
-          match === "text"
-            ? "Words only looks at transcripts and captions. The sound itself may still match."
-            : match === "sound"
-              ? "Sound only looks at what the clips sound like. Their words may still match."
-              : "Try other words, describe the sound, or search with an audio file."
-        }
+        message={EMPTY_HINT[match]}
       >
         {match !== "all" && <Button onClick={recovery.onMatchAll}>Search All instead</Button>}
         {source && (
