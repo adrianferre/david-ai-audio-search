@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import type { SimilarAudiosResponseV1 } from "@/lib/api/v1/types";
 import { apiError, internalError } from "@/server/api/errors";
+import { sourceQuerySchema } from "@/server/api/source-filter";
 import { toSimilarAudioV1 } from "@/server/api/v1/audios";
 import { findSimilarAudios } from "@/server/audios/repository";
 
@@ -11,9 +12,9 @@ const MAX_LIMIT = 100;
 
 const querySchema = z.object({
   limit: z.coerce.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
-});
+}).extend(sourceQuerySchema.shape);
 
-/** GET /api/v1/audios/{id}/similar?limit=50 */
+/** GET /api/v1/audios/{id}/similar?limit=50&source=librispeech */
 export async function GET(
   request: NextRequest,
   ctx: RouteContext<"/api/v1/audios/[id]/similar">,
@@ -26,7 +27,7 @@ export async function GET(
 
   let hits;
   try {
-    hits = await findSimilarAudios(id, parsed.data.limit);
+    hits = await findSimilarAudios(id, parsed.data.limit, parsed.data.source);
   } catch (error) {
     return internalError(error);
   }

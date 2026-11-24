@@ -4,7 +4,10 @@
  * Never change these shapes in a breaking way: add a v2 instead.
  */
 
-export type AudioSource = "librispeech" | "audiocaps" | "commonvoice";
+/** The datasets of the catalog, in the order the list and the UI show them. */
+export const AUDIO_SOURCES = ["librispeech", "audiocaps", "commonvoice"] as const;
+
+export type AudioSource = (typeof AUDIO_SOURCES)[number];
 
 export type Pagination = {
   page: number;
@@ -41,6 +44,11 @@ export type AudioListItemV1 = {
   title: string;
   text: string;
   durationSeconds: number;
+  /**
+   * Waveform overview to draw: 64 peak levels from 0 (silence) to 1 (the clip's
+   * loudest moment), evenly spaced over the clip. Null when not computed yet.
+   */
+  waveformPeaks: number[] | null;
 };
 
 type AudioFileInfoV1 = {
@@ -82,6 +90,14 @@ export type AudioDetailV1 =
   | (AudioListItemV1 & { source: "commonvoice"; metadata: CommonVoiceMetadataV1 });
 
 export type AudioListResponseV1 = PaginatedResponse<AudioListItemV1>;
+
+/** One dataset of the catalog and how many audios it has (`GET /api/v1/datasets`). */
+export type DatasetV1 = {
+  source: AudioSource;
+  count: number;
+};
+
+export type DatasetsResponseV1 = DataResponse<DatasetV1[]>;
 export type AudioDetailResponseV1 = DataResponse<AudioDetailV1>;
 
 /**

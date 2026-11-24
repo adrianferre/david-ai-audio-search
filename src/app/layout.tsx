@@ -1,13 +1,19 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Besley, Geist_Mono, Inter } from "next/font/google";
 
 import { QueryProvider } from "@/components/query-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
-const geistSans = Geist({
+// The type of withdavid.ai: Inter for the interface, Besley for titles.
+const inter = Inter({
   variable: "--font-sans",
+  subsets: ["latin"],
+});
+
+const besley = Besley({
+  variable: "--font-besley",
   subsets: ["latin"],
 });
 
@@ -17,8 +23,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AI Audio Search",
-  description: "Search audio with AI.",
+  title: "Audio Search · David AI",
+  description: "Search the audio catalog by what is said or what it sounds like.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -26,7 +32,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${besley.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
         <ThemeProvider

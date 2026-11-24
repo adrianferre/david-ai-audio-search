@@ -13,6 +13,7 @@ import {
 
 import {
   fetchAudios,
+  fetchDatasets,
   fetchSimilarAudios,
   searchAudios,
   searchByAudioFile,
@@ -20,9 +21,11 @@ import {
 import type {
   AudioListResponseV1,
   AudioSearchResponseV1,
+  AudioSource,
   SearchMatchFilterV1,
   SimilarAudiosResponseV1,
 } from "@/lib/api/v1/types";
+import type { Peaks } from "@/lib/audio/peaks";
 
 export const PAGE_SIZE = 50;
 /** Search and "similar" show at most this many audios. */
@@ -39,19 +42,28 @@ export type SearchResultsData = AudioSearchResponseV1 & { hasMore: boolean };
  * select-all checkbox),
  * so both read the same cache entries instead of fetching twice.
  */
-export const catalogQuery = () =>
+export const catalogQuery = (source: AudioSource | null) =>
   infiniteQueryOptions({
-    queryKey: ["v1", "audios", { pageSize: PAGE_SIZE }],
+    queryKey: ["v1", "audios", { pageSize: PAGE_SIZE, source }],
     queryFn: ({ pageParam, signal }) =>
-      fetchAudios({ page: pageParam, pageSize: PAGE_SIZE, signal }),
+      fetchAudios({ page: pageParam, pageSize: PAGE_SIZE, source, signal }),
     initialPageParam: 1,
     getNextPageParam: (lastPage) => lastPage.pagination.nextPage ?? undefined,
   });
 
-export const searchQuery = (q: string, match: SearchMatchFilterV1) =>
+/** Every dataset with its number of audios, for the sidebar. */
+export const datasetsQuery = () =>
   queryOptions({
-    queryKey: ["v1", "search", { q, match, limit: RESULTS_LIMIT + 1 }],
-    queryFn: ({ signal }) => searchAudios({ q, match, limit: RESULTS_LIMIT + 1, signal }),
+    queryKey: ["v1", "datasets"],
+    queryFn: ({ signal }) => fetchDatasets(signal),
+    staleTime: 10 * 60 * 1000,
+  });
+
+export const searchQuery = (q: string, match: SearchMatchFilterV1, source: AudioSource | null) =>
+  queryOptions({
+    queryKey: ["v1", "search", { q, match, source, limit: RESULTS_LIMIT + 1 }],
+    queryFn: ({ signal }) =>
+      searchAudios({ q, match, source, limit: RESULTS_LIMIT + 1, signal }),
     // Keep the previous results on screen while the next query loads.
     placeholderData: keepPreviousData,
     select: cutToLimit,
@@ -66,10 +78,10 @@ function cutToLimit(response: AudioSearchResponseV1): SearchResultsData {
   };
 }
 
-export const similarQuery = (id: string) =>
+export const similarQuery = (id: string, source: AudioSource | null) =>
   queryOptions({
-    queryKey: ["v1", "audio", id, "similar", { limit: RESULTS_LIMIT }],
-    queryFn: ({ signal }) => fetchSimilarAudios({ id, limit: RESULTS_LIMIT, signal }),
+    queryKey: ["v1", "audio", id, "similar", { limit: RESULTS_LIMIT, source }],
+    queryFn: ({ signal }) => fetchSimilarAudios({ id, source, limit: RESULTS_LIMIT, signal }),
   });
 
 /**
@@ -82,48 +94,64 @@ export type AudioExample = {
   name: string;
   source: "file" | "recording";
   wav: Blob;
+  /** Of the part that is searched. */
+  durationSeconds: number;
+  peaks: Peaks;
   /** The file was longer than the part that is searched. */
   trimmed: boolean;
 };
 
-export const fileQuery = (example: AudioExample | null) =>
+export const fileQuery = (example: AudioExample | null, source: AudioSource | null) =>
   queryOptions({
-    queryKey: ["v1", "search", "audio", example?.id ?? "", { limit: RESULTS_LIMIT }],
+    queryKey: ["v1", "search", "audio", example?.id ?? "", { limit: RESULTS_LIMIT, source }],
     queryFn: ({ signal }) =>
-      searchByAudioFile({ wav: example!.wav, limit: RESULTS_LIMIT, signal }),
+      searchByAudioFile({ wav: example!.wav, source, limit: RESULTS_LIMIT, signal }),
     enabled: example !== null,
     // The result for a given file never changes.
     staleTime: Infinity,
   });
 
-/**
- * What the list shows: the whole catalog, a text search, the audios similar to
- * one of the catalog, or the audios that sound like the user's own file.
- */
-export type AudioListView =
-  | { kind: "browse" }
-  | { kind: "search"; q: string; match: SearchMatchFilterV1 }
-  | { kind: "similar"; id: string }
-  | { kind: "file"; example: AudioExample };
+/** The clip "Find similar sound" was used on, as the list and its header show it. */
+export type ReferenceClip = {
+  id: string;
+  source: AudioSource;
+  title: string;
+  text: string;
+  durationSeconds: number;
+  waveformPeaks: number[] | null;
+};
 
 /**
- * The current view as the search bar needs it: the rows the list shows, for
- * the select-all checkbox, and a short count of them.
+ * What the list shows: the whole catalog, a text search, the audios similar to
+ * one of the catalog, or the audios that sound like the user's own file. Each
+ * from one dataset when `source` is set (the sidebar's filter).
+ */
+export type AudioListView = { source: AudioSource | null } & (
+  | { kind: "browse" }
+  | { kind: "search"; q: string; match: SearchMatchFilterV1 }
+  | { kind: "similar"; reference: ReferenceClip }
+  | { kind: "file"; example: AudioExample }
+);
+
+/**
+ * The current view as the header and the select-all checkbox need it: the rows
+ * the list shows, a short count of them, and whether they are still loading.
  */
 export function useListView(view: AudioListView): {
-  rows: readonly { id: string }[];
+  rows: readonly { id: string; durationSeconds: number }[];
   summary: string;
 } {
-  const catalog = useInfiniteQuery(catalogQuery());
+  const { source } = view;
+  const catalog = useInfiniteQuery({ ...catalogQuery(source), enabled: view.kind === "browse" });
   const search = useQuery({
-    ...searchQuery(view.kind === "search" ? view.q : "", view.kind === "search" ? view.match : "all"),
+    ...searchQuery(view.kind === "search" ? view.q : "", view.kind === "search" ? view.match : "all", source),
     enabled: view.kind === "search",
   });
   const similar = useQuery({
-    ...similarQuery(view.kind === "similar" ? view.id : ""),
+    ...similarQuery(view.kind === "similar" ? view.reference.id : "", source),
     enabled: view.kind === "similar",
   });
-  const file = useQuery(fileQuery(view.kind === "file" ? view.example : null));
+  const file = useQuery(fileQuery(view.kind === "file" ? view.example : null, source));
 
   const rows =
     view.kind === "browse"
@@ -138,10 +166,9 @@ export function useListView(view: AudioListView): {
 }
 
 /**
- * A short count for the view, e.g. "50 of 3,129 audios" or "12 results of
- * 3,129": what's shown, out of the whole catalog searched. A list cut off at
- * `RESULTS_LIMIT` says so ("50+ results", "50 most similar"), since its length
- * is the cap, not the number of matches.
+ * A short count for the view's header, e.g. "3,329 clips", "12 clips · best
+ * match first". A list cut off at `RESULTS_LIMIT` says so ("50+ clips", "50
+ * closest clips"), since its length is the cap, not the number of matches.
  */
 function summarize(
   view: AudioListView,
@@ -157,32 +184,32 @@ function summarize(
     file: UseQueryResult<SimilarAudiosResponseV1>;
   },
 ): string {
-  const total = catalog.data?.pages[0]?.pagination.total;
-  const ofTotal = total === undefined ? "" : ` of ${total.toLocaleString()}`;
+  const clips = (count: number) => `${count.toLocaleString()} ${count === 1 ? "clip" : "clips"}`;
 
   switch (view.kind) {
     case "browse": {
-      if (!catalog.data) return catalog.status === "error" ? "" : "Loading…";
-      const loaded = catalog.data.pages.reduce((sum, page) => sum + page.data.length, 0);
-      return `${loaded.toLocaleString()}${ofTotal} audios`;
+      const total = catalog.data?.pages[0]?.pagination.total;
+      if (total === undefined) return catalog.status === "error" ? "" : "Loading…";
+      return clips(total);
     }
     case "search": {
-      if (search.status === "error") return "Search failed";
+      if (search.status === "error") return "";
       if (search.status === "pending" || search.isPlaceholderData) return "Searching…";
       const count = search.data.data.length;
-      if (search.data.hasMore) return `${count.toLocaleString()}+ results${ofTotal}`;
-      return `${count.toLocaleString()} ${count === 1 ? "result" : "results"}${ofTotal}`;
+      if (count === 0) return "";
+      return `${search.data.hasMore ? `${count.toLocaleString()}+ clips` : clips(count)} · best match first`;
     }
     case "similar":
     case "file": {
       const result = view.kind === "similar" ? similar : file;
-      if (result.status === "error") return "Search failed";
+      if (result.status === "error") return "";
       if (result.status === "pending") return view.kind === "file" ? "Listening…" : "Finding similar…";
       // Ranked by distance with no cutoff, so a full list is the top N, not
       // the only N that are similar.
       const count = result.data.data.length;
-      if (count >= RESULTS_LIMIT) return `${count.toLocaleString()} most similar${ofTotal}`;
-      return `${count.toLocaleString()} similar${ofTotal}`;
+      if (count === 0) return "";
+      const what = count >= RESULTS_LIMIT ? `${count.toLocaleString()} closest clips` : clips(count);
+      return `${what} · most similar first`;
     }
   }
 }

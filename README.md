@@ -92,9 +92,9 @@ Each clip has up to three things to match against, all in the `audios` table:
   A clip's score is its best signal, and clips below 3 standard deviations are dropped. Each
   result says why it matched: `text` (shown as "Said" for a transcript, "Caption" for captions),
   `sound` ("Sounds like") or both.
-- **Search by example** ("Find similar" on any clip) returns the nearest neighbours of that clip's
+- **Search by example** ("Find similar sound" on any clip) returns the nearest neighbours of that clip's
   audio vector. It needs no model call: the vector is already stored.
-- **Search with your own audio file** ("Search with a file", or drop a file anywhere on the
+- **Search with your own audio file** ("Upload", or drop a file anywhere on the
   page): the browser decodes the file (WAV, MP3, M4A, OGG, FLAC…), converts it to 16 kHz mono
   WAV like the catalog, keeps the first 30 seconds and posts it. The server embeds it the same
   way the catalog was embedded and returns the nearest audio vectors. The file is not stored.
@@ -153,6 +153,22 @@ change it needs is [`003_commonvoice.sql`](src/server/db/migrations/003_commonvo
 pnpm import-commonvoice --dry-run   # print the sample, write nothing
 pnpm import-commonvoice             # add `--count N` for a different sample size
 pnpm embed-catalog                  # embed the new clips (about $0.30 for 200)
+pnpm compute-waveforms              # their waveform overviews
+```
+
+### Waveforms
+
+Each clip's waveform overview is stored with it, in `waveform_peaks`
+([`004_waveform_peaks.sql`](src/server/db/migrations/004_waveform_peaks.sql)), and sent by the
+API, so the UI only draws it. A script fills it: it reads each FLAC from the Blob store, decodes
+it to 8 kHz mono with ffmpeg and keeps the loudest sample of each of 64 equal slices, scaled so
+the loudest slice is 1 (with a gentle curve, so quiet passages still show). Like `embed-catalog`,
+it **writes to production**; it only touches clips without peaks and costs nothing but Blob
+reads. The algorithm is in [`src/lib/audio/peaks.ts`](src/lib/audio/peaks.ts); after changing
+it, recompute every clip with `--all`.
+
+```bash
+pnpm compute-waveforms   # add `--limit 20` for a trial run, `--all` to recompute every clip
 ```
 
 ### AI Gateway
@@ -173,6 +189,7 @@ the AI Gateway tab of the Vercel team. To use an API key instead of OIDC, set `A
 | `pnpm typecheck` | Generate route types and run `tsc`   |
 | `pnpm embed-catalog` | Embed the clips that have no vector yet (see Search) |
 | `pnpm import-commonvoice` | Add the Common Voice sample to the database and Blob store (see Search) |
+| `pnpm compute-waveforms` | Compute the waveform overviews of the clips that have none yet (see Waveforms) |
 | `pnpm test`      | Unit tests (the evaluation's metrics) |
 | `pnpm eval`      | Retrieval evaluation, read-only (see [eval/](eval/README.md)) |
 
@@ -184,7 +201,7 @@ the AI Gateway tab of the Vercel team. To use an API key instead of OIDC, set `A
 - `src/lib/` – shared utilities
 - `src/server/db/` – Neon client, the catalog schema (`schema.sql`) and its migrations
 - `src/server/search/` – embedding and ranking settings, and the query embedding call
-- `scripts/` – one-off scripts (`embed-catalog.mts`, `import-commonvoice.mts`)
+- `scripts/` – one-off scripts (`embed-catalog.mts`, `import-commonvoice.mts`, `compute-waveforms.mts`)
 - `scripts/eval/`, `eval/` – the retrieval evaluation: code, query sets, results
 - `src/env.ts` – typed, validated environment variables (`import { env } from "@/env"`)
 
@@ -194,22 +211,33 @@ JSON endpoints served by the app. They are versioned under `/api/vN`; once a ver
 
 ### `GET /api/v1/audios`
 
-Paginated list of every audio in the catalog: LibriSpeech first, then AudioCaps, then Common Voice, each sorted by id. Every item has the same shape whatever its dataset.
+Paginated list of every audio in the catalog: LibriSpeech first, then AudioCaps, then Common Voice, each sorted by id. Every item has the same shape whatever its dataset. Every item, in this list and in every other response, carries `waveformPeaks`: the clip's waveform overview, 64 levels from 0 (silence) to 1 (its loudest moment), evenly spaced over the clip, or `null` if not computed yet. The UI draws its waveforms from it.
 
 | Query param | Default | Rules |
 | --- | --- | --- |
 | `page` | `1` | integer ≥ 1 (pages past the end return `data: []`) |
 | `pageSize` | `50` | integer 1–100 |
+| `source` | every dataset | `librispeech`, `audiocaps` or `commonvoice`: only that dataset (`total` counts only it) |
 
 ```json
 {
   "data": [
     { "id": "librispeech-1272-128104-0000", "source": "librispeech", "title": "Reviews · read by John Rose",
-      "text": "MISTER QUILTER IS THE APOSTLE OF ...", "durationSeconds": 5.855 }
+      "text": "MISTER QUILTER IS THE APOSTLE OF ...", "durationSeconds": 5.855,
+      "waveformPeaks": [0.412, 0.733, 0.951, "… 64 in all"] }
   ],
   "pagination": { "page": 1, "pageSize": 50, "total": 3329, "totalPages": 67,
                   "hasNextPage": true, "hasPreviousPage": false, "nextPage": 2, "previousPage": null }
 }
+```
+
+### `GET /api/v1/datasets`
+
+Every dataset of the catalog with its number of audios, in the list's order. The UI shows them as the sidebar's filters.
+
+```json
+{ "data": [ { "source": "librispeech", "count": 2703 }, { "source": "audiocaps", "count": 426 },
+            { "source": "commonvoice", "count": 200 } ] }
 ```
 
 ### `GET /api/v1/audios/{id}`
@@ -218,7 +246,7 @@ One audio: the list fields plus a dataset-specific `metadata` object (speaker/ch
 
 ### `GET /api/v1/audios/{id}/audio`
 
-The audio's FLAC (`audio/flac`), streamed from the private Blob store. Supports `Range` requests (`206`, or `416` for an unsatisfiable range) and `If-None-Match` (`304`). The UI uses it as the `<audio>` source of the row's play button. The Blob store is private, so its files can't be fetched directly, but this route streams any clip, AudioCaps included, to anyone who can reach the app. The project uses Vercel Authentication with Standard Protection: preview and generated deployment URLs require a Vercel login, the production domain `david-ai-audio-search.vercel.app` does not. Known gap: AudioCaps audio is publicly reachable through the production API. The fix is to protect this route or the production domain; that is not done yet.
+The audio's FLAC (`audio/flac`), streamed from the private Blob store. Supports `Range` requests (`206`, or `416` for an unsatisfiable range) and `If-None-Match` (`304`). The UI uses it as the `<audio>` source of the player (the waveforms come with the list items, see `waveformPeaks`). The Blob store is private, so its files can't be fetched directly, but this route streams any clip, AudioCaps included, to anyone who can reach the app. The project uses Vercel Authentication with Standard Protection: preview and generated deployment URLs require a Vercel login, the production domain `david-ai-audio-search.vercel.app` does not. Known gap: AudioCaps audio is publicly reachable through the production API. The fix is to protect this route or the production domain; that is not done yet.
 
 ### `GET /api/v1/search`
 
@@ -230,6 +258,7 @@ relevant first. There is no pagination: it is a ranked top list.
 | `q` | required | 1–200 characters |
 | `match` | `all` | `all`, `text` (transcripts and captions) or `sound` (the audio alone) |
 | `limit` | `50` | integer 1–100 |
+| `source` | every dataset | `librispeech`, `audiocaps` or `commonvoice`: only that dataset's clips |
 
 ```json
 {
@@ -242,14 +271,15 @@ relevant first. There is no pagination: it is a ranked top list.
 ```
 
 `score` is how far the clip stands out from the rest of the catalog for this query, in standard
-deviations (plus a bonus for exact words); compare it only within one response. Clips that
+deviations (plus a bonus for exact words); compare it only within one response. With `source`, clips
+are still scored against the whole catalog, so a score doesn't change with the filter. Clips that
 don't stand out are left out, so the list is often shorter than `limit`.
 Returns `503 search_unavailable` when the embedding model can't be reached.
 
 ### `GET /api/v1/audios/{id}/similar`
 
 Search by example: the audios that sound most like `{id}`, most similar first. Each item is a list
-item plus `similarity` (cosine similarity, at most 1). `limit` works as above. `404` for an
+item plus `similarity` (cosine similarity, at most 1). `limit` and `source` work as above. `404` for an
 unknown id.
 
 ### `POST /api/v1/audios/export`
@@ -264,13 +294,13 @@ audios-2026-11-24-2.zip
     └── audiocaps-rqfQRErjfk8_170.flac
 ```
 
-The ZIP is streamed (so it isn't bound by the 4.5 MB function response limit) and its entries are stored uncompressed (FLAC already is). Unknown ids return `404 not_found` with `details.missingIds` before anything is streamed. It is one request for the rate limit, whatever the number of ids. The UI uses it for the row checkboxes' **Download** button and for the **ZIP** button of the details panel (one audio). The panel's **Audio** button saves only the FLAC, from `GET /api/v1/audios/{id}/audio`.
+The ZIP is streamed (so it isn't bound by the 4.5 MB function response limit) and its entries are stored uncompressed (FLAC already is). Unknown ids return `404 not_found` with `details.missingIds` before anything is streamed. It is one request for the rate limit, whatever the number of ids. The UI uses it for the selection bar's **Download ZIP** (the checked rows) and for **Download › Audio + details (ZIP)** in the details panel (one audio). The panel's **Download › Audio only (FLAC)** saves only the FLAC, from `GET /api/v1/audios/{id}/audio`.
 
 ### `POST /api/v1/search/audio`
 
 Search by your own example: the audios that sound most like the clip in the request body, most
 similar first. Send a WAV file with `Content-Type: audio/wav` (at most 2 MB; 16 kHz mono, about a
-minute, is what the model was given for the catalog). Items and `limit` are as in `/similar`.
+minute, is what the model was given for the catalog). Items, `limit` and `source` are as in `/similar`.
 The clip is embedded and discarded.
 
 ```sh
@@ -292,8 +322,8 @@ deployments require a Vercel login. The deployed app limits `/api/*` to **120 re
 minute per IP** with a Vercel Firewall rule ("Rate limit API", in the project's Firewall
 settings, not in this repo). Over the limit, requests get `429` with the firewall's own body
 (not the JSON error shape above) until the minute is over; the UI shows "Too many requests" and
-doesn't retry. Browsing the UI stays far below it (one request per 50 items scrolled or per
-audio opened). Local dev servers without credentials proxy to the deployed API, so they share
+doesn't retry. Browsing costs one request per 50 items scrolled or per audio opened (the
+waveforms come with the items), plus the audio a clip plays. Local dev servers without credentials proxy to the deployed API, so they share
 the limit of your IP; with `.env.local` the local API isn't limited.
 
 ### Where the code lives
