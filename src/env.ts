@@ -17,10 +17,15 @@ export const env = createEnv({
       .enum(["development", "test", "production"])
       .default("development"),
     // Neon Postgres (pooled). Set by the Neon integration: `vercel env pull .env.local`.
-    DATABASE_URL: z.url(),
+    // Required on Vercel. Optional locally: without it, `next.config.ts` proxies
+    // /api/* to API_UPSTREAM_URL instead of serving it from the local route handlers.
+    DATABASE_URL: process.env.VERCEL ? z.url() : z.url().optional(),
     // Private Vercel Blob store holding the FLAC files. Set by the Blob integration;
     // reads authenticate with the Vercel OIDC token (VERCEL_OIDC_TOKEN locally).
-    BLOB_STORE_ID: z.string().min(1),
+    // Required on Vercel, optional locally like DATABASE_URL.
+    BLOB_STORE_ID: process.env.VERCEL ? z.string().min(1) : z.string().min(1).optional(),
+    // Deployed API used by local dev servers that have no DATABASE_URL.
+    API_UPSTREAM_URL: z.url().default("https://david-ai-audio-search.vercel.app"),
     // Vercel AI Gateway (query embeddings for search). Optional: without it the AI SDK
     // authenticates with the Vercel OIDC token, like the Blob store.
     AI_GATEWAY_API_KEY: z.string().min(1).optional(),

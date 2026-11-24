@@ -12,7 +12,7 @@ import {
 import { type ReactNode, useCallback, useEffect, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
-import { fetchAudios, fetchSimilarAudios, searchAudios } from "@/lib/api/v1/client";
+import { ApiError, fetchAudios, fetchSimilarAudios, searchAudios } from "@/lib/api/v1/client";
 import type {
   AudioListItemV1,
   AudioSource,
@@ -139,7 +139,11 @@ function BrowseList({ actions }: { actions: RowActions }) {
           tail={
             !hasNextPage ? null : isFetchNextPageError ? (
               <div className="flex h-full items-center gap-3 px-4 text-sm">
-                <span className="text-destructive">Couldn&apos;t load more audios.</span>
+                <span className="text-destructive">
+                  {error instanceof ApiError && error.status === 429
+                    ? error.message
+                    : "Couldn't load more audios."}
+                </span>
                 <Button variant="outline" size="sm" onClick={() => fetchNextPage()}>
                   Retry
                 </Button>

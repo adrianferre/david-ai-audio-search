@@ -22,6 +22,10 @@ export class ApiError extends Error {
 
 async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   const res = await fetch(url, { signal, headers: { accept: "application/json" } });
+  if (res.status === 429) {
+    // Rate limited by the Vercel firewall, which answers with its own body.
+    throw new ApiError(429, "rate_limited", "Too many requests. Wait a minute and try again.");
+  }
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as ApiErrorBody | null;
     throw new ApiError(

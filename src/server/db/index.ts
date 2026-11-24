@@ -12,6 +12,11 @@ let sql: NeonQueryFunction<false, false> | undefined;
  * connection string.
  */
 export function getSql(): NeonQueryFunction<false, false> {
+  if (!env.DATABASE_URL) {
+    // Without it, next.config.ts proxies /api/* upstream, so this is only reached
+    // by code that queries the database outside the API routes.
+    throw new Error("DATABASE_URL is not set. Run `vercel env pull .env.local` to query the database.");
+  }
   sql ??= neon(env.DATABASE_URL);
   return sql;
 }
