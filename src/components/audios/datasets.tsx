@@ -38,8 +38,10 @@ export function DatasetTag({ source, className }: { source: AudioSource; classNa
 }
 
 /**
- * The clip's text as the UI shows it. LibriSpeech transcripts are all capitals;
- * they read better in sentence case.
+ * The clip's text as a title (list rows, headlines). LibriSpeech
+ * transcripts are all capitals; they read better in sentence case, though names
+ * lose their capital ("Mister quilter"). Where the transcript is shown as data
+ * (the details panel, copy, the export) it is the dataset's, unchanged.
  */
 export function displayText(clip: { source: AudioSource; text: string }): string {
   if (clip.source !== "librispeech") return clip.text;
@@ -48,13 +50,20 @@ export function displayText(clip: { source: AudioSource; text: string }): string
 }
 
 /**
- * The clip's title as the UI shows it. An AudioCaps title is "YouTube <id> @ 70s";
- * the start reads better as a time.
+ * The clip's title as the UI shows it. An AudioCaps title is its AudioSet labels
+ * then its segment, "Sneeze, Speech · YouTube <id> @ 70s"; the start reads better
+ * as a time.
  */
 export function displayTitle(clip: { source: AudioSource; title: string }): string {
-  const youtube = /^YouTube (\S+) @ (\d+)s$/.exec(clip.title);
+  const youtube = /^(?:(.+) · )?YouTube (\S+) @ (\d+)s$/.exec(clip.title);
   if (clip.source === "audiocaps" && youtube) {
-    return `YouTube ${youtube[1]} · from ${formatClock(Number(youtube[2]))}`;
+    const [, labels, id, start] = youtube;
+    return [labels, `YouTube ${id} · from ${formatClock(Number(start))}`].filter(Boolean).join(" · ");
   }
   return clip.title;
+}
+
+/** The dataset and the split the catalog took from it, e.g. "LibriSpeech dev-clean". */
+export function datasetWithSplit(source: AudioSource, split: string | undefined): string {
+  return split ? `${SOURCE_LABEL[source]} ${split}` : SOURCE_LABEL[source];
 }

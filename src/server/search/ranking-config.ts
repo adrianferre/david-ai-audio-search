@@ -44,7 +44,36 @@ export const MIN_SHARE_OF_BEST = 0.5;
 
 /**
  * Below this top score, nothing clearly matches the query: the results are the
- * closest clips, not answers (the API's `strongMatch`). In the evaluation it
- * flags 10 of 11 queries without an answer and 3.5% of the queries with one.
+ * closest clips, not answers (the API's `strongMatch`), unless the best text
+ * match is close in absolute terms (STRONG_MATCH_TEXT_COSINE, below). In the
+ * evaluation the score alone flags 10 of 11 queries without an answer and 3.5%
+ * of the queries with one.
  */
 export const STRONG_MATCH_SCORE = 5;
+
+/**
+ * A z-score measures how rare a match is, not how close: when a query fits a
+ * large group of clips ("english conversations in noisy settings": dozens of
+ * captions are people speaking over engines), the right clip can't stand far
+ * above the rest, and it scored 4.6 at a text cosine of 0.748. So a top score
+ * from STRONG_MATCH_MIN_SCORE also counts as a clear match when the best text
+ * match is this close in absolute terms (raw cosine of the text vectors). In
+ * the evaluation the queries without an answer reach at most 0.724 (bar one
+ * already over 5), and the rule clears about six in seven of the answerable
+ * queries the score alone flags (3.5% flagged → 0.5%). Tied to the embedding model and the query
+ * format (embedding-config.ts): recalibrate with `pnpm eval` when either changes.
+ */
+export const STRONG_MATCH_TEXT_COSINE = 0.735;
+
+/** The lowest top score that STRONG_MATCH_TEXT_COSINE can make a clear match. */
+export const STRONG_MATCH_MIN_SCORE = 4;
+
+/**
+ * Whether something clearly matches a typed query, from the best result's
+ * score and the raw cosine of the best text match among the results (null when
+ * no result matched by text).
+ */
+export function isStrongMatch(bestScore: number, bestTextCosine: number | null): boolean {
+  if (bestScore >= STRONG_MATCH_SCORE) return true;
+  return bestScore >= STRONG_MATCH_MIN_SCORE && bestTextCosine !== null && bestTextCosine >= STRONG_MATCH_TEXT_COSINE;
+}

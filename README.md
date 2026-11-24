@@ -60,7 +60,8 @@ it from local scripts or a SQL console unless you mean to change production.
   sentence, with the sentence as transcript, from [Mozilla Common Voice](https://commonvoice.mozilla.org).
   License CC0. One clip per speaker from the dev split, among clips with at least 2 up-votes,
   no down-votes and age, gender and accent filled in. Genders and accents are taken in turn,
-  so the sample spans 39 accents and teens to eighties. Speakers are anonymous (`clientId` is
+  so the sample spans teens to eighties and 39 different accent answers (free text; some name several
+  accents, so there are fewer distinct accents). Speakers are anonymous (`clientId` is
   Common Voice's hashed contributor id; don't try to identify them). Mozilla now distributes
   the dataset through its Data Collective (account required), so `pnpm import-commonvoice` reads
   the public mirror [`fsicoli/common_voice_17_0`](https://huggingface.co/datasets/fsicoli/common_voice_17_0)
@@ -137,8 +138,10 @@ Each clip has up to three things to match against, all in the `audios` table:
 - **The cut-off trims; the top score judges.** Nearest-neighbour search always has a nearest clip,
   so a query with no good answer in the catalog still returns a handful of weak results. When
   the best of them scores under 5, the response says so (`strongMatch: false`) and the list
-  opens with "Nothing clearly matches". In the evaluation that flags 10 of 11 queries without an
-  answer and 3.5% of those with one.
+  opens with "Nothing clearly matches", unless it scores at least 4 and its text is close to the
+  query in absolute terms (text cosine ≥ 0.735): a query that fits many clips can't stand far above
+  them. In the evaluation that flags 10 of 11 queries without an answer and 0.5% of those with one
+  (3.5% with the score alone).
 - **No vector index.** With about 3,300 clips an exact scan takes a few milliseconds and returns
   the true nearest neighbours. An HNSW index is the next step at a much larger scale.
 
@@ -187,6 +190,19 @@ pnpm embed-catalog                  # embed the new clips (about $0.30 for 200)
 pnpm compute-waveforms              # their waveform overviews
 ```
 
+### AudioSet labels
+
+AudioCaps clips are AudioSet segments, so each one has AudioSet's labels ("Sneeze", "Speech"…). A
+script stores them in each AudioCaps row's `metadata.audioSetLabels`: it streams AudioSet's
+`unbalanced_train_segments.csv` (~100 MB, not kept) and matches the clips on YouTube id and start
+time. It **writes to production**, only touches that one field of `audiocaps` rows (vectors stay)
+and skips rows that already have the same labels. AudioSet labels are CC BY 4.0 (Google).
+
+```bash
+pnpm import-audioset-labels --dry-run   # print what it would write
+pnpm import-audioset-labels
+```
+
 ### Waveforms
 
 Each clip's waveform overview is stored with it, in `waveform_peaks`
@@ -220,6 +236,7 @@ the AI Gateway tab of the Vercel team. To use an API key instead of OIDC, set `A
 | `pnpm typecheck` | Generate route types and run `tsc`   |
 | `pnpm embed-catalog` | Embed the clips that have no vector yet (see Search) |
 | `pnpm import-commonvoice` | Add the Common Voice sample to the database and Blob store (see Search) |
+| `pnpm import-audioset-labels` | Store the AudioCaps clips' AudioSet labels in the database (see AudioSet labels) |
 | `pnpm compute-waveforms` | Compute the waveform overviews of the clips that have none yet (see Waveforms) |
 | `pnpm test`      | Unit tests (the evaluation's metrics) |
 | `pnpm eval`      | Retrieval evaluation, read-only (see [eval/](eval/README.md)) |
@@ -232,7 +249,7 @@ the AI Gateway tab of the Vercel team. To use an API key instead of OIDC, set `A
 - `src/lib/` – shared utilities
 - `src/server/db/` – Neon client, the catalog schema (`schema.sql`) and its migrations
 - `src/server/search/` – embedding and ranking settings, and the query embedding call
-- `scripts/` – one-off scripts (`embed-catalog.mts`, `import-commonvoice.mts`, `compute-waveforms.mts`)
+- `scripts/` – one-off scripts (`embed-catalog.mts`, `import-commonvoice.mts`, `import-audioset-labels.mts`, `compute-waveforms.mts`)
 - `scripts/eval/`, `eval/` – the retrieval evaluation: code, query sets, results
 - `src/env.ts` – typed, validated environment variables (`import { env } from "@/env"`)
 
@@ -264,16 +281,27 @@ Paginated list of every audio in the catalog: LibriSpeech first, then AudioCaps,
 
 ### `GET /api/v1/datasets`
 
-Every dataset of the catalog with its number of audios, in the list's order. The UI shows them as the sidebar's filters.
+Every dataset of the catalog (the `datasets` table) with its number of audios, the split the catalog took from it and its original format, in the list's order. The UI shows them as the sidebar's filters.
 
 ```json
-{ "data": [ { "source": "librispeech", "count": 2703 }, { "source": "audiocaps", "count": 426 },
-            { "source": "commonvoice", "count": 200 } ] }
+{ "data": [ { "source": "librispeech", "count": 2703, "split": "dev-clean", "originalFormat": "FLAC", "lossyOrigin": false },
+            { "source": "audiocaps", "count": 426, "split": "val", "originalFormat": "YouTube audio", "lossyOrigin": true },
+            { "source": "commonvoice", "count": 200, "split": "dev", "originalFormat": "MP3", "lossyOrigin": true } ] }
 ```
 
 ### `GET /api/v1/audios/{id}`
 
-One audio: the list fields plus a dataset-specific `metadata` object (speaker/chapter/transcript for LibriSpeech; YouTube id, start time and all captions for AudioCaps; anonymous speaker id, self-reported age/gender/accent, sentence and validation votes for Common Voice).
+One audio: the list fields plus a dataset-specific `metadata` object (speaker/chapter/transcript for LibriSpeech; YouTube id, start time, all captions and AudioSet labels for AudioCaps; anonymous speaker id, self-reported age/gender/accent, sentence and validation votes for Common Voice). Transcripts and captions are the dataset's, unchanged (LibriSpeech's are upper case without punctuation; the UI shows them in sentence case only in titles).
+
+Every `metadata` also says where the clip comes from, from its dataset's row in the `datasets` table ([`005_datasets.sql`](src/server/db/migrations/005_datasets.sql)):
+
+| Field | LibriSpeech | AudioCaps | Common Voice |
+| --- | --- | --- | --- |
+| `split` | `dev-clean` | `val` | `dev` |
+| `originalFormat` | `FLAC` | `YouTube audio` | `MP3` |
+| `lossyOrigin` | `false` | `true` | `true` |
+
+Every clip is served as 16 kHz mono FLAC; `lossyOrigin` means compression artefacts may remain. An AudioCaps clip also has `audioSetLabels`, the AudioSet labels of its YouTube segment (`["Sneeze", "Speech"]`, empty when it has none), and its list `title` starts with them: `"Sneeze, Speech · YouTube uRlbY6_aoBU @ 0s"`. They are stored in the row's `metadata` by `pnpm import-audioset-labels` (below).
 
 ### `GET /api/v1/audios/{id}/audio`
 
@@ -296,7 +324,7 @@ relevant first. There is no pagination: it is a ranked top list.
 ```json
 {
   "data": [
-    { "id": "audiocaps-...", "source": "audiocaps", "title": "YouTube ... @ 30s",
+    { "id": "audiocaps-...", "source": "audiocaps", "title": "Dog, Speech · YouTube ... @ 30s",
       "text": "A dog barks and a man speaks", "durationSeconds": 10,
       "score": 8.27, "matches": ["text", "sound"] }
   ],
@@ -305,10 +333,12 @@ relevant first. There is no pagination: it is a ranked top list.
 ```
 
 `score` is how far the clip stands out from the rest of the catalog for this query, in standard
-deviations (plus bonuses for exact words and the exact phrase); compare it only within one response. With `source`, clips
+deviations (plus bonuses for exact words and the exact phrase); compare it only within one response. The UI
+shows it next to the relevance bars in the list, which compare it with the best result. With `source`, clips
 are still scored against the whole catalog, so a score doesn't change with the filter. Clips that
 don't stand out, or score under half of the best result returned, are left out, so the list is often shorter than `limit`.
-`strongMatch` is `false` when the best result scores under 5: nothing clearly matches, and the
+`strongMatch` is `false` when the best result scores under 5, unless it scores at least 4 and the
+best text match's cosine to the query is at least 0.735: nothing clearly matches, and the
 results are only the closest clips (an empty list is never a strong match). It is only judged for
 typed queries: with an example's sound (`soundOf`, a WAV body) it is `true` whenever there are results.
 Returns `503 search_unavailable` when the embedding model can't be reached.

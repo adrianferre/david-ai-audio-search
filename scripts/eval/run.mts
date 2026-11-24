@@ -38,10 +38,13 @@ import {
 import {
   EXACT_PHRASE_BONUS,
   EXACT_WORDS_BONUS,
+  isStrongMatch,
   MIN_SHARE_OF_BEST,
   MIN_TYPED_SOUND_Z_SCORE,
   MIN_Z_SCORE,
+  STRONG_MATCH_MIN_SCORE,
   STRONG_MATCH_SCORE,
+  STRONG_MATCH_TEXT_COSINE,
 } from "../../src/server/search/ranking-config.ts";
 import {
   bootstrapDifference,
@@ -545,6 +548,8 @@ type PerQuery = {
   /** Share of the returned clips that are relevant (null: nothing returned). */
   precision: Record<SystemName, number | null>;
   topScore?: number;
+  /** Raw text cosine of the best text match among production's matches (null: none), as repository.ts's best_text_cosine. */
+  topTextCosine?: number | null;
 };
 
 const groupOf = (q: EvalQuery) => {
@@ -583,6 +588,9 @@ textQueries.forEach((q, qi) => {
   }
   const uncut = rankProduction(clips, both, { ...NO_CUT_OFF, limit: 1 });
   record.topScore = uncut[0]?.score;
+  // Before the share-of-best cut and the limit, as the SQL's window over `matched`.
+  const matched = rankProduction(clips, both, { shareOfBest: 0, limit: Infinity }).filter((h) => h.text);
+  record.topTextCosine = matched.length > 0 ? Math.max(...matched.map((h) => both.text![h.index])) : null;
 
   // Threshold sweeps: one z cut-off for both signals on the previous ranking, and the share of the best on production.
   for (const minZ of THRESHOLDS) {
@@ -747,18 +755,30 @@ const answerability = {
   auc: rocAuc(diagnostics.topScorePositive, diagnostics.topScoreNegative),
   positive: { p10: percentile(diagnostics.topScorePositive, 10), p50: percentile(diagnostics.topScorePositive, 50), p90: percentile(diagnostics.topScorePositive, 90) },
   negative: { p10: percentile(diagnostics.topScoreNegative, 10), p50: percentile(diagnostics.topScoreNegative, 50), p90: percentile(diagnostics.topScoreNegative, 90) },
-  /** At each candidate STRONG_MATCH_SCORE: share of queries told "nothing clearly matches". */
-  strongMatch: [4, 4.5, 5, 5.5, 6].map((threshold) => ({
-    threshold,
-    negativeFlagged: mean(diagnostics.topScoreNegative.map((t) => (t < threshold ? 1 : 0))),
-    positiveFlagged: mean(diagnostics.topScorePositive.map((t) => (t < threshold ? 1 : 0))),
-    positiveFlaggedBySet: Object.fromEntries(
-      POSITIVE_TEXT_SETS.map((set) => {
-        const tops = perQuery.filter((r) => r.set === set && r.topScore !== undefined).map((r) => r.topScore!);
-        return [set, mean(tops.map((t) => (t < threshold ? 1 : 0)))];
-      }),
-    ),
-  })),
+  /**
+   * Share of queries told "nothing clearly matches" (`strongMatch: false`), by
+   * rule: the top score alone at each candidate threshold, then production's
+   * (isStrongMatch: the score, or a close text match from STRONG_MATCH_MIN_SCORE).
+   */
+  strongMatch: [
+    ...[4, 4.5, 5, 5.5, 6].map((threshold) => ({
+      rule: `Top score under ${threshold.toFixed(1)}`,
+      flagged: (r: PerQuery) => (r.topScore ?? 0) < threshold,
+    })),
+    {
+      rule: `Production: under ${STRONG_MATCH_SCORE.toFixed(1)}, unless from ${STRONG_MATCH_MIN_SCORE.toFixed(1)} with a text cosine ≥ ${STRONG_MATCH_TEXT_COSINE}`,
+      flagged: (r: PerQuery) => !isStrongMatch(r.topScore ?? 0, r.topTextCosine ?? null),
+    },
+  ].map(({ rule, flagged }) => {
+    const share = (rows: PerQuery[]) => mean(rows.map((r) => (flagged(r) ? 1 : 0)));
+    const textRows = perQuery.filter((r) => r.topScore !== undefined);
+    return {
+      rule,
+      negativeFlagged: share(textRows.filter((r) => r.set === "negative")),
+      positiveFlagged: share(textRows.filter((r) => POSITIVE_TEXT_SETS.includes(r.set))),
+      positiveFlaggedBySet: Object.fromEntries(POSITIVE_TEXT_SETS.map((set) => [set, share(textRows.filter((r) => r.set === set))])),
+    };
+  }),
 };
 
 const paraphraseNoOverlap = perQuery.filter((r) => r.set === "paraphrase" && (textQueries.find((q) => q.id === r.id)?.notes?.sharedWords as string[]).length === 0);
@@ -963,6 +983,8 @@ const results = {
     exactPhraseBonus: EXACT_PHRASE_BONUS,
     minShareOfBest: MIN_SHARE_OF_BEST,
     strongMatchScore: STRONG_MATCH_SCORE,
+    strongMatchMinScore: STRONG_MATCH_MIN_SCORE,
+    strongMatchTextCosine: STRONG_MATCH_TEXT_COSINE,
     limit: LIMIT,
   },
   catalog: Object.fromEntries([...new Set(clips.map((c) => c.source))].map((s) => [s, clips.filter((c) => c.source === s).length])),
