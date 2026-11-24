@@ -262,10 +262,19 @@ function BrowseList({
     );
   }
   if (rows.length === 0) {
+    const anyLength = isAnyDuration(duration);
     return (
       <EmptyResults
         title={`No clip${scopeWords(source, duration)}`}
-        message="Widen the length range in the sidebar, or look in every dataset."
+        message={
+          source && !anyLength
+            ? "Widen the length range in the sidebar, or look in every dataset."
+            : !anyLength
+              ? "Widen the length range in the sidebar."
+              : source
+                ? "This dataset has no clips yet. Look in every dataset."
+                : "The catalog has no clips yet."
+        }
       >
         <ClearFilterButtons source={source} duration={duration} recovery={recovery} />
       </EmptyResults>
