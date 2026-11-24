@@ -1,9 +1,9 @@
-import "server-only";
-
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
-import type { LibriSpeechRecord, PendingRecord } from "./types";
+import type { LibriSpeechRecord } from "../../src/server/audios/types";
+import { blobPathnameFor } from "./paths";
+import type { LocalRecord } from "./types";
 
 /** Parses LibriSpeech's `;`-commented, `|`-separated metadata files. */
 function parsePipeTable(text: string, columns: number): string[][] {
@@ -33,11 +33,12 @@ async function listDirs(dir: string): Promise<string[]> {
   return entries.filter((e) => e.isDirectory()).map((e) => e.name);
 }
 
+/** Reads `data/librispeech/LibriSpeech/<subset>`: one record per transcript line. */
 export async function loadLibriSpeech(
-  rootDir: string,
+  dataDir: string,
   subset = "dev-clean",
-): Promise<PendingRecord<LibriSpeechRecord>[]> {
-  const base = path.join(rootDir, "LibriSpeech");
+): Promise<LocalRecord<LibriSpeechRecord>[]> {
+  const base = path.join(dataDir, "librispeech", "LibriSpeech");
   const subsetDir = path.join(base, subset);
 
   // ID | SEX | SUBSET | MINUTES | NAME
@@ -56,7 +57,7 @@ export async function loadLibriSpeech(
     ),
   );
 
-  const records: PendingRecord<LibriSpeechRecord>[] = [];
+  const records: LocalRecord<LibriSpeechRecord>[] = [];
   for (const speakerId of await listDirs(subsetDir)) {
     const speakerDir = path.join(subsetDir, speakerId);
     for (const chapterId of await listDirs(speakerDir)) {
@@ -69,11 +70,13 @@ export async function loadLibriSpeech(
         if (space <= 0) continue;
         const utteranceId = line.slice(0, space);
         const fileName = `${utteranceId}.flac`;
+        const filePath = path.join(chapterDir, fileName);
         records.push({
           id: `librispeech-${utteranceId}`,
           source: "librispeech",
           utteranceId,
-          filePath: path.join(chapterDir, fileName),
+          filePath,
+          blobPathname: blobPathnameFor(dataDir, filePath),
           fileName,
           speaker: {
             id: speakerId,

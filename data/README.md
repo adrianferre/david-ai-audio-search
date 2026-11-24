@@ -4,6 +4,10 @@ Downloaded datasets live here. They are gitignored and fetched by the scripts in
 `scripts/datasets/`. The Conductor setup script runs `pnpm data:setup`, so every
 new workspace gets them automatically.
 
+The app doesn't read this folder: it serves the catalog from Neon Postgres and keeps
+the FLAC files in a private Vercel Blob store. `pnpm catalog:sync` publishes what is
+here to both (see the README, "Publish the datasets").
+
 ```bash
 pnpm data:setup        # everything below (checks prerequisites first)
 pnpm data:librispeech  # LibriSpeech dev-clean (pass another subset as an argument)

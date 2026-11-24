@@ -1,5 +1,3 @@
-import "server-only";
-
 import { open } from "node:fs/promises";
 
 export type FlacInfo = {

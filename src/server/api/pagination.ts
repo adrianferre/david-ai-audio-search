@@ -19,20 +19,27 @@ export const paginationQuerySchema = z.object({
 
 export type PaginationQuery = z.infer<typeof paginationQuerySchema>;
 
-/** Offset pagination over an in-memory list. Pages past the end are empty. */
-export function paginate<T, R = T>(
+/** Offset of the first item of the requested page. */
+export function pageOffset({ page, pageSize }: PaginationQuery): number {
+  return (page - 1) * pageSize;
+}
+
+/**
+ * Builds the response for one page of offset pagination. `items` is that page
+ * (already sliced) and `total` the size of the whole list. Pages past the end are empty.
+ */
+export function toPaginatedResponse<T, R = T>(
   items: readonly T[],
+  total: number,
   { page, pageSize }: PaginationQuery,
   map: (item: T) => R = (item) => item as unknown as R,
 ): PaginatedResponse<R> {
-  const total = items.length;
   const totalPages = Math.ceil(total / pageSize);
-  const start = (page - 1) * pageSize;
   const hasNextPage = page < totalPages;
   const hasPreviousPage = page > 1;
 
   return {
-    data: items.slice(start, start + pageSize).map(map),
+    data: items.map(map),
     pagination: {
       page,
       pageSize,
