@@ -113,6 +113,12 @@ export type SearchMatchV1 = "text" | "sound";
  */
 export type SearchMatchFilterV1 = "all" | SearchMatchV1 | "exact";
 
+/**
+ * Most characters the search endpoint takes in `q`: room for the transcript of
+ * a 30 s clip, searched by what's said in it. The search box stops at 200.
+ */
+export const MAX_SEARCH_QUERY_LENGTH = 1000;
+
 export type AudioSearchResultV1 = AudioListItemV1 & {
   /** How far the audio stands out for this query, higher is better. Only comparable within one response. */
   score: number;
@@ -126,6 +132,22 @@ export type SimilarAudioV1 = AudioListItemV1 & {
 
 export type AudioSearchResponseV1 = DataResponse<AudioSearchResultV1[]>;
 export type SimilarAudiosResponseV1 = DataResponse<SimilarAudioV1[]>;
+
+/**
+ * What's said in a clip (`GET /api/v1/audios/{id}/transcript`), or in a WAV
+ * clip of the user's (`POST /api/v1/transcriptions`).
+ */
+export type TranscriptV1 = {
+  /** Empty when nobody speaks in the clip. */
+  text: string;
+  /**
+   * Made by a speech-to-text model, not part of the dataset: AudioCaps clips
+   * (they come with captions, not transcripts) and the user's own clips.
+   */
+  generated: boolean;
+};
+
+export type TranscriptResponseV1 = DataResponse<TranscriptV1>;
 
 /** Most audios one export can hold (`POST /api/v1/audios/export`). */
 export const MAX_EXPORT_IDS = 200;

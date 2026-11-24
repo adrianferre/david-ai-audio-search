@@ -13,9 +13,15 @@ import { formatClock, Waveform } from "./waveform";
 /** The search bar's match options, as a recent text search names them. */
 const MATCH_LABEL: Record<SearchMatchFilterV1, string> = {
   all: "All",
-  text: "Words",
+  exact: "Words",
+  text: "Meaning",
   sound: "Sound",
 };
+
+/** The transcript a search with a clip searched with, when it searched by what's said and someone speaks. */
+function spokenText(entry: { match?: SearchMatchFilterV1; transcript?: string }): string | null {
+  return entry.match && entry.match !== "sound" && entry.transcript ? entry.transcript : null;
+}
 
 export const recentOptionId = (listId: string, index: number) => `${listId}-${index}`;
 
@@ -92,33 +98,43 @@ function RecentSearchRow({ entry }: { entry: RecentSearch }) {
       label = <>“{entry.q}”</>;
       match = MATCH_LABEL[entry.match];
       break;
-    case "similar":
+    case "similar": {
       icon = <AudioLinesIcon />;
+      // Searched by what's said in it, the clip goes by its transcript, as in the search bar.
+      const said = spokenText(entry);
       label = (
         <>
-          <span className="text-muted-foreground">Similar to </span>“{displayText(entry.reference)}”
+          <span className="text-muted-foreground">Similar to </span>“
+          {displayText({ source: entry.reference.source, text: said ?? entry.reference.text })}”
         </>
       );
+      match = MATCH_LABEL[entry.match ?? "sound"];
       audio = {
         peaks: entry.reference.waveformPeaks,
         durationSeconds: entry.reference.durationSeconds,
       };
       break;
-    case "audio":
+    }
+    case "audio": {
       icon = entry.example.source === "recording" ? <MicIcon /> : <FileAudioIcon />;
-      label =
-        entry.example.source === "recording" ? (
-          <>
-            <span className="text-muted-foreground">Sounds like </span>your recording
-          </>
-        ) : (
-          <>
-            <span className="text-muted-foreground">Sounds like </span>
-            {entry.example.name}
-          </>
-        );
+      const said = spokenText(entry);
+      const name = entry.example.source === "recording" ? "your recording" : entry.example.name;
+      label = said ? (
+        <>
+          <span className="text-muted-foreground">Similar to </span>“{said}”
+        </>
+      ) : (
+        <>
+          <span className="text-muted-foreground">
+            {(entry.match ?? "sound") === "sound" ? "Sounds like " : "Similar to "}
+          </span>
+          {name}
+        </>
+      );
+      match = MATCH_LABEL[entry.match ?? "sound"];
       audio = { peaks: entry.example.peaks, durationSeconds: entry.example.durationSeconds };
       break;
+    }
   }
 
 

@@ -5,23 +5,16 @@ import type { SimilarAudiosResponseV1 } from "@/lib/api/v1/types";
 import { apiError, internalError } from "@/server/api/errors";
 import { sourceQuerySchema } from "@/server/api/source-filter";
 import { toSimilarAudioV1 } from "@/server/api/v1/audios";
+import { readWavBody } from "@/server/api/wav-body";
 import { findAudiosNearVector } from "@/server/audios/repository";
 import { embedAudioQuery } from "@/server/search/embeddings";
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
 
-/** About a minute of 16 kHz mono 16-bit WAV; the web app sends at most 30 s. */
-const MAX_BYTES = 2 * 1024 * 1024;
-
 const querySchema = z.object({
   limit: z.coerce.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
 }).extend(sourceQuerySchema.shape);
-
-function isWav(bytes: Uint8Array): boolean {
-  const ascii = (start: number, end: number) => String.fromCharCode(...bytes.subarray(start, end));
-  return bytes.length > 44 && ascii(0, 4) === "RIFF" && ascii(8, 12) === "WAVE";
-}
 
 /**
  * POST /api/v1/search/audio?limit=50&source=audiocaps with a WAV body (`Content-Type: audio/wav`).
@@ -34,25 +27,12 @@ export async function POST(request: NextRequest) {
     return apiError(400, "invalid_request", "Invalid query parameters", z.flattenError(parsed.error).fieldErrors);
   }
 
-  const contentType = request.headers.get("content-type")?.split(";")[0].trim().toLowerCase();
-  if (contentType !== "audio/wav" && contentType !== "audio/x-wav") {
-    return apiError(415, "unsupported_media_type", "Send the audio as a WAV file (Content-Type: audio/wav)");
-  }
-  const declaredLength = Number(request.headers.get("content-length"));
-  if (declaredLength > MAX_BYTES) {
-    return apiError(413, "payload_too_large", `The audio must be at most ${MAX_BYTES / 1024 / 1024} MB`);
-  }
-  const wav = new Uint8Array(await request.arrayBuffer());
-  if (wav.length > MAX_BYTES) {
-    return apiError(413, "payload_too_large", `The audio must be at most ${MAX_BYTES / 1024 / 1024} MB`);
-  }
-  if (!isWav(wav)) {
-    return apiError(400, "invalid_request", "The body is not a WAV file");
-  }
+  const upload = await readWavBody(request);
+  if (upload.error) return upload.error;
 
   let vector;
   try {
-    vector = await embedAudioQuery(wav, request.signal);
+    vector = await embedAudioQuery(upload.wav, request.signal);
   } catch (error) {
     // The embedding model is an external service (Vercel AI Gateway).
     console.error("[api] Audio embedding failed:", error);

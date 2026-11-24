@@ -22,7 +22,7 @@ import type { LevelMeter, RecorderStatus } from "@/lib/audio/use-microphone-reco
 import { cn } from "@/lib/utils";
 
 import { displayText } from "./datasets";
-import type { AudioExample, ReferenceClip } from "./queries";
+import type { AudioExample, ClipMatch, ReferenceClip } from "./queries";
 import type { RecentSearch } from "./recent-searches";
 import { recentOptionId, RecentSearchesPopover } from "./recent-searches-popover";
 import { formatClock, Waveform } from "./waveform";
@@ -52,6 +52,34 @@ const MATCH_OPTIONS: { value: SearchMatchFilterV1; label: string; hint: string }
   { value: "text", label: "Meaning", hint: "Matches the meaning of the transcripts and captions" },
   { value: "sound", label: "Sound", hint: "Matches what the clips sound like" },
 ];
+
+/**
+ * What a search with a clip (a file, a recording, a "similar to" clip)
+ * compares, in the order of the text search's options. Sound is the default.
+ * Words and Meaning search with what's said in the clip, as the text filters of
+ * the same names do; All adds the clip's own sound.
+ */
+const CLIP_MATCH_OPTIONS: { value: ClipMatch; label: string; hint: string }[] = [
+  {
+    value: "all",
+    label: "All",
+    hint: "Finds the clips that sound like this one, or whose transcripts or captions say what’s said in it",
+  },
+  {
+    value: "exact",
+    label: "Words",
+    hint: "Finds the clips whose transcripts or captions contain the exact words said in this one",
+  },
+  {
+    value: "text",
+    label: "Meaning",
+    hint: "Finds the clips whose transcripts or captions mean what’s said in this one",
+  },
+  { value: "sound", label: "Sound", hint: "Finds the clips that sound like this one" },
+];
+
+/** What's said in the clip searched by its words, as its chip shows it. */
+export type TranscriptLine = { status: "pending" } | { status: "error" } | { status: "success"; text: string };
 
 const MATCH_EXPLANATION: Record<SearchMatchFilterV1, ReactNode> = {
   all: (
@@ -87,6 +115,9 @@ export function AudioSearchBar({
   onQueryChange,
   match,
   onMatchChange,
+  clipMatch,
+  onClipMatchChange,
+  transcript,
   similarTo,
   similarPlayback,
   onToggleSimilar,
@@ -107,6 +138,11 @@ export function AudioSearchBar({
   onQueryChange: (query: string) => void;
   match: SearchMatchFilterV1;
   onMatchChange: (match: SearchMatchFilterV1) => void;
+  /** What a search with a clip compares: its sound, or what's said in it (exact words or meaning). */
+  clipMatch: ClipMatch;
+  onClipMatchChange: (match: ClipMatch) => void;
+  /** The clip's transcript, while a clip is searched by what's said in it (All, Words, Meaning). */
+  transcript: TranscriptLine | null;
   /** Set while the list shows the clips similar to this one. */
   similarTo: ReferenceClip | null;
   /** The reference clip in the player: whether it plays, and the share of it played (0 to 1). */
@@ -147,6 +183,11 @@ export function AudioSearchBar({
   const error = exampleStatus?.kind === "error" ? exampleStatus.message : null;
   // A file, a recording, or a "similar to" clip replaces the text input until its X clears it.
   const chip = reading || example !== null || similarTo !== null;
+  // Searched by what's said in it, the chip names the clip by its words, once they're known.
+  const byWords = clipMatch !== "sound" && transcript !== null;
+  const spoken = byWords && transcript.status === "success" && transcript.text !== "" ? transcript.text : null;
+  const transcribing = byWords && transcript.status === "pending";
+  const nobodySpeaks = byWords && transcript.status === "success" && transcript.text === "";
   const recentOpen =
     inputFocused && !recentDismissed && query === "" && recentSearches.length > 0;
   const activeIndex = recentOpen && activeRecent < recentSearches.length ? activeRecent : -1;
@@ -215,11 +256,22 @@ export function AudioSearchBar({
                     <PlayIcon className="ml-px size-3 fill-current" />
                   )}
                 </IconButton>
-                <span className="truncate">
-                  <span className="text-muted-foreground">Sounds like </span>
-                  {example.name}
-                  {example.trimmed && (
-                    <span className="text-muted-foreground"> · first {MAX_EXAMPLE_SECONDS} s</span>
+                <span className="truncate" title={spoken ?? undefined}>
+                  {spoken ? (
+                    <>
+                      <span className="text-muted-foreground">Similar to </span>“{spoken}”
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-muted-foreground">
+                        {transcribing ? "Transcribing " : clipMatch === "sound" ? "Sounds like " : "Similar to "}
+                      </span>
+                      {example.name}
+                      {transcribing && "…"}
+                      {example.trimmed && (
+                        <span className="text-muted-foreground"> · first {MAX_EXAMPLE_SECONDS} s</span>
+                      )}
+                    </>
                   )}
                 </span>
                 <Waveform
@@ -265,8 +317,9 @@ export function AudioSearchBar({
                     <PlayIcon className="ml-px size-3 fill-current" />
                   )}
                 </IconButton>
-                <span className="truncate">
-                  <span className="text-muted-foreground">Similar to </span>“{displayText(similarTo)}”
+                <span className="truncate" title={spoken ?? undefined}>
+                  <span className="text-muted-foreground">{transcribing ? "Transcribing " : "Similar to "}</span>“
+                  {spoken ?? displayText(similarTo)}”{transcribing && "…"}
                 </span>
                 <Waveform
                   peaks={similarTo.waveformPeaks}
@@ -368,30 +421,15 @@ export function AudioSearchBar({
               </>
             )}
             {!chip && (
-              <div
-                role="group"
-                aria-label="Match on"
-                className="flex shrink-0 gap-0.5 rounded-full bg-muted p-[3px]"
-              >
-                {MATCH_OPTIONS.map((option) => (
-                  <Tooltip key={option.value}>
-                    <TooltipTrigger
-                      type="button"
-                      aria-pressed={match === option.value}
-                      aria-description={option.hint}
-                      onClick={() => onMatchChange(option.value)}
-                      className={cn(
-                        "h-[30px] rounded-full px-3 text-[0.8rem] font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
-                        match === option.value &&
-                          "bg-card text-foreground shadow-[0_1px_2px_rgba(26,26,25,0.08)]",
-                      )}
-                    >
-                      {option.label}
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">{option.hint}</TooltipContent>
-                  </Tooltip>
-                ))}
-              </div>
+              <MatchToggle label="Match on" options={MATCH_OPTIONS} value={match} onChange={onMatchChange} />
+            )}
+            {!reading && (example !== null || similarTo !== null) && (
+              <MatchToggle
+                label="Search by"
+                options={CLIP_MATCH_OPTIONS}
+                value={clipMatch}
+                onChange={onClipMatchChange}
+              />
             )}
             <span aria-hidden="true" className="mx-0.5 h-6 w-px shrink-0 bg-border" />
             <input
@@ -464,13 +502,57 @@ export function AudioSearchBar({
           <CircleAlertIcon aria-hidden="true" className="size-4 shrink-0" />
           {error}
         </p>
+      ) : chip ? (
+        // Words and Meaning have nothing to search with then; the list says so.
+        !reading &&
+        clipMatch === "all" &&
+        nobodySpeaks && (
+          <p className="pl-1 text-[0.8rem] text-muted-foreground">
+            Nobody speaks in the clip, so <b className="font-medium text-foreground">All</b> matches its
+            sound only.
+          </p>
+        )
       ) : (
-        !chip &&
         !recording &&
         query.trim() !== "" && (
           <p className="pl-1 text-[0.8rem] text-muted-foreground">{MATCH_EXPLANATION[match]}</p>
         )
       )}
+    </div>
+  );
+}
+
+/** A segmented control: one pressed button per option, with its hint as the tooltip. */
+function MatchToggle<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: { value: T; label: string; hint: string }[];
+  value: T;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div role="group" aria-label={label} className="flex shrink-0 gap-0.5 rounded-full bg-muted p-[3px]">
+      {options.map((option) => (
+        <Tooltip key={option.value}>
+          <TooltipTrigger
+            type="button"
+            aria-pressed={value === option.value}
+            aria-description={option.hint}
+            onClick={() => onChange(option.value)}
+            className={cn(
+              "h-[30px] rounded-full px-3 text-[0.8rem] font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
+              value === option.value && "bg-card text-foreground shadow-[0_1px_2px_rgba(26,26,25,0.08)]",
+            )}
+          >
+            {option.label}
+          </TooltipTrigger>
+          <TooltipContent side="bottom">{option.hint}</TooltipContent>
+        </Tooltip>
+      ))}
     </div>
   );
 }

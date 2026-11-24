@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import type { AudioSource, SearchMatchFilterV1 } from "@/lib/api/v1/types";
 
-import type { AudioExample, ReferenceClip } from "./queries";
+import type { AudioExample, ClipMatch, ReferenceClip } from "./queries";
 
 /** The search bar offers this many of the latest searches. */
 export const MAX_RECENT_SEARCHES = 5;
@@ -16,9 +16,19 @@ export const MAX_RECENT_SEARCHES = 5;
  */
 export type RecentSearch = { id: string; at: number; source: AudioSource | null } & (
   | { kind: "text"; q: string; match: SearchMatchFilterV1 }
-  | { kind: "similar"; reference: ReferenceClip }
-  | { kind: "audio"; example: AudioExample }
+  | ({ kind: "similar"; reference: ReferenceClip } & ClipSearchState)
+  | ({ kind: "audio"; example: AudioExample } & ClipSearchState)
 );
+
+/**
+ * How a search with a clip last stood. Optional: entries saved before they
+ * existed searched by sound.
+ */
+type ClipSearchState = {
+  match?: ClipMatch;
+  /** What's said in the clip, once transcribed, when `match` isn't "sound". Empty when nobody speaks. */
+  transcript?: string;
+};
 
 /** A search as `remember` takes it: its id and time are added. */
 export type NewRecentSearch = RecentSearch extends infer S
@@ -74,13 +84,20 @@ async function saveEntries(entries: RecentSearch[]): Promise<void> {
 
 const normalize = (q: string) => q.trim().toLowerCase();
 
-/** Whether `next` is the same search as `entry`, so the older one goes. A file attached again counts. */
+/**
+ * Whether `next` is the same search as `entry`, so the older one goes. A file
+ * attached again counts. A search with a clip is one entry whatever its match
+ * and dataset filter: it is saved again as they change, and keeps the latest.
+ */
 function repeats(entry: RecentSearch, next: NewRecentSearch): boolean {
-  if (entry.kind !== next.kind || entry.source !== next.source) return false;
+  if (entry.kind !== next.kind) return false;
   switch (next.kind) {
     case "text":
       return (
-        entry.kind === "text" && entry.match === next.match && normalize(entry.q) === normalize(next.q)
+        entry.kind === "text" &&
+        entry.source === next.source &&
+        entry.match === next.match &&
+        normalize(entry.q) === normalize(next.q)
       );
     case "similar":
       return entry.kind === "similar" && entry.reference.id === next.reference.id;
