@@ -92,6 +92,11 @@ Each clip has up to three things to match against, all in the `audios` table:
   A clip's score is its best signal, and clips below 3 standard deviations are dropped. Each
   result says why it matched: `text` (shown as "Said" for a transcript, "Caption" for captions),
   `sound` ("Sounds like") or both.
+- **Exact words** (the "Words" filter, `match=exact`) skips the vectors: a clip matches when its
+  transcript or captions contain every word of the query as typed. It doesn't stem or drop stop
+  words, so "barking" doesn't match "barks" and "the end" needs both words, which is what you want
+  when looking for a specific word or line. The query needs no model call, so it works even when the
+  AI Gateway doesn't.
 - **Search by example** ("Find similar sound" on any clip) returns the nearest neighbours of that clip's
   audio vector. It needs no model call: the vector is already stored.
 - **Search with your own audio file** ("Upload", or drop a file anywhere on the
@@ -243,7 +248,7 @@ relevant first. There is no pagination: it is a ranked top list.
 | Query param | Default | Rules |
 | --- | --- | --- |
 | `q` | required | 1–200 characters |
-| `match` | `all` | `all`, `text` (transcripts and captions) or `sound` (the audio alone) |
+| `match` | `all` | `all`, `exact` (the exact words of the transcripts and captions, no vectors; "Words" in the UI), `text` (their meaning; "Meaning") or `sound` (the audio alone; "Sound") |
 | `limit` | `50` | integer 1–100 |
 | `source` | every dataset | `librispeech`, `audiocaps` or `commonvoice`: only that dataset's clips |
 
@@ -262,6 +267,11 @@ deviations (plus a bonus for exact words); compare it only within one response. 
 are still scored against the whole catalog, so a score doesn't change with the filter. Clips that
 don't stand out are left out, so the list is often shorter than `limit`.
 Returns `503 search_unavailable` when the embedding model can't be reached.
+
+With `match=exact` there is no model call and no cut-off: every clip whose text contains all the
+query's words as written is returned (up to `limit`), with `matches: ["text"]`. `score` is then
+Postgres's `ts_rank_cd` (more and closer occurrences rank higher). The query takes web-search
+syntax: `"a phrase"`, `or`, `-word`.
 
 ### `GET /api/v1/audios/{id}/similar`
 

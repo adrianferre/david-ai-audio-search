@@ -234,6 +234,63 @@ export async function searchAudios({
 }
 
 /**
+ * Exact-word search over the clip's text (transcript or captions), no vectors:
+ * a clip matches when its text contains every word of the query as written
+ * (case and punctuation aside). Unlike the `search_text` index it does not stem
+ * ("barking" doesn't match "barks") or drop stop words ("the", "a"), so it is
+ * computed per query, which is fine for a few thousand rows. Web-search syntax
+ * works: "a quoted phrase" for words in a row, `or`, and `-word` to exclude.
+ * Most relevant first (`ts_rank_cd`: more and closer occurrences), then by id.
+ */
+export async function searchAudiosByExactWords({
+  query,
+  limit,
+  source = null,
+}: {
+  query: string;
+  limit: number;
+  source?: AudioSource | null;
+}): Promise<AudioSearchHit[]> {
+  const rows = await getSql()`
+    WITH q AS (
+      SELECT websearch_to_tsquery('simple', ${query}) AS words,
+             -- Any of the query's words, to pick the caption to show.
+             replace(plainto_tsquery('simple', ${query})::text, '&', '|')::tsquery AS any_word
+    )
+    SELECT a.id, a.source, a.file_name, a.blob_pathname, a.duration_seconds, a.sample_rate, a.channels, a.waveform_peaks,
+           a.metadata, ts_rank_cd(t.doc, q.words)::float8 AS score,
+           (
+             SELECT caption
+             FROM jsonb_array_elements_text(a.metadata->'captions') WITH ORDINALITY AS c(caption, position)
+             ORDER BY (to_tsvector('simple', caption) @@ q.words) DESC,
+                      ts_rank(to_tsvector('simple', caption), q.any_word) DESC, position
+             LIMIT 1
+           ) AS caption
+    FROM audios a
+    CROSS JOIN q
+    CROSS JOIN LATERAL (
+      -- The captions as jsonb, not as text: each caption is indexed on its own,
+      -- with a gap between them, so a quoted phrase can't span two captions.
+      SELECT coalesce(
+               to_tsvector('simple', a.metadata->>'transcript'),
+               to_tsvector('simple', a.metadata->'captions'),
+               ''::tsvector
+             ) AS doc
+    ) t
+    WHERE t.doc @@ q.words
+      AND (${source}::text IS NULL OR a.source = ${source})
+    ORDER BY score DESC, a.id
+    LIMIT ${limit}
+  `;
+  return rows.map((row) => ({
+    record: toRecord(row),
+    score: row.score as number,
+    matches: ["text"],
+    caption: (row.caption as string | null) ?? null,
+  }));
+}
+
+/**
  * Search by example: the clips whose audio vector is nearest to the one of
  * `id`, most similar first, from `source` only when it is set. Returns null when
  * `id` doesn't exist, and an empty list when it has no vector yet.

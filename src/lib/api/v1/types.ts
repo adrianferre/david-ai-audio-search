@@ -107,8 +107,11 @@ export type AudioDetailResponseV1 = DataResponse<AudioDetailV1>;
  */
 export type SearchMatchV1 = "text" | "sound";
 
-/** `match` query parameter of the search endpoint. */
-export type SearchMatchFilterV1 = "all" | SearchMatchV1;
+/**
+ * `match` query parameter of the search endpoint. `exact` is the text alone, by
+ * its exact words (no vectors); its results match on `text`.
+ */
+export type SearchMatchFilterV1 = "all" | SearchMatchV1 | "exact";
 
 export type AudioSearchResultV1 = AudioListItemV1 & {
   /** How far the audio stands out for this query, higher is better. Only comparable within one response. */

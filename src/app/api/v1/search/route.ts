@@ -5,7 +5,7 @@ import type { AudioSearchResponseV1 } from "@/lib/api/v1/types";
 import { apiError, internalError } from "@/server/api/errors";
 import { sourceQuerySchema } from "@/server/api/source-filter";
 import { toAudioSearchResultV1 } from "@/server/api/v1/audios";
-import { searchAudios } from "@/server/audios/repository";
+import { searchAudios, searchAudiosByExactWords } from "@/server/audios/repository";
 import type { SearchMatch } from "@/server/audios/types";
 import { embedQuery } from "@/server/search/embeddings";
 
@@ -14,7 +14,7 @@ const MAX_LIMIT = 100;
 
 const querySchema = z.object({
   q: z.string().trim().min(1).max(200),
-  match: z.enum(["all", "text", "sound"]).default("all"),
+  match: z.enum(["all", "text", "sound", "exact"]).default("all"),
   limit: z.coerce.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
 }).extend(sourceQuerySchema.shape);
 
@@ -25,6 +25,19 @@ export async function GET(request: NextRequest) {
     return apiError(400, "invalid_request", "Invalid query parameters", z.flattenError(parsed.error).fieldErrors);
   }
   const { q, match, limit, source } = parsed.data;
+
+  // Exact words need no model call: only the full-text match.
+  if (match === "exact") {
+    let hits;
+    try {
+      hits = await searchAudiosByExactWords({ query: q, limit, source });
+    } catch (error) {
+      return internalError(error);
+    }
+    const body: AudioSearchResponseV1 = { data: hits.map(toAudioSearchResultV1) };
+    return Response.json(body);
+  }
+
   const signals: SearchMatch[] = match === "all" ? ["text", "sound"] : [match];
 
   let vectors;
