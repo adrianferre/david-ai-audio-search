@@ -250,3 +250,21 @@ export async function getAudios(ids: string[]): Promise<AudioRecord[]> {
   }));
   return ids.flatMap((id) => byId.get(id) ?? []);
 }
+
+/**
+ * Search by an outside example: the clips whose audio vector is nearest to
+ * `vector` (an embedded audio file), most similar first.
+ */
+export async function findAudiosNearVector(vector: number[], limit: number): Promise<SimilarAudioHit[]> {
+  const rows = await getSql()`
+    WITH q AS (SELECT ${toVector(vector)}::vector AS v)
+    SELECT a.id, a.source, a.file_name, a.blob_pathname, a.duration_seconds, a.sample_rate, a.channels,
+           a.metadata, (1 - (a.audio_embedding <=> q.v))::float8 AS similarity
+    FROM audios a
+    CROSS JOIN q
+    WHERE a.audio_embedding IS NOT NULL
+    ORDER BY a.audio_embedding <=> q.v, a.id
+    LIMIT ${limit}
+  `;
+  return rows.map((row) => ({ record: toRecord(row), similarity: row.similarity as number }));
+}

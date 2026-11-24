@@ -11,7 +11,12 @@ import {
   useQuery,
 } from "@tanstack/react-query";
 
-import { fetchAudios, fetchSimilarAudios, searchAudios } from "@/lib/api/v1/client";
+import {
+  fetchAudios,
+  fetchSimilarAudios,
+  searchAudios,
+  searchByAudioFile,
+} from "@/lib/api/v1/client";
 import type {
   AudioListResponseV1,
   AudioSearchResponseV1,
@@ -67,11 +72,39 @@ export const similarQuery = (id: string) =>
     queryFn: ({ signal }) => fetchSimilarAudios({ id, limit: RESULTS_LIMIT, signal }),
   });
 
-/** What the list shows: the whole catalog, a text search, or the audios similar to one. */
+/**
+ * An audio file the user brought, or a recording they made from the
+ * microphone, converted to the WAV the search API takes.
+ */
+export type AudioExample = {
+  /** New for every file attached, so attaching the same file again searches again. */
+  id: string;
+  name: string;
+  source: "file" | "recording";
+  wav: Blob;
+  /** The file was longer than the part that is searched. */
+  trimmed: boolean;
+};
+
+export const fileQuery = (example: AudioExample | null) =>
+  queryOptions({
+    queryKey: ["v1", "search", "audio", example?.id ?? "", { limit: RESULTS_LIMIT }],
+    queryFn: ({ signal }) =>
+      searchByAudioFile({ wav: example!.wav, limit: RESULTS_LIMIT, signal }),
+    enabled: example !== null,
+    // The result for a given file never changes.
+    staleTime: Infinity,
+  });
+
+/**
+ * What the list shows: the whole catalog, a text search, the audios similar to
+ * one of the catalog, or the audios that sound like the user's own file.
+ */
 export type AudioListView =
   | { kind: "browse" }
   | { kind: "search"; q: string; match: SearchMatchFilterV1 }
-  | { kind: "similar"; id: string };
+  | { kind: "similar"; id: string }
+  | { kind: "file"; example: AudioExample };
 
 /**
  * The current view as the search bar needs it: the rows the list shows, for
@@ -90,15 +123,18 @@ export function useListView(view: AudioListView): {
     ...similarQuery(view.kind === "similar" ? view.id : ""),
     enabled: view.kind === "similar",
   });
+  const file = useQuery(fileQuery(view.kind === "file" ? view.example : null));
 
   const rows =
     view.kind === "browse"
       ? (catalog.data?.pages.flatMap((page) => page.data) ?? [])
       : view.kind === "search"
         ? (search.data?.data ?? [])
-        : (similar.data?.data ?? []);
+        : view.kind === "similar"
+          ? (similar.data?.data ?? [])
+          : (file.data?.data ?? []);
 
-  return { rows, summary: summarize(view, { catalog, search, similar }) };
+  return { rows, summary: summarize(view, { catalog, search, similar, file }) };
 }
 
 /**
@@ -113,10 +149,12 @@ function summarize(
     catalog,
     search,
     similar,
+    file,
   }: {
     catalog: UseInfiniteQueryResult<InfiniteData<AudioListResponseV1>>;
     search: UseQueryResult<SearchResultsData>;
     similar: UseQueryResult<SimilarAudiosResponseV1>;
+    file: UseQueryResult<SimilarAudiosResponseV1>;
   },
 ): string {
   const total = catalog.data?.pages[0]?.pagination.total;
@@ -135,12 +173,14 @@ function summarize(
       if (search.data.hasMore) return `${count.toLocaleString()}+ results${ofTotal}`;
       return `${count.toLocaleString()} ${count === 1 ? "result" : "results"}${ofTotal}`;
     }
-    case "similar": {
-      if (similar.status === "error") return "Search failed";
-      if (similar.status === "pending") return "Finding similar…";
+    case "similar":
+    case "file": {
+      const result = view.kind === "similar" ? similar : file;
+      if (result.status === "error") return "Search failed";
+      if (result.status === "pending") return view.kind === "file" ? "Listening…" : "Finding similar…";
       // Ranked by distance with no cutoff, so a full list is the top N, not
       // the only N that are similar.
-      const count = similar.data.data.length;
+      const count = result.data.data.length;
       if (count >= RESULTS_LIMIT) return `${count.toLocaleString()} most similar${ofTotal}`;
       return `${count.toLocaleString()} similar${ofTotal}`;
     }

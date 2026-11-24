@@ -92,6 +92,14 @@ Each clip has up to three things to match against, all in the `audios` table:
   `sound` ("Sounds like") or both.
 - **Search by example** ("Find similar" on any clip) returns the nearest neighbours of that clip's
   audio vector. It needs no model call: the vector is already stored.
+- **Search with your own audio file** ("Search with a file", or drop a file anywhere on the
+  page): the browser decodes the file (WAV, MP3, M4A, OGG, FLAC…), converts it to 16 kHz mono
+  WAV like the catalog, keeps the first 30 seconds and posts it. The server embeds it the same
+  way the catalog was embedded and returns the nearest audio vectors. The file is not stored.
+- **Search with a recording** ("Record"): the browser records from the microphone with
+  `MediaRecorder` (up to 30 seconds, stopped by "Stop and search") and sends the recording
+  through the same conversion as a file. Echo cancellation and noise suppression are turned off,
+  since they are tuned for voices and would filter out the sounds being searched for.
 - **Captions are indexed as text.** A sound query such as "dog barking" can match an AudioCaps
   clip through its captions, its audio, or both. The "Sounds like" filter (`match=sound`) uses
   the audio alone, which is what finds sounds in clips nobody has described. A clip has several
@@ -243,7 +251,24 @@ audios-2026-11-24-2.zip
 
 The ZIP is streamed (so it isn't bound by the 4.5 MB function response limit) and its entries are stored uncompressed (FLAC already is). Unknown ids return `404 not_found` with `details.missingIds` before anything is streamed. It is one request for the rate limit, whatever the number of ids. The UI uses it for the row checkboxes' **Download** button.
 
-Errors always look like `{ "error": { "code", "message", "details"? } }`: `400 invalid_request`, `404 not_found`, `500 internal_error` (e.g. the database is unreachable) and `503 search_unavailable`.
+### `POST /api/v1/search/audio`
+
+Search by your own example: the audios that sound most like the clip in the request body, most
+similar first. Send a WAV file with `Content-Type: audio/wav` (at most 2 MB; 16 kHz mono, about a
+minute, is what the model was given for the catalog). Items and `limit` are as in `/similar`.
+The clip is embedded and discarded.
+
+```sh
+ffmpeg -i my-dog.m4a -ac 1 -ar 16000 my-dog.wav
+curl -X POST -H 'content-type: audio/wav' --data-binary @my-dog.wav \
+  'https://david-ai-audio-search.vercel.app/api/v1/search/audio?limit=10'
+```
+
+`415 unsupported_media_type` for another content type, `413 payload_too_large` over 2 MB,
+`400 invalid_request` when the body is not a WAV file and `503 search_unavailable` when the
+embedding model can't be reached.
+
+Errors always look like `{ "error": { "code", "message", "details"? } }`: `400 invalid_request`, `404 not_found`, `413 payload_too_large`, `415 unsupported_media_type`, `500 internal_error` (e.g. the database is unreachable) and `503 search_unavailable`.
 
 ### Rate limits
 

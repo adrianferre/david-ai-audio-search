@@ -34,3 +34,20 @@ export function toTextQuery(query: string): string {
 export function toSoundQuery(query: string): string {
   return query;
 }
+
+/** Format of the audio sent to the model, at ingest and at query time. */
+export const AUDIO_MIME_TYPE = "audio/wav";
+
+/**
+ * The `embed()` input for one audio clip (16 kHz mono WAV, base64). The audio
+ * goes in the Google `content` option; the text value stays empty so only the
+ * audio is embedded.
+ */
+export function toAudioInput(base64Wav: string) {
+  return {
+    value: "",
+    providerOptions: {
+      google: { content: [[{ inlineData: { mimeType: AUDIO_MIME_TYPE, data: base64Wav } }]] },
+    },
+  };
+}

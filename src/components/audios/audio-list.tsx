@@ -23,7 +23,14 @@ import type {
 } from "@/lib/api/v1/types";
 import { cn } from "@/lib/utils";
 
-import { type AudioListView, catalogQuery, searchQuery, similarQuery } from "./queries";
+import {
+  type AudioExample,
+  type AudioListView,
+  catalogQuery,
+  fileQuery,
+  searchQuery,
+  similarQuery,
+} from "./queries";
 import { clearOnEscape, type Selection } from "./selection";
 import { type PlayerStatus, useAudioPlayer } from "./use-audio-player";
 
@@ -108,6 +115,7 @@ export function AudioList({
         <SearchResults q={view.q} match={view.match} actions={actions} />
       )}
       {view.kind === "similar" && <SimilarResults id={view.id} actions={actions} />}
+      {view.kind === "file" && <FileResults example={view.example} actions={actions} />}
     </section>
   );
 }
@@ -214,6 +222,25 @@ function SimilarResults({ id, actions }: { id: string; actions: RowActions }) {
       )}
       {/* Keyed by the example so the scroll position resets with it. */}
       {rows && rows.length > 0 && <AudioRows key={id} rows={rows} actions={actions} />}
+    </>
+  );
+}
+
+function FileResults({ example, actions }: { example: AudioExample; actions: RowActions }) {
+  const { data, status, error, refetch } = useQuery(fileQuery(example));
+  const rows = data?.data;
+
+  return (
+    <>
+      {status === "pending" && (
+        <ListMessage>Finding the clips that sound like “{example.name}”…</ListMessage>
+      )}
+      {status === "error" && <ListError message={error.message} onRetry={() => refetch()} />}
+      {rows && rows.length === 0 && (
+        <ListMessage>No clip in the catalog can be compared yet.</ListMessage>
+      )}
+      {/* Keyed by the example so the scroll position resets with it. */}
+      {rows && rows.length > 0 && <AudioRows key={example.id} rows={rows} actions={actions} />}
     </>
   );
 }

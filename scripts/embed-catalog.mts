@@ -20,6 +20,7 @@ import { embed } from "ai";
 import {
   EMBEDDING_DIMENSIONS,
   EMBEDDING_MODEL,
+  toAudioInput,
   toTextDocument,
 } from "../src/server/search/embedding-config.ts";
 
@@ -80,12 +81,8 @@ function checked(embedding: number[]): string {
 async function embedAudio(wav: Buffer): Promise<string> {
   const { embedding } = await embed({
     model: EMBEDDING_MODEL,
-    // The audio goes in `content`; the text value stays empty so only the audio is embedded.
-    value: "",
+    ...toAudioInput(wav.toString("base64")),
     dimensions: EMBEDDING_DIMENSIONS,
-    providerOptions: {
-      google: { content: [[{ inlineData: { mimeType: "audio/wav", data: wav.toString("base64") } }]] },
-    },
     maxRetries: 5,
   });
   return checked(embedding);
