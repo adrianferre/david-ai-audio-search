@@ -4,8 +4,8 @@ import "server-only";
  * Internal, version-agnostic representation of an audio file.
  * API versions map this to their own public shapes (see src/server/api/vN).
  *
- * Records live in the `audios` Postgres table and the FLAC files in a private
- * Vercel Blob store. Both are filled by `pnpm catalog:sync` (scripts/catalog).
+ * Records live in the `audios` table in Neon Postgres (src/server/db/schema.sql)
+ * and the FLAC files in a private Vercel Blob store.
  */
 
 type AudioFileInfo = {

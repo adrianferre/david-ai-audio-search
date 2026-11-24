@@ -41,6 +41,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# datasets (downloaded via scripts/, too large for git)
-/data/*
-!/data/README.md
+# datasets from before the catalog moved to Neon + Vercel Blob (no longer used)
+/data/

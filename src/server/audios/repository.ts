@@ -6,7 +6,7 @@ import { getSql } from "@/server/db";
 
 import type { AudioRecord } from "./types";
 
-// Columns of the `audios` table (schema: scripts/catalog/schema.ts).
+// Columns of the `audios` table (schema: src/server/db/schema.sql).
 const speakerSchema = z.object({ id: z.string(), sex: z.string().nullable(), name: z.string().nullable() });
 const chapterSchema = z.object({ id: z.string(), title: z.string().nullable(), bookTitle: z.string().nullable() });
 

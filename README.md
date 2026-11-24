@@ -6,21 +6,21 @@ Next.js 16 (App Router, Turbopack, Cache Components) with TypeScript, Tailwind C
 
 ### 1. Prerequisites
 
-Runs on macOS and Linux (on Windows, use WSL).
-
 | Tool | Why | Install |
 | --- | --- | --- |
-| Node.js 20.9+ | Runs the app and scripts | [nodejs.org](https://nodejs.org) or `nvm install 22` |
+| Node.js 20.9+ | Runs the app | [nodejs.org](https://nodejs.org) or `nvm install 22` |
 | pnpm | Package manager (version pinned in `package.json`) | `corepack enable` |
-| ffmpeg | Cuts the AudioCaps clips | macOS: `brew install ffmpeg` · Linux: `sudo apt install ffmpeg` |
-| `tar`, `unzip` | Unpack downloads | Preinstalled on macOS · Linux: `sudo apt install tar unzip` |
+| Vercel CLI | Links the project and pulls its credentials | `npm i -g vercel` then `vercel login` |
+
+You also need access to the Vercel team `adrian-ferre`.
 
 ### 2. Install and connect to Vercel
 
-The app reads its catalog from Neon Postgres and keeps the FLAC files in a private
-Vercel Blob store. Both belong to the Vercel project
-[`adrian-ferre/david-ai-audio-search`](https://vercel.com/adrian-ferre/david-ai-audio-search),
-and every environment (development, preview, production) shares the same database and store.
+There is no local data to download. The app reads its catalog straight from the Vercel
+project [`adrian-ferre/david-ai-audio-search`](https://vercel.com/adrian-ferre/david-ai-audio-search):
+the catalog is in Neon Postgres and the FLAC files in a private Vercel Blob store. Every
+environment (development, preview, production) shares that database and store, so
+`pnpm dev` serves the same data as production.
 
 ```bash
 git clone <this repo> && cd david-ai-audio-search
@@ -31,47 +31,19 @@ pnpm dev                     # http://localhost:3000
 ```
 
 `.env.local` holds secrets: keep it out of git (`.env*` is ignored), logs and screenshots.
-Its `VERCEL_OIDC_TOKEN` (used for Blob) expires after about 12 hours; run
-`vercel env pull .env.local` again when a script says it has expired.
+The app only reads from the database. Since it is the production database, don't write to
+it from local scripts or a SQL console unless you mean to change production.
 
-### 3. Publish the datasets (only when they change)
+### Data
 
-The catalog is already in Neon and Blob, so you only need this to add or refresh datasets.
+- **LibriSpeech dev-clean**: 2,703 read-speech recordings with transcripts, from
+  [OpenSLR 12](https://www.openslr.org/12). License CC BY 4.0.
+- **AudioCaps val**: 426 ten-second sound clips with 5 captions each, from
+  [AudioCaps](https://github.com/cdjkim/audiocaps). Captions are MIT; the audio was cut from
+  YouTube videos and belongs to their uploaders. That is why the Blob store is private:
+  don't make it public or serve AudioCaps audio to the public.
 
-```bash
-pnpm data:setup     # downloads the audio datasets into data/
-pnpm catalog:sync   # uploads them to Blob and replaces the catalog in Postgres
-```
-
-`pnpm data:setup` checks the prerequisites first, then downloads about 520 MB into `data/`:
-
-- **LibriSpeech dev-clean**: 2,703 read-speech recordings with transcripts, from OpenSLR.
-- **AudioCaps val**: up to 495 ten-second sound clips with 5 captions each, cut from YouTube.
-
-The first run takes about 10–15 minutes. Files are cached in `~/.cache/david-ai-audio-search/`,
-so re-running it, or setting up another clone on the same machine, takes seconds.
-
-`pnpm catalog:sync` publishes what is in `data/` to **every environment, production included**:
-
-1. Uploads each FLAC to the private Blob store at its path under `data/`
-   (e.g. `audiocaps/val/audio/vfY_TJq7n_U_130.flac`), skipping files already there with the same size.
-2. Creates the `audios` table if needed (`scripts/catalog/schema.ts`), then upserts every
-   row and deletes rows that are no longer in `data/`, all in one transaction.
-
-It refuses to run if a dataset is missing locally, so it never wipes a dataset by accident.
-The first upload takes about 2 minutes; later runs only send what changed.
-
-Good to know:
-
-- **It's safe to re-run.** If `pnpm data:setup` stops partway (network drop, YouTube rate limiting),
-  run it again and it continues where it left off. The same goes for `pnpm catalog:sync`.
-- **Some AudioCaps clips will be missing.** About 14% of the source videos have been deleted,
-  made private or age-restricted. Those are listed in `data/audiocaps/val/unavailable.json`,
-  and the exact count can differ by country.
-- **Licenses:** LibriSpeech is CC BY 4.0. AudioCaps captions are MIT; the audio belongs to
-  the original YouTube uploaders, so keep it for research and don't redistribute it. That is
-  why the Blob store is private: don't make it public or serve AudioCaps audio to the public.
-- Details and file layout: [`data/README.md`](data/README.md).
+The table is described in [`src/server/db/schema.sql`](src/server/db/schema.sql).
 
 ## Scripts
 
@@ -82,8 +54,6 @@ Good to know:
 | `pnpm start`     | Serve the production build           |
 | `pnpm lint`      | ESLint                               |
 | `pnpm typecheck` | Generate route types and run `tsc`   |
-| `pnpm data:setup` | Download all datasets into `data/` (LibriSpeech dev-clean + AudioCaps val) |
-| `pnpm catalog:sync` | Upload `data/` to Vercel Blob and the catalog to Postgres (all environments) |
 
 ## Project layout
 
@@ -91,9 +61,7 @@ Good to know:
 - `src/components/ui/` – shadcn/ui components (`pnpm dlx shadcn@latest add <name>`)
 - `src/components/` – app components (theme provider/toggle)
 - `src/lib/` – shared utilities
-- `data/` – downloaded datasets, gitignored (see `data/README.md`)
-- `scripts/datasets/` – dataset download scripts
-- `scripts/catalog/` – `pnpm catalog:sync`: dataset parsers, Postgres schema, Blob upload
+- `src/server/db/` – Neon client and the catalog schema (`schema.sql`)
 - `src/env.ts` – typed, validated environment variables (`import { env } from "@/env"`)
 
 ## API
@@ -132,7 +100,7 @@ Errors always look like `{ "error": { "code", "message", "details"? } }`: `400 i
 - `src/server/api/v1/`: mappers from the internal records to the v1 response shapes.
 - `src/server/api/`: shared pagination and error helpers.
 - `src/server/audios/`: the internal record types and the Postgres queries (`repository.ts`).
-- `src/server/db/`: the Neon client (HTTP driver, one fetch per query).
+- `src/server/db/`: the Neon client (HTTP driver, one fetch per query) and `schema.sql`.
 - `src/lib/api/v1/`: the public types and the client fetchers used by the UI.
 
 To add a v2, create `src/app/api/v2/...` and `src/server/api/v2/` mappers (and `src/lib/api/v2/` types). The data layer (`src/server/audios/`) is shared.
