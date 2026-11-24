@@ -11,14 +11,16 @@ CREATE EXTENSION IF NOT EXISTS vector;
 CREATE TABLE IF NOT EXISTS audios (
   -- "C" collation: byte-wise ordering, the same on every server locale.
   id               text COLLATE "C" PRIMARY KEY,
-  source           text NOT NULL CHECK (source IN ('librispeech', 'audiocaps')),
+  -- 'commonvoice' added by migrations/003_commonvoice.sql.
+  source           text NOT NULL CHECK (source IN ('librispeech', 'audiocaps', 'commonvoice')),
   file_name        text NOT NULL,
   -- Pathname of the FLAC in the private Vercel Blob store.
   blob_pathname    text NOT NULL,
   duration_seconds double precision NOT NULL,
   sample_rate      integer NOT NULL,
   channels         smallint NOT NULL,
-  -- Dataset-specific fields (LibriSpeechMetadata / AudioCapsMetadata in src/server/audios/types.ts).
+  -- Dataset-specific fields (LibriSpeechMetadata / AudioCapsMetadata / CommonVoiceMetadata in
+  -- src/server/audios/types.ts).
   metadata         jsonb NOT NULL,
   updated_at       timestamptz NOT NULL DEFAULT now(),
 
@@ -27,8 +29,8 @@ CREATE TABLE IF NOT EXISTS audios (
   -- scripts/embed-catalog.mts fills them; NULL means "not embedded yet".
   -- What the clip sounds like: embedding of the waveform. Every clip.
   audio_embedding  vector(768),
-  -- The clip's text: embedding of the transcript (LibriSpeech) or of all the
-  -- captions joined (AudioCaps).
+  -- The clip's text: embedding of the transcript (LibriSpeech, Common Voice) or of
+  -- all the captions joined (AudioCaps).
   text_embedding   vector(768),
   -- Model that produced both vectors.
   embedding_model  text,
@@ -38,7 +40,8 @@ CREATE TABLE IF NOT EXISTS audios (
                      (to_tsvector('english', coalesce(metadata->>'transcript', metadata->>'captions', ''))) STORED
 );
 
--- Matches the ORDER BY of the list endpoint: LibriSpeech first, then AudioCaps, each by id.
+-- Matches the ORDER BY of the list endpoint: LibriSpeech first, then the rest by id
+-- (AudioCaps, then Common Voice).
 CREATE INDEX IF NOT EXISTS audios_list_order_idx
   ON audios ((CASE source WHEN 'librispeech' THEN 0 ELSE 1 END), id);
 
