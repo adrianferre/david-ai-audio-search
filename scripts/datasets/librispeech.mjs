@@ -31,7 +31,10 @@ const workspaceRoot = join(DATA_DIR, "librispeech", "LibriSpeech");
 const scope = `librispeech:${subset}`;
 
 async function fetchToCache() {
-  const sums = await (await fetch(`${BASE_URL}/md5sum.txt`)).text();
+  const sumsUrl = `${BASE_URL}/md5sum.txt`;
+  const res = await fetch(sumsUrl);
+  if (!res.ok) throw new Error(`GET ${sumsUrl} failed: HTTP ${res.status}`);
+  const sums = await res.text();
   const md5 = sums
     .split("\n")
     .map((line) => line.trim().split(/\s+/))

@@ -27,6 +27,7 @@ import {
   renameSync,
   rmSync,
   statSync,
+  utimesSync,
 } from "node:fs";
 import { arch, platform } from "node:os";
 import { basename, join } from "node:path";
@@ -130,9 +131,8 @@ async function ensureYtDlp() {
   if (!build) throw new Error(`No yt-dlp build for platform ${platform()}`);
   const binDir = join(CACHE_DIR, "bin");
   const pointer = join(binDir, "yt-dlp-current");
-  const current = existsSync(pointer)
-    ? join(binDir, readFileSync(pointer, "utf8").trim(), build)
-    : null;
+  const currentName = existsSync(pointer) ? readFileSync(pointer, "utf8").trim() : null;
+  const current = currentName ? join(binDir, currentName, build) : null;
   if (current && existsSync(current) && Date.now() - statSync(pointer).mtimeMs < YTDLP_MAX_AGE_MS) {
     return current;
   }
@@ -157,7 +157,14 @@ async function ensureYtDlp() {
     // before launching many in parallel.
     spawnSync(bin, ["--version"], { stdio: "ignore" });
     writeFileAtomic(pointer, `${name}\n`);
-    // Remove older builds, with a day's grace for runs that may still use them.
+    // Stamp the build we just replaced, so its mtime marks when it was
+    // superseded rather than when it was downloaded.
+    if (currentName && existsSync(join(binDir, currentName))) {
+      const now = new Date();
+      utimesSync(join(binDir, currentName), now, now);
+    }
+    // Remove older builds, with a day's grace (since being superseded) for
+    // runs that may still use them.
     for (const entry of readdirSync(binDir)) {
       const path = join(binDir, entry);
       if (entry.startsWith("yt-dlp") && entry !== name && path !== pointer &&
@@ -285,11 +292,13 @@ if (todo.length > 0) {
 
   let done = 0;
   let failed = [];
+  const recovered = new Set();
   const attempt = async (clip) => {
     const result = await fetchClip(ytDlp, clip);
     done++;
     if (result === "ok") {
       delete unavailable[clip.id];
+      recovered.add(clip.id);
     } else if (result.unavailable) {
       unavailable[clip.id] = result.unavailable;
       log(scope, `${clip.id}: unavailable (${result.unavailable})`);
@@ -309,11 +318,11 @@ if (todo.length > 0) {
     await runPool(retry, 1, attempt);
   }
 
-  // Merge with entries written by concurrent runs before saving.
-  writeFileAtomic(
-    unavailablePath,
-    `${JSON.stringify({ ...readJson(unavailablePath, {}), ...unavailable }, null, 2)}\n`,
-  );
+  // Merge with entries written by concurrent runs before saving, dropping
+  // clips this run managed to download.
+  const merged = { ...readJson(unavailablePath, {}), ...unavailable };
+  for (const id of recovered) delete merged[id];
+  writeFileAtomic(unavailablePath, `${JSON.stringify(merged, null, 2)}\n`);
   if (failed.length > 0) {
     process.exitCode = 1;
     log(scope, `${failed.length} clips failed (likely rate limiting). Re-run \`pnpm data:audiocaps\` to fetch them.`);
