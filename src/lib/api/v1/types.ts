@@ -1,0 +1,72 @@
+/**
+ * Public contract of the v1 HTTP API. Shared by the route handlers (server)
+ * and the fetchers/components (client), so both sides stay in sync.
+ * Never change these shapes in a breaking way: add a v2 instead.
+ */
+
+export type AudioSource = "librispeech" | "audiocaps";
+
+export type Pagination = {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+  nextPage: number | null;
+  previousPage: number | null;
+};
+
+export type PaginatedResponse<T> = {
+  data: T[];
+  pagination: Pagination;
+};
+
+export type DataResponse<T> = {
+  data: T;
+};
+
+export type ApiErrorBody = {
+  error: {
+    code: string;
+    message: string;
+    details?: unknown;
+  };
+};
+
+/** One row of the audio list. Same shape regardless of the dataset. */
+export type AudioListItemV1 = {
+  id: string;
+  source: AudioSource;
+  title: string;
+  text: string;
+  durationSeconds: number;
+};
+
+type AudioFileInfoV1 = {
+  fileName: string;
+  sampleRate: number;
+  channels: number;
+};
+
+export type LibriSpeechMetadataV1 = AudioFileInfoV1 & {
+  utteranceId: string;
+  speaker: { id: string; sex: string | null; name: string | null };
+  chapter: { id: string; title: string | null; bookTitle: string | null };
+  transcript: string;
+};
+
+export type AudioCapsMetadataV1 = AudioFileInfoV1 & {
+  youtubeId: string;
+  youtubeUrl: string;
+  startTime: number;
+  captions: string[];
+  audiocapIds: number[];
+};
+
+export type AudioDetailV1 =
+  | (AudioListItemV1 & { source: "librispeech"; metadata: LibriSpeechMetadataV1 })
+  | (AudioListItemV1 & { source: "audiocaps"; metadata: AudioCapsMetadataV1 });
+
+export type AudioListResponseV1 = PaginatedResponse<AudioListItemV1>;
+export type AudioDetailResponseV1 = DataResponse<AudioDetailV1>;
