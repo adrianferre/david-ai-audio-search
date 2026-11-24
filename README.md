@@ -204,6 +204,20 @@ Search by example: the audios that sound most like `{id}`, most similar first. E
 item plus `similarity` (cosine similarity, at most 1). `limit` works as above. `404` for an
 unknown id.
 
+### `POST /api/v1/audios/export`
+
+Downloads several audios at once as a ZIP (`application/zip`, `Content-Disposition: attachment`). Body: `{ "ids": ["librispeech-1272-128104-0000", "…"] }`, 1–200 ids (duplicates are ignored).
+
+```text
+audios-2026-11-24-2.zip
+├── metadata.json          { exportedAt, count, audios: [ <same shape as GET /api/v1/audios/{id}> … ] }
+└── audio/
+    ├── librispeech-1272-128104-0000.flac
+    └── audiocaps-rqfQRErjfk8_170.flac
+```
+
+The ZIP is streamed (so it isn't bound by the 4.5 MB function response limit) and its entries are stored uncompressed (FLAC already is). Unknown ids return `404 not_found` with `details.missingIds` before anything is streamed. It is one request for the rate limit, whatever the number of ids. The UI uses it for the row checkboxes' **Download** button.
+
 Errors always look like `{ "error": { "code", "message", "details"? } }`: `400 invalid_request`, `404 not_found`, `500 internal_error` (e.g. the database is unreachable) and `503 search_unavailable`.
 
 ### Rate limits

@@ -1,23 +1,37 @@
 "use client";
 
-import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+} from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   AudioWaveformIcon,
   CircleAlertIcon,
+  DownloadIcon,
   LoaderCircleIcon,
   PauseIcon,
   PlayIcon,
 } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useRef } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { ApiError, fetchAudios, fetchSimilarAudios, searchAudios } from "@/lib/api/v1/client";
-import type {
-  AudioListItemV1,
-  AudioSource,
-  SearchMatchFilterV1,
-  SearchMatchV1,
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  ApiError,
+  exportAudios,
+  fetchAudios,
+  fetchSimilarAudios,
+  searchAudios,
+} from "@/lib/api/v1/client";
+import {
+  type AudioListItemV1,
+  type AudioSource,
+  MAX_EXPORT_IDS,
+  type SearchMatchFilterV1,
+  type SearchMatchV1,
 } from "@/lib/api/v1/types";
 import { cn } from "@/lib/utils";
 
@@ -53,7 +67,19 @@ export type AudioListView =
 /** A list item, plus why it is in the results when it comes from a search. */
 type Row = AudioListItemV1 & { matches?: SearchMatchV1[]; similarity?: number };
 
+/** Rows checked for download, by id: they stay checked across pages and views. */
+type Selection = {
+  checked: ReadonlySet<string>;
+  setChecked: (next: ReadonlySet<string>) => void;
+  download: {
+    isPending: boolean;
+    error: Error | null;
+    start: () => void;
+  };
+};
+
 type RowActions = {
+  selection: Selection;
   selectedId: string | null;
   onSelect: (id: string) => void;
   onFindSimilar: (audio: { id: string; title: string }) => void;
@@ -63,6 +89,24 @@ type RowActions = {
 function formatDuration(seconds: number) {
   const total = Math.round(seconds);
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
+
+/** Saves a downloaded file through a temporary link. */
+function saveFile(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  // Give the browser time to start the download before freeing the blob.
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+/** True when the click that changed a checkbox had Shift held. */
+function withShift(event: Event) {
+  return "shiftKey" in event && event.shiftKey === true;
 }
 
 export function AudioList({
@@ -78,10 +122,36 @@ export function AudioList({
 }) {
   // Lives here, above the views, so playback continues when the view changes.
   const player = useAudioPlayer();
-  const actions: RowActions = { selectedId, onSelect, onFindSimilar, player };
+
+  // Also above the views, so checked rows survive searching and browsing.
+  const [checked, setCheckedState] = useState<ReadonlySet<string>>(() => new Set());
+  const download = useMutation({
+    mutationFn: (ids: string[]) => exportAudios(ids),
+    onSuccess: ({ blob, fileName }) => saveFile(blob, fileName),
+  });
+  const selection: Selection = {
+    checked,
+    setChecked: (next) => {
+      setCheckedState(next);
+      download.reset();
+    },
+    download: {
+      isPending: download.isPending,
+      error: download.error,
+      start: () => download.mutate([...checked]),
+    },
+  };
+
+  const actions: RowActions = { selection, selectedId, onSelect, onFindSimilar, player };
 
   return (
-    <section className="flex min-w-0 flex-1 flex-col" aria-label="Audios">
+    <section
+      className="flex min-w-0 flex-1 flex-col"
+      aria-label="Audios"
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && checked.size > 0) selection.setChecked(new Set());
+      }}
+    >
       {view.kind === "browse" && <BrowseList actions={actions} />}
       {view.kind === "search" && (
         <SearchResults q={view.q} match={view.match} actions={actions} />
@@ -121,7 +191,7 @@ function BrowseList({ actions }: { actions: RowActions }) {
 
   return (
     <>
-      <ListSummary>
+      <ListSummary rows={rows} selection={actions.selection}>
         {data
           ? `${rows.length.toLocaleString()} of ${total.toLocaleString()} audios`
           : "Loading audios…"}
@@ -180,7 +250,7 @@ function SearchResults({
 
   return (
     <>
-      <ListSummary>
+      <ListSummary rows={rows ?? []} selection={actions.selection}>
         {searching || !rows
           ? status === "error"
             ? "Search failed"
@@ -213,7 +283,7 @@ function SimilarResults({ id, actions }: { id: string; actions: RowActions }) {
 
   return (
     <>
-      <ListSummary>
+      <ListSummary rows={rows ?? []} selection={actions.selection}>
         {status === "pending"
           ? "Finding similar audios…"
           : status === "error"
@@ -233,13 +303,79 @@ function SimilarResults({ id, actions }: { id: string; actions: RowActions }) {
   );
 }
 
-function ListSummary({ children }: { children: ReactNode }) {
+/**
+ * The bar above the rows: what the list shows, a checkbox for all of its rows,
+ * and the download controls once some rows are checked.
+ */
+function ListSummary({
+  rows,
+  selection,
+  children,
+}: {
+  rows: Row[];
+  selection: Selection;
+  children: ReactNode;
+}) {
+  const { checked, setChecked, download } = selection;
+  const checkedHere = rows.filter((row) => checked.has(row.id)).length;
+  const allChecked = rows.length > 0 && checkedHere === rows.length;
+  const tooMany = checked.size > MAX_EXPORT_IDS;
+
+  const checkAll = (value: boolean) => {
+    const next = new Set(checked);
+    for (const row of rows) {
+      if (value) next.add(row.id);
+      else next.delete(row.id);
+    }
+    setChecked(next);
+  };
+
   return (
-    <div
-      aria-live="polite"
-      className="flex h-10 shrink-0 items-center border-b px-4 text-sm text-muted-foreground"
-    >
-      {children}
+    <div className="flex h-10 shrink-0 items-center gap-3 border-b pr-2 pl-4 text-sm text-muted-foreground">
+      <Checkbox
+        aria-label="Select all audios in the list"
+        checked={allChecked}
+        indeterminate={checkedHere > 0 && !allChecked}
+        disabled={rows.length === 0}
+        onCheckedChange={checkAll}
+      />
+      <span aria-live="polite" className="min-w-0 truncate">
+        {children}
+      </span>
+      {checked.size > 0 && (
+        <div className="ml-auto flex min-w-0 shrink-0 items-center gap-3">
+          {download.error ? (
+            <span className="truncate text-destructive" role="alert">
+              {download.error.message}
+            </span>
+          ) : tooMany ? (
+            <span className="truncate">Up to {MAX_EXPORT_IDS} at a time</span>
+          ) : null}
+          <span className="shrink-0 text-foreground">
+            {checked.size.toLocaleString()} selected
+          </span>
+          <Button variant="ghost" size="sm" onClick={() => setChecked(new Set())}>
+            Clear
+          </Button>
+          <Button
+            size="sm"
+            disabled={tooMany || download.isPending}
+            onClick={download.start}
+          >
+            {download.isPending ? (
+              <>
+                <LoaderCircleIcon className="animate-spin" />
+                Preparing ZIP…
+              </>
+            ) : (
+              <>
+                <DownloadIcon />
+                {download.error ? "Retry download" : `Download (${checked.size})`}
+              </>
+            )}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -275,7 +411,22 @@ function AudioRows({
   dimmed?: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { selectedId, onSelect, onFindSimilar, player } = actions;
+  const { selection, selectedId, onSelect, onFindSimilar, player } = actions;
+  // Last row toggled by hand: the other end of a Shift+click range.
+  const anchorRef = useRef<number | null>(null);
+
+  const toggleRow = (index: number, value: boolean, shift: boolean) => {
+    const anchor = anchorRef.current;
+    const [from, to] =
+      shift && anchor !== null ? [Math.min(anchor, index), Math.max(anchor, index)] : [index, index];
+    const next = new Set(selection.checked);
+    for (const row of rows.slice(from, to + 1)) {
+      if (value) next.add(row.id);
+      else next.delete(row.id);
+    }
+    anchorRef.current = index;
+    selection.setChecked(next);
+  };
 
   // eslint-disable-next-line react-hooks/incompatible-library -- known TanStack Virtual limitation; nothing here memoizes its return value.
   const virtualizer = useVirtualizer({
@@ -308,6 +459,8 @@ function AudioRows({
               {row ? (
                 <AudioRow
                   audio={row}
+                  checked={selection.checked.has(row.id)}
+                  onCheckedChange={(value, shift) => toggleRow(item.index, value, shift)}
                   selected={row.id === selectedId}
                   onSelect={onSelect}
                   onFindSimilar={onFindSimilar}
@@ -331,6 +484,8 @@ function AudioRows({
 
 function AudioRow({
   audio,
+  checked,
+  onCheckedChange,
   selected,
   onSelect,
   onFindSimilar,
@@ -338,6 +493,10 @@ function AudioRow({
   onTogglePlay,
 }: {
   audio: Row;
+  /** Picked for download. */
+  checked: boolean;
+  onCheckedChange: (checked: boolean, shift: boolean) => void;
+  /** Open in the detail panel. */
   selected: boolean;
   onSelect: (id: string) => void;
   onFindSimilar: (audio: { id: string; title: string }) => void;
@@ -349,9 +508,18 @@ function AudioRow({
     <div
       className={cn(
         "flex h-full w-full items-center border-b hover:bg-muted/60 has-[>[data-row-select]:focus-visible]:bg-muted",
+        checked && "bg-primary/5 dark:bg-primary/10",
         selected && "bg-muted",
       )}
     >
+      <Checkbox
+        className="ml-4"
+        aria-label={`Select ${audio.title}`}
+        checked={checked}
+        // Shift+click selects a range of rows, not the text between them.
+        onMouseDown={(event) => event.shiftKey && event.preventDefault()}
+        onCheckedChange={(value, details) => onCheckedChange(value, withShift(details.event))}
+      />
       <PlayButton
         title={audio.title}
         status={playback?.status ?? null}
@@ -438,7 +606,7 @@ function PlayButton({
     <Button
       variant={status === "error" ? "destructive" : "outline"}
       size="icon"
-      className="ml-4 rounded-full"
+      className="ml-3 rounded-full"
       aria-label={label}
       title={status === "error" ? "Couldn't load this audio. Click to retry." : undefined}
       onClick={onClick}

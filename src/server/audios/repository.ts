@@ -212,3 +212,18 @@ export async function findSimilarAudios(id: string, limit: number): Promise<Simi
   if (found.length === 0) return null;
   return rows.map((row) => ({ record: toRecord(row), similarity: row.similarity as number }));
 }
+
+/** The audios with these ids, in the order given. Unknown ids are left out. */
+export async function getAudios(ids: string[]): Promise<AudioRecord[]> {
+  if (ids.length === 0) return [];
+  const rows = await getSql()`
+    SELECT id, source, file_name, blob_pathname, duration_seconds, sample_rate, channels, metadata
+    FROM audios
+    WHERE id = ANY(${ids})
+  `;
+  const byId = new Map(rows.map((row) => {
+    const record = toRecord(row);
+    return [record.id, record];
+  }));
+  return ids.flatMap((id) => byId.get(id) ?? []);
+}
