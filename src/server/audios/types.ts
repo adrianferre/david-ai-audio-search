@@ -32,17 +32,39 @@ export type AudioCapsMetadata = {
   audiocapIds: number[];
 };
 
+/**
+ * A crowd-sourced Common Voice recording: one volunteer reading one prompted sentence.
+ * Speakers are anonymous; `clientId` is Common Voice's hashed contributor id. The
+ * demographics are self-reported and optional.
+ */
+export type CommonVoiceMetadata = {
+  /** Common Voice clip name without extension, e.g. `common_voice_en_21807105`. */
+  clipId: string;
+  sentenceId: string;
+  speaker: { clientId: string; age: string | null; gender: string | null; accent: string | null };
+  /** The sentence the speaker was asked to read, as written (mixed case, punctuated). */
+  transcript: string;
+  /** Validation votes from other volunteers. */
+  upVotes: number;
+  downVotes: number;
+  locale: string;
+};
+
 export type LibriSpeechRecord = AudioFileInfo &
   LibriSpeechMetadata & { id: string; source: "librispeech" };
 
 export type AudioCapsRecord = AudioFileInfo &
   AudioCapsMetadata & { id: string; source: "audiocaps" };
 
-export type AudioRecord = LibriSpeechRecord | AudioCapsRecord;
+export type CommonVoiceRecord = AudioFileInfo &
+  CommonVoiceMetadata & { id: string; source: "commonvoice" };
+
+export type AudioRecord = LibriSpeechRecord | AudioCapsRecord | CommonVoiceRecord;
 
 /**
- * Why a search result matched: its text (the transcript of a LibriSpeech clip,
- * the captions of an AudioCaps clip) or what it sounds like (the audio).
+ * Why a search result matched: its text (the transcript of a LibriSpeech or
+ * Common Voice clip, the captions of an AudioCaps clip) or what it sounds like
+ * (the audio).
  */
 export type SearchMatch = "text" | "sound";
 

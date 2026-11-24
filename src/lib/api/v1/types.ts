@@ -4,7 +4,7 @@
  * Never change these shapes in a breaking way: add a v2 instead.
  */
 
-export type AudioSource = "librispeech" | "audiocaps";
+export type AudioSource = "librispeech" | "audiocaps" | "commonvoice";
 
 export type Pagination = {
   page: number;
@@ -64,16 +64,30 @@ export type AudioCapsMetadataV1 = AudioFileInfoV1 & {
   audiocapIds: number[];
 };
 
+/** Crowd-sourced speech: an anonymous volunteer reading a prompted sentence. */
+export type CommonVoiceMetadataV1 = AudioFileInfoV1 & {
+  clipId: string;
+  sentenceId: string;
+  /** Self-reported and optional. `clientId` is Common Voice's hashed contributor id. */
+  speaker: { clientId: string; age: string | null; gender: string | null; accent: string | null };
+  transcript: string;
+  upVotes: number;
+  downVotes: number;
+  locale: string;
+};
+
 export type AudioDetailV1 =
   | (AudioListItemV1 & { source: "librispeech"; metadata: LibriSpeechMetadataV1 })
-  | (AudioListItemV1 & { source: "audiocaps"; metadata: AudioCapsMetadataV1 });
+  | (AudioListItemV1 & { source: "audiocaps"; metadata: AudioCapsMetadataV1 })
+  | (AudioListItemV1 & { source: "commonvoice"; metadata: CommonVoiceMetadataV1 });
 
 export type AudioListResponseV1 = PaginatedResponse<AudioListItemV1>;
 export type AudioDetailResponseV1 = DataResponse<AudioDetailV1>;
 
 /**
- * Why a search result matched: its text (the transcript of a LibriSpeech audio,
- * the captions of an AudioCaps audio) or what it sounds like (the audio itself).
+ * Why a search result matched: its text (the transcript of a LibriSpeech or
+ * Common Voice audio, the captions of an AudioCaps audio) or what it sounds like
+ * (the audio itself).
  */
 export type SearchMatchV1 = "text" | "sound";
 

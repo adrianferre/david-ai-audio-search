@@ -1,7 +1,7 @@
 /**
  * Fills the search vectors of the `audios` table (src/server/db/schema.sql):
  * `audio_embedding` from the waveform and `text_embedding` from the clip's text
- * (the LibriSpeech transcript, or the AudioCaps captions).
+ * (the LibriSpeech or Common Voice transcript, or the AudioCaps captions).
  *
  *   node --env-file=.env.local scripts/embed-catalog.mts [--limit N]
  *

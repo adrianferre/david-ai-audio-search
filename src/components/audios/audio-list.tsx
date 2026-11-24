@@ -45,12 +45,22 @@ const ROW_HEIGHT = 72;
 const SOURCE_LABEL: Record<AudioSource, string> = {
   librispeech: "LibriSpeech",
   audiocaps: "AudioCaps",
+  commonvoice: "Common Voice",
 };
 
-/** A text match is on the transcript (LibriSpeech) or on the captions (AudioCaps). */
+const SOURCE_BADGE_CLASS: Record<AudioSource, string> = {
+  librispeech: "bg-sky-500/15 text-sky-700 dark:text-sky-300",
+  audiocaps: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  commonvoice: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+};
+
+const SAID_MATCH_LABEL = { label: "Said", title: "Matches what is said (the transcript)" };
+
+/** A text match is on the transcript (LibriSpeech, Common Voice) or on the captions (AudioCaps). */
 const TEXT_MATCH_LABEL: Record<AudioSource, { label: string; title: string }> = {
-  librispeech: { label: "Said", title: "Matches what is said (the transcript)" },
+  librispeech: SAID_MATCH_LABEL,
   audiocaps: { label: "Caption", title: "Matches the captions that describe the audio" },
+  commonvoice: SAID_MATCH_LABEL,
 };
 const SOUND_MATCH_LABEL = { label: "Sounds like", title: "Matches what the audio sounds like" };
 
@@ -571,9 +581,7 @@ function AudioRow({
           <span
             className={cn(
               "shrink-0 rounded px-1.5 py-0.5 text-[0.7rem] font-medium",
-              audio.source === "librispeech"
-                ? "bg-sky-500/15 text-sky-700 dark:text-sky-300"
-                : "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+              SOURCE_BADGE_CLASS[audio.source],
             )}
           >
             {SOURCE_LABEL[audio.source]}
