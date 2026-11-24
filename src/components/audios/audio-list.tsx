@@ -46,7 +46,7 @@ const TEXT_MATCH_LABEL: Record<AudioSource, { label: string; title: string }> = 
 };
 const SOUND_MATCH_LABEL = { label: "Sounds like", title: "Matches what the clip itself sounds like" };
 
-function matchLabel(match: SearchMatchV1, source: AudioSource) {
+export function matchLabel(match: SearchMatchV1, source: AudioSource) {
   return match === "text" ? TEXT_MATCH_LABEL[source] : SOUND_MATCH_LABEL;
 }
 
@@ -228,7 +228,7 @@ function SearchResults({
   const best = data.data[0]?.score ?? 0;
   const rows: Row[] = data.data.map((hit) => ({
     ...hit,
-    relevance: best > 0 ? Math.min(5, Math.max(1, Math.round((hit.score / best) * 5))) : 1,
+    relevance: relevanceLevel(hit.score, best),
   }));
 
   if (rows.length === 0 && !searching) {
@@ -615,8 +615,13 @@ function AudioRow({
   );
 }
 
+/** 1 to 5: how a search result's score compares with the best result's. */
+export function relevanceLevel(score: number, best: number) {
+  return best > 0 ? Math.min(5, Math.max(1, Math.round((score / best) * 5))) : 1;
+}
+
 /** Five bars, filled by how this result ranks next to the best one. */
-function RelevanceMeter({ level }: { level: number }) {
+export function RelevanceMeter({ level }: { level: number }) {
   return (
     <span
       role="img"

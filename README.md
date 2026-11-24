@@ -161,6 +161,27 @@ it, recompute every clip with `--all`.
 pnpm compute-waveforms   # add `--limit 20` for a trial run, `--all` to recompute every clip
 ```
 
+### Embedding Map
+
+The **Map** view (`List | Map` above the results, or `/?view=map`) draws every clip at its
+place on a 2D UMAP map of its audio vector, or of its text vector, coloured by dataset, sound
+family, book, speaker, sex or gender, age or accent. It is the same catalog as the list: the
+sidebar's filter, the search bar, the details panel and the selection (lasso or box select, then
+**Download ZIP**) all work on it, and a search draws its results with lines to the query.
+
+The maps are computed offline, so they don't follow catalog changes until regenerated. Two steps:
+the export reads the database (read-only) and writes `design/embedding-map/`; the build turns
+that into the compact file the browser loads, `public/embedding-map.json` (~2 MB, ~0.5 MB
+gzipped). The build needs no credentials.
+
+```bash
+pnpm export-embedding-map   # design/embedding-map/*.json, from the database
+pnpm build-embedding-map    # public/embedding-map.json, from those files
+```
+
+A query has no point of its own on the precomputed maps: its star sits at the score-weighted
+centre of its top 10 results, which is also where UMAP's `transform` starts a new point from.
+
 ### AI Gateway
 
 Nothing to configure: the app authenticates to the gateway with the project's OIDC token, the
@@ -180,7 +201,8 @@ the AI Gateway tab of the Vercel team. To use an API key instead of OIDC, set `A
 | `pnpm embed-catalog` | Embed the clips that have no vector yet (see Search) |
 | `pnpm import-commonvoice` | Add the Common Voice sample to the database and Blob store (see Search) |
 | `pnpm compute-waveforms` | Compute the waveform overviews of the clips that have none yet (see Waveforms) |
-| `pnpm export-embedding-map` | Regenerate the Embedding Map design data in `design/embedding-map/` (read-only) |
+| `pnpm export-embedding-map` | Regenerate the Embedding Map data in `design/embedding-map/` (read-only) |
+| `pnpm build-embedding-map` | Build `public/embedding-map.json`, the Map view's data, from `design/embedding-map/` |
 
 ## Project layout
 
@@ -190,8 +212,9 @@ the AI Gateway tab of the Vercel team. To use an API key instead of OIDC, set `A
 - `src/lib/` – shared utilities
 - `src/server/db/` – Neon client, the catalog schema (`schema.sql`) and its migrations
 - `src/server/search/` – embedding settings and the query embedding call
-- `scripts/` – one-off scripts (`embed-catalog.mts`, `import-commonvoice.mts`, `compute-waveforms.mts`, `export-embedding-map.mts`)
-- `design/embedding-map/` – design prompt and real data (UMAP maps, neighbours, example queries) for the Embedding Map view
+- `src/components/map/` – the Map view: the canvas scatter, its colourings, overlays and story
+- `scripts/` – one-off scripts (`embed-catalog.mts`, `import-commonvoice.mts`, `compute-waveforms.mts`, `export-embedding-map.mts`, `build-embedding-map.mts`)
+- `design/embedding-map/` – design prompt and real data (UMAP maps, neighbours, example queries) for the Embedding Map view; `public/embedding-map.json` is built from it
 - `src/env.ts` – typed, validated environment variables (`import { env } from "@/env"`)
 
 ## API

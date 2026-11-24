@@ -21,6 +21,8 @@ pnpm export-embedding-map --labels <file>     # or reuses a JSON of shape { labe
 ```
 
 It needs `.env.local` (database and AI Gateway, see the root README) and takes about a minute.
+Then `pnpm build-embedding-map` rebuilds `public/embedding-map.json`, the file the app's Map view
+loads, from these files.
 
 1. Reads every clip and both of its vectors from Neon, in read-only transactions. It never
    writes to the database or the Blob store.

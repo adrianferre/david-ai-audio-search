@@ -1,11 +1,15 @@
 "use client";
 
-import { AudioLinesIcon } from "lucide-react";
+import { AudioLinesIcon, ChartScatterIcon, ListIcon } from "lucide-react";
 import { type DragEvent, useEffect, useRef, useState } from "react";
 
 import type { AudioSource, SearchMatchFilterV1 } from "@/lib/api/v1/types";
 import { MAX_EXAMPLE_SECONDS, toExampleClip, UnreadableAudioError } from "@/lib/audio/to-wav";
 import { useMicrophoneRecorder } from "@/lib/audio/use-microphone-recorder";
+import { cn } from "@/lib/utils";
+
+import { EmbeddingMapView } from "../map/embedding-map-view";
+import { useViewLayout, type ViewLayout } from "../map/use-view-layout";
 
 import { AudioDetailPanel } from "./audio-detail-panel";
 import { AudioList } from "./audio-list";
@@ -59,6 +63,7 @@ export function AudioBrowser() {
   const exampleUrl = useRef<{ id: string; url: string } | null>(null);
   // One player for the list, the details panel and the user's clip.
   const player = useAudioPlayer();
+  const [layout, setLayout] = useViewLayout();
 
   const debouncedQuery = useDebouncedValue(query, SEARCH_DEBOUNCE_MS).trim();
   // Clearing the box goes back to the full list at once, without the delay.
@@ -215,9 +220,12 @@ export function AudioBrowser() {
           <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             {/* truncate clips overflow; the padding keeps Besley's descenders (g, y, p) inside it. */}
             <h1 className="-mb-2 min-w-0 truncate pb-2 font-serif text-[32px] leading-10 tracking-[-0.64px]">{title}</h1>
-            <p aria-live="polite" className="text-[0.8rem] text-muted-foreground tabular-nums">
-              {[scope, summary].filter(Boolean).join(" · ")}
-            </p>
+            <div className="flex items-center gap-4">
+              <p aria-live="polite" className="text-[0.8rem] text-muted-foreground tabular-nums">
+                {[scope, summary].filter(Boolean).join(" · ")}
+              </p>
+              <LayoutSwitch layout={layout} onChange={setLayout} />
+            </div>
           </div>
           <AudioSearchBar
             query={query}
@@ -270,22 +278,42 @@ export function AudioBrowser() {
             }}
           />
         </header>
-        <div className="relative flex min-h-0 flex-1 flex-col">
-          <AudioList
+        {layout === "map" ? (
+          <EmbeddingMapView
             view={view}
-            selection={selection}
             selectedId={selectedId}
             onSelect={setSelectedId}
-            onFindSimilar={showSimilar}
-            player={player}
-            recovery={{
-              onMatchAll: () => setMatch("all"),
-              onClearSearch: () => setQuery(""),
-              onClearSource: () => setSource(null),
+            selection={selection}
+            detailsOpen={selectedId !== null}
+            onTryQuery={(q) => {
+              setSimilarTo(null);
+              clearExample();
+              setQuery(q);
+            }}
+            onClearQuery={() => {
+              setSimilarTo(null);
+              clearExample();
+              setQuery("");
             }}
           />
-          <SelectionBar selection={selection} />
-        </div>
+        ) : (
+          <div className="relative flex min-h-0 flex-1 flex-col">
+            <AudioList
+              view={view}
+              selection={selection}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              onFindSimilar={showSimilar}
+              player={player}
+              recovery={{
+                onMatchAll: () => setMatch("all"),
+                onClearSearch: () => setQuery(""),
+                onClearSource: () => setSource(null),
+              }}
+            />
+            <SelectionBar selection={selection} />
+          </div>
+        )}
       </main>
       {selectedId && (
         <AudioDetailPanel
@@ -305,6 +333,34 @@ export function AudioBrowser() {
           <p className="text-[0.8rem] text-muted-foreground">Any audio or video file, up to 20 MB</p>
         </div>
       )}
+    </div>
+  );
+}
+
+const LAYOUTS: { value: ViewLayout; label: string; icon: typeof ListIcon }[] = [
+  { value: "list", label: "List", icon: ListIcon },
+  { value: "map", label: "Map", icon: ChartScatterIcon },
+];
+
+/** List | Map: two views of the same catalog, search and selection. */
+function LayoutSwitch({ layout, onChange }: { layout: ViewLayout; onChange: (layout: ViewLayout) => void }) {
+  return (
+    <div role="group" aria-label="View" className="flex shrink-0 gap-0.5 rounded-full bg-muted p-[3px]">
+      {LAYOUTS.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          aria-pressed={layout === option.value}
+          onClick={() => onChange(option.value)}
+          className={cn(
+            "inline-flex h-[30px] items-center gap-1.5 rounded-full px-3 text-[0.8rem] font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 [&_svg]:size-3.5",
+            layout === option.value && "bg-card text-foreground shadow-[0_1px_2px_rgba(26,26,25,0.08)]",
+          )}
+        >
+          <option.icon aria-hidden="true" />
+          {option.label}
+        </button>
+      ))}
     </div>
   );
 }

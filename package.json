@@ -11,7 +11,8 @@
     "embed-catalog": "node --env-file=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/embed-catalog.mts",
     "compute-waveforms": "node --env-file=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/compute-waveforms.mts",
     "import-commonvoice": "node --env-file=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/import-commonvoice.mts",
-    "export-embedding-map": "node --env-file=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/export-embedding-map.mts"
+    "export-embedding-map": "node --env-file=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/export-embedding-map.mts",
+    "build-embedding-map": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/build-embedding-map.mts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
