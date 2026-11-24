@@ -1,0 +1,1518 @@
+{
+  "queries": [
+    {
+      "query": "dog barking",
+      "audioMap": {
+        "x": 0.335,
+        "y": 0.9355
+      },
+      "textMap": {
+        "x": 0.1666,
+        "y": 0.8793
+      },
+      "results": [
+        {
+          "id": "audiocaps-v3EwremxU2w_70",
+          "score": 9.537,
+          "matches": [
+            "text",
+            "sound"
+          ]
+        },
+        {
+          "id": "audiocaps-sShpyu2l4YQ_0",
+          "score": 8.939,
+          "matches": [
+            "text",
+            "sound"
+          ]
+        },
+        {
+          "id": "audiocaps-xIS6JwaGxuk_10",
+          "score": 8.866,
+          "matches": [
+            "text",
+            "sound"
+          ]
+        },
+        {
+          "id": "audiocaps-zY3icUyMdh8_20",
+          "score": 8.822,
+          "matches": [
+            "text",
+            "sound"
+          ]
+        },
+        {
+          "id": "audiocaps-v-wcQf4BDY0_120",
+          "score": 8.772,
+          "matches": [
+            "text",
+            "sound"
+          ]
+        },
+        {
+          "id": "audiocaps-tIY7qOV3rEM_0",
+          "score": 8.264,
+          "matches": [
+            "text",
+            "sound"
+          ]
+        },
+        {
+          "id": "audiocaps-w8hYTIDPWGI_270",
+          "score": 8.108,
+          "matches": [
+            "text",
+            "sound"
+          ]
+        },
+        {
+          "id": "audiocaps-y1saVTXsKwc_80",
+          "score": 7.067,
+          "matches": [
+            "text"
+          ]
+        },
+        {
+          "id": "audiocaps-uC9dtII1KDI_150",
+          "score": 6.597,
+          "matches": [
+            "text"
+          ]
+        },
+        {
+          "id": "audiocaps-xeOp_6mV1DY_60",
+          "score": 6.056,
+          "matches": [
+            "text"
+          ]
+        }
+      ],
+      "similarity": {
+        "text": {
+          "p10": 0.557,
+          "p50": 0.59,
+          "p90": 0.635,
+          "histogram": [
+            {
+              "binStart": 0.25,
+              "binEnd": 0.2775,
+              "count": 0
+            },
+            {
+              "binStart": 0.2775,
+              "binEnd": 0.305,
+              "count": 0
+            },
+            {
+              "binStart": 0.305,
+              "binEnd": 0.3325,
+              "count": 0
+            },
+            {
+              "binStart": 0.3325,
+              "binEnd": 0.36,
+              "count": 0
+            },
+            {
+              "binStart": 0.36,
+              "binEnd": 0.3875,
+              "count": 0
+            },
+            {
+              "binStart": 0.3875,
+              "binEnd": 0.415,
+              "count": 0
+            },
+            {
+              "binStart": 0.415,
+              "binEnd": 0.4425,
+              "count": 0
+            },
+            {
+              "binStart": 0.4425,
+              "binEnd": 0.47,
+              "count": 0
+            },
+            {
+              "binStart": 0.47,
+              "binEnd": 0.4975,
+              "count": 0
+            },
+            {
+              "binStart": 0.4975,
+              "binEnd": 0.525,
+              "count": 5
+            },
+            {
+              "binStart": 0.525,
+              "binEnd": 0.5525,
+              "count": 242
+            },
+            {
+              "binStart": 0.5525,
+              "binEnd": 0.58,
+              "count": 1019
+            },
+            {
+              "binStart": 0.58,
+              "binEnd": 0.6075,
+              "count": 1065
+            },
+            {
+              "binStart": 0.6075,
+              "binEnd": 0.635,
+              "count": 659
+            },
+            {
+              "binStart": 0.635,
+              "binEnd": 0.6625,
+              "count": 289
+            },
+            {
+              "binStart": 0.6625,
+              "binEnd": 0.69,
+              "count": 35
+            },
+            {
+              "binStart": 0.69,
+              "binEnd": 0.7175,
+              "count": 6
+            },
+            {
+              "binStart": 0.7175,
+              "binEnd": 0.745,
+              "count": 2
+            },
+            {
+              "binStart": 0.745,
+              "binEnd": 0.7725,
+              "count": 2
+            },
+            {
+              "binStart": 0.7725,
+              "binEnd": 0.8,
+              "count": 5
+            }
+          ]
+        },
+        "audio": {
+          "p10": 0.478,
+          "p50": 0.514,
+          "p90": 0.57,
+          "histogram": [
+            {
+              "binStart": 0.25,
+              "binEnd": 0.2775,
+              "count": 0
+            },
+            {
+              "binStart": 0.2775,
+              "binEnd": 0.305,
+              "count": 1
+            },
+            {
+              "binStart": 0.305,
+              "binEnd": 0.3325,
+              "count": 1
+            },
+            {
+              "binStart": 0.3325,
+              "binEnd": 0.36,
+              "count": 0
+            },
+            {
+              "binStart": 0.36,
+              "binEnd": 0.3875,
+              "count": 6
+            },
+            {
+              "binStart": 0.3875,
+              "binEnd": 0.415,
+              "count": 10
+            },
+            {
+              "binStart": 0.415,
+              "binEnd": 0.4425,
+              "count": 15
+            },
+            {
+              "binStart": 0.4425,
+              "binEnd": 0.47,
+              "count": 159
+            },
+            {
+              "binStart": 0.47,
+              "binEnd": 0.4975,
+              "count": 757
+            },
+            {
+              "binStart": 0.4975,
+              "binEnd": 0.525,
+              "count": 1179
+            },
+            {
+              "binStart": 0.525,
+              "binEnd": 0.5525,
+              "count": 680
+            },
+            {
+              "binStart": 0.5525,
+              "binEnd": 0.58,
+              "count": 237
+            },
+            {
+              "binStart": 0.58,
+              "binEnd": 0.6075,
+              "count": 152
+            },
+            {
+              "binStart": 0.6075,
+              "binEnd": 0.635,
+              "count": 85
+            },
+            {
+              "binStart": 0.635,
+              "binEnd": 0.6625,
+              "count": 35
+            },
+            {
+              "binStart": 0.6625,
+              "binEnd": 0.69,
+              "count": 6
+            },
+            {
+              "binStart": 0.69,
+              "binEnd": 0.7175,
+              "count": 3
+            },
+            {
+              "binStart": 0.7175,
+              "binEnd": 0.745,
+              "count": 1
+            },
+            {
+              "binStart": 0.745,
+              "binEnd": 0.7725,
+              "count": 2
+            },
+            {
+              "binStart": 0.7725,
+              "binEnd": 0.8,
+              "count": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "query": "baby crying",
+      "audioMap": {
+        "x": 0.3391,
+        "y": 0.9579
+      },
+      "textMap": {
+        "x": 0.131,
+        "y": 0.8327
+      },
+      "results": [
+        {
+          "id": "audiocaps-xw5cmiqbaUg_160",
+          "score": 9.75,
+          "matches": [
+            "text",
+            "sound"
+          ]
+        },
+        {
+          "id": "audiocaps-zwOBqeFTgiU_30",
+          "score": 9.461,
+          "matches": [
+            "text",
+            "sound"
+          ]
+        },
+        {
+          "id": "audiocaps-zliInBdC98Y_30",
+          "score": 9.388,
+          "matches": [
+            "text",
+            "sound"
+          ]
+        },
+        {
+          "id": "audiocaps-xhmRY9yhC7c_20",
+          "score": 9.142,
+          "matches": [
+            "text",
+            "sound"
+          ]
+        },
+        {
+          "id": "audiocaps-wIJK3-5y0kA_30",
+          "score": 9.072,
+          "matches": [
+            "text"
+          ]
+        },
+        {
+          "id": "audiocaps-v7Pz4dWmggg_30",
+          "score": 8.969,
+          "matches": [
+            "text"
+          ]
+        },
+        {
+          "id": "audiocaps-wyllXV6PjKo_30",
+          "score": 8.92,
+          "matches": [
+            "text"
+          ]
+        },
+        {
+          "id": "audiocaps-tO_j4tdLRaA_70",
+          "score": 8.823,
+          "matches": [
+            "text"
+          ]
+        },
+        {
+          "id": "audiocaps-vBeI4j_kJro_16",
+          "score": 8.602,
+          "matches": [
+            "text",
+            "sound"
+          ]
+        },
+        {
+          "id": "audiocaps-smDKStoHBJo_0",
+          "score": 8.4,
+          "matches": [
+            "text",
+            "sound"
+          ]
+        }
+      ],
+      "similarity": {
+        "text": {
+          "p10": 0.551,
+          "p50": 0.587,
+          "p90": 0.626,
+          "histogram": [
+            {
+              "binStart": 0.25,
+              "binEnd": 0.28,
+              "count": 0
+            },
+            {
+              "binStart": 0.28,
+              "binEnd": 0.31,
+              "count": 0
+            },
+            {
+              "binStart": 0.31,
+              "binEnd": 0.34,
+              "count": 0
+            },
+            {
+              "binStart": 0.34,
+              "binEnd": 0.37,
+              "count": 0
+            },
+            {
+              "binStart": 0.37,
+              "binEnd": 0.4,
+              "count": 0
+            },
+            {
+              "binStart": 0.4,
+              "binEnd": 0.43,
+              "count": 0
+            },
+            {
+              "binStart": 0.43,
+              "binEnd": 0.46,
+              "count": 0
+            },
+            {
+              "binStart": 0.46,
+              "binEnd": 0.49,
+              "count": 0
+            },
+            {
+              "binStart": 0.49,
+              "binEnd": 0.52,
+              "count": 8
+            },
+            {
+              "binStart": 0.52,
+              "binEnd": 0.55,
+              "count": 307
+            },
+            {
+              "binStart": 0.55,
+              "binEnd": 0.58,
+              "count": 1061
+            },
+            {
+              "binStart": 0.58,
+              "binEnd": 0.61,
+              "count": 1204
+            },
+            {
+              "binStart": 0.61,
+              "binEnd": 0.64,
+              "count": 596
+            },
+            {
+              "binStart": 0.64,
+              "binEnd": 0.67,
+              "count": 110
+            },
+            {
+              "binStart": 0.67,
+              "binEnd": 0.7,
+              "count": 22
+            },
+            {
+              "binStart": 0.7,
+              "binEnd": 0.73,
+              "count": 8
+            },
+            {
+              "binStart": 0.73,
+              "binEnd": 0.76,
+              "count": 4
+            },
+            {
+              "binStart": 0.76,
+              "binEnd": 0.79,
+              "count": 6
+            },
+            {
+              "binStart": 0.79,
+              "binEnd": 0.82,
+              "count": 3
+            },
+            {
+              "binStart": 0.82,
+              "binEnd": 0.85,
+              "count": 0
+            }
+          ]
+        },
+        "audio": {
+          "p10": 0.477,
+          "p50": 0.513,
+          "p90": 0.574,
+          "histogram": [
+            {
+              "binStart": 0.25,
+              "binEnd": 0.28,
+              "count": 1
+            },
+            {
+              "binStart": 0.28,
+              "binEnd": 0.31,
+              "count": 0
+            },
+            {
+              "binStart": 0.31,
+              "binEnd": 0.34,
+              "count": 0
+            },
+            {
+              "binStart": 0.34,
+              "binEnd": 0.37,
+              "count": 3
+            },
+            {
+              "binStart": 0.37,
+              "binEnd": 0.4,
+              "count": 5
+            },
+            {
+              "binStart": 0.4,
+              "binEnd": 0.43,
+              "count": 19
+            },
+            {
+              "binStart": 0.43,
+              "binEnd": 0.46,
+              "count": 77
+            },
+            {
+              "binStart": 0.46,
+              "binEnd": 0.49,
+              "count": 608
+            },
+            {
+              "binStart": 0.49,
+              "binEnd": 0.52,
+              "count": 1221
+            },
+            {
+              "binStart": 0.52,
+              "binEnd": 0.55,
+              "count": 779
+            },
+            {
+              "binStart": 0.55,
+              "binEnd": 0.58,
+              "count": 327
+            },
+            {
+              "binStart": 0.58,
+              "binEnd": 0.61,
+              "count": 180
+            },
+            {
+              "binStart": 0.61,
+              "binEnd": 0.64,
+              "count": 76
+            },
+            {
+              "binStart": 0.64,
+              "binEnd": 0.67,
+              "count": 18
+            },
+            {
+              "binStart": 0.67,
+              "binEnd": 0.7,
+              "count": 11
+            },
+            {
+              "binStart": 0.7,
+              "binEnd": 0.73,
+              "count": 4
+            },
+            {
+              "binStart": 0.73,
+              "binEnd": 0.76,
+              "count": 0
+            },
+            {
+              "binStart": 0.76,
+              "binEnd": 0.79,
+              "count": 0
+            },
+            {
+              "binStart": 0.79,
+              "binEnd": 0.82,
+              "count": 0
+            },
+            {
+              "binStart": 0.82,
+              "binEnd": 0.85,
+              "count": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "query": "someone sneezing",
+      "audioMap": {
+        "x": 0.337,
+        "y": 0.9614
+      },
+      "textMap": {
+        "x": 0.1735,
+        "y": 0.7875
+      },
+      "results": [
+        {
+          "id": "audiocaps-uRlbY6_aoBU_0",
+          "score": 10.634,
+          "matches": [
+            "text",
+            "sound"
+          ]
+        },
+        {
+          "id": "audiocaps-y4tPJXBKDig_20",
+          "score": 9.488,
+          "matches": [
+            "text"
+          ]
+        },
+        {
+          "id": "audiocaps-vhIcOufIwo4_30",
+          "score": 7.995,
+          "matches": [
+            "text"
+          ]
+        },
+        {
+          "id": "librispeech-2428-83705-0036",
+          "score": 6.944,
+          "matches": [
+            "text",
+            "sound"
+          ]
+        },
+        {
+          "id": "audiocaps-t8CV69hcvF0_210",
+          "score": 6.523,
+          "matches": [
+            "text",
+            "sound"
+          ]
+        },
+        {
+          "id": "audiocaps-wnNNcxAPwGQ_0",
+          "score": 6.384,
+          "matches": [
+            "text"
+          ]
+        },
+        {
+          "id": "audiocaps-vJrjSeP17yE_40",
+          "score": 5.22,
+          "matches": [
+            "text"
+          ]
+        },
+        {
+          "id": "audiocaps-spJCm8tD9Zo_90",
+          "score": 4.666,
+          "matches": [
+            "text"
+          ]
+        },
+        {
+          "id": "audiocaps-vHZQht-r5fg_10",
+          "score": 4.598,
+          "matches": [
+            "text",
+            "sound"
+          ]
+        },
+        {
+          "id": "audiocaps-sLkeqCDJIyw_120",
+          "score": 4.444,
+          "matches": [
+            "text"
+          ]
+        }
+      ],
+      "similarity": {
+        "text": {
+          "p10": 0.562,
+          "p50": 0.596,
+          "p90": 0.634,
+          "histogram": [
+            {
+              "binStart": 0.3,
+              "binEnd": 0.3275,
+              "count": 0
+            },
+            {
+              "binStart": 0.3275,
+              "binEnd": 0.355,
+              "count": 0
+            },
+            {
+              "binStart": 0.355,
+              "binEnd": 0.3825,
+              "count": 0
+            },
+            {
+              "binStart": 0.3825,
+              "binEnd": 0.41,
+              "count": 0
+            },
+            {
+              "binStart": 0.41,
+              "binEnd": 0.4375,
+              "count": 0
+            },
+            {
+              "binStart": 0.4375,
+              "binEnd": 0.465,
+              "count": 0
+            },
+            {
+              "binStart": 0.465,
+              "binEnd": 0.4925,
+              "count": 0
+            },
+            {
+              "binStart": 0.4925,
+              "binEnd": 0.52,
+              "count": 6
+            },
+            {
+              "binStart": 0.52,
+              "binEnd": 0.5475,
+              "count": 104
+            },
+            {
+              "binStart": 0.5475,
+              "binEnd": 0.575,
+              "count": 627
+            },
+            {
+              "binStart": 0.575,
+              "binEnd": 0.6025,
+              "count": 1208
+            },
+            {
+              "binStart": 0.6025,
+              "binEnd": 0.63,
+              "count": 976
+            },
+            {
+              "binStart": 0.63,
+              "binEnd": 0.6575,
+              "count": 343
+            },
+            {
+              "binStart": 0.6575,
+              "binEnd": 0.685,
+              "count": 40
+            },
+            {
+              "binStart": 0.685,
+              "binEnd": 0.7125,
+              "count": 13
+            },
+            {
+              "binStart": 0.7125,
+              "binEnd": 0.74,
+              "count": 6
+            },
+            {
+              "binStart": 0.74,
+              "binEnd": 0.7675,
+              "count": 3
+            },
+            {
+              "binStart": 0.7675,
+              "binEnd": 0.795,
+              "count": 2
+            },
+            {
+              "binStart": 0.795,
+              "binEnd": 0.8225,
+              "count": 1
+            },
+            {
+              "binStart": 0.8225,
+              "binEnd": 0.85,
+              "count": 0
+            }
+          ]
+        },
+        "audio": {
+          "p10": 0.442,
+          "p50": 0.48,
+          "p90": 0.531,
+          "histogram": [
+            {
+              "binStart": 0.3,
+              "binEnd": 0.3275,
+              "count": 2
+            },
+            {
+              "binStart": 0.3275,
+              "binEnd": 0.355,
+              "count": 2
+            },
+            {
+              "binStart": 0.355,
+              "binEnd": 0.3825,
+              "count": 7
+            },
+            {
+              "binStart": 0.3825,
+              "binEnd": 0.41,
+              "count": 35
+            },
+            {
+              "binStart": 0.41,
+              "binEnd": 0.4375,
+              "count": 211
+            },
+            {
+              "binStart": 0.4375,
+              "binEnd": 0.465,
+              "count": 754
+            },
+            {
+              "binStart": 0.465,
+              "binEnd": 0.4925,
+              "count": 1135
+            },
+            {
+              "binStart": 0.4925,
+              "binEnd": 0.52,
+              "count": 690
+            },
+            {
+              "binStart": 0.52,
+              "binEnd": 0.5475,
+              "count": 301
+            },
+            {
+              "binStart": 0.5475,
+              "binEnd": 0.575,
+              "count": 138
+            },
+            {
+              "binStart": 0.575,
+              "binEnd": 0.6025,
+              "count": 45
+            },
+            {
+              "binStart": 0.6025,
+              "binEnd": 0.63,
+              "count": 6
+            },
+            {
+              "binStart": 0.63,
+              "binEnd": 0.6575,
+              "count": 1
+            },
+            {
+              "binStart": 0.6575,
+              "binEnd": 0.685,
+              "count": 1
+            },
+            {
+              "binStart": 0.685,
+              "binEnd": 0.7125,
+              "count": 0
+            },
+            {
+              "binStart": 0.7125,
+              "binEnd": 0.74,
+              "count": 1
+            },
+            {
+              "binStart": 0.74,
+              "binEnd": 0.7675,
+              "count": 0
+            },
+            {
+              "binStart": 0.7675,
+              "binEnd": 0.795,
+              "count": 0
+            },
+            {
+              "binStart": 0.795,
+              "binEnd": 0.8225,
+              "count": 0
+            },
+            {
+              "binStart": 0.8225,
+              "binEnd": 0.85,
+              "count": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "query": "thank you",
+      "audioMap": {
+        "x": 0.2637,
+        "y": 0.8027
+      },
+      "textMap": {
+        "x": 0.9608,
+        "y": 0.2853
+      },
+      "results": [
+        {
+          "id": "librispeech-2412-153947-0007",
+          "score": 7.363,
+          "matches": [
+            "text"
+          ]
+        },
+        {
+          "id": "librispeech-8842-302196-0007",
+          "score": 7.14,
+          "matches": [
+            "text"
+          ]
+        },
+        {
+          "id": "librispeech-1993-147149-0026",
+          "score": 6.3,
+          "matches": [
+            "text"
+          ]
+        },
+        {
+          "id": "librispeech-3576-138058-0029",
+          "score": 5.553,
+          "matches": [
+            "text"
+          ]
+        },
+        {
+          "id": "librispeech-3170-137482-0015",
+          "score": 5.527,
+          "matches": [
+            "text"
+          ]
+        },
+        {
+          "id": "librispeech-1988-24833-0023",
+          "score": 5.495,
+          "matches": [
+            "text"
+          ]
+        },
+        {
+          "id": "librispeech-3081-166546-0085",
+          "score": 5.166,
+          "matches": [
+            "text"
+          ]
+        },
+        {
+          "id": "librispeech-1988-147956-0008",
+          "score": 5.04,
+          "matches": [
+            "text"
+          ]
+        },
+        {
+          "id": "librispeech-3853-163249-0016",
+          "score": 4.906,
+          "matches": [
+            "text"
+          ]
+        },
+        {
+          "id": "audiocaps-u2f5NpsoHBg_30",
+          "score": 4.621,
+          "matches": [
+            "sound"
+          ]
+        }
+      ],
+      "similarity": {
+        "text": {
+          "p10": 0.576,
+          "p50": 0.612,
+          "p90": 0.651,
+          "histogram": [
+            {
+              "binStart": 0.25,
+              "binEnd": 0.275,
+              "count": 0
+            },
+            {
+              "binStart": 0.275,
+              "binEnd": 0.3,
+              "count": 0
+            },
+            {
+              "binStart": 0.3,
+              "binEnd": 0.325,
+              "count": 0
+            },
+            {
+              "binStart": 0.325,
+              "binEnd": 0.35,
+              "count": 0
+            },
+            {
+              "binStart": 0.35,
+              "binEnd": 0.375,
+              "count": 0
+            },
+            {
+              "binStart": 0.375,
+              "binEnd": 0.4,
+              "count": 0
+            },
+            {
+              "binStart": 0.4,
+              "binEnd": 0.425,
+              "count": 0
+            },
+            {
+              "binStart": 0.425,
+              "binEnd": 0.45,
+              "count": 0
+            },
+            {
+              "binStart": 0.45,
+              "binEnd": 0.475,
+              "count": 0
+            },
+            {
+              "binStart": 0.475,
+              "binEnd": 0.5,
+              "count": 0
+            },
+            {
+              "binStart": 0.5,
+              "binEnd": 0.525,
+              "count": 0
+            },
+            {
+              "binStart": 0.525,
+              "binEnd": 0.55,
+              "count": 14
+            },
+            {
+              "binStart": 0.55,
+              "binEnd": 0.575,
+              "count": 285
+            },
+            {
+              "binStart": 0.575,
+              "binEnd": 0.6,
+              "count": 835
+            },
+            {
+              "binStart": 0.6,
+              "binEnd": 0.625,
+              "count": 1120
+            },
+            {
+              "binStart": 0.625,
+              "binEnd": 0.65,
+              "count": 728
+            },
+            {
+              "binStart": 0.65,
+              "binEnd": 0.675,
+              "count": 261
+            },
+            {
+              "binStart": 0.675,
+              "binEnd": 0.7,
+              "count": 69
+            },
+            {
+              "binStart": 0.7,
+              "binEnd": 0.725,
+              "count": 12
+            },
+            {
+              "binStart": 0.725,
+              "binEnd": 0.75,
+              "count": 5
+            }
+          ]
+        },
+        "audio": {
+          "p10": 0.519,
+          "p50": 0.557,
+          "p90": 0.595,
+          "histogram": [
+            {
+              "binStart": 0.25,
+              "binEnd": 0.275,
+              "count": 0
+            },
+            {
+              "binStart": 0.275,
+              "binEnd": 0.3,
+              "count": 1
+            },
+            {
+              "binStart": 0.3,
+              "binEnd": 0.325,
+              "count": 0
+            },
+            {
+              "binStart": 0.325,
+              "binEnd": 0.35,
+              "count": 2
+            },
+            {
+              "binStart": 0.35,
+              "binEnd": 0.375,
+              "count": 2
+            },
+            {
+              "binStart": 0.375,
+              "binEnd": 0.4,
+              "count": 1
+            },
+            {
+              "binStart": 0.4,
+              "binEnd": 0.425,
+              "count": 9
+            },
+            {
+              "binStart": 0.425,
+              "binEnd": 0.45,
+              "count": 10
+            },
+            {
+              "binStart": 0.45,
+              "binEnd": 0.475,
+              "count": 19
+            },
+            {
+              "binStart": 0.475,
+              "binEnd": 0.5,
+              "count": 81
+            },
+            {
+              "binStart": 0.5,
+              "binEnd": 0.525,
+              "count": 318
+            },
+            {
+              "binStart": 0.525,
+              "binEnd": 0.55,
+              "count": 925
+            },
+            {
+              "binStart": 0.55,
+              "binEnd": 0.575,
+              "count": 1068
+            },
+            {
+              "binStart": 0.575,
+              "binEnd": 0.6,
+              "count": 648
+            },
+            {
+              "binStart": 0.6,
+              "binEnd": 0.625,
+              "count": 193
+            },
+            {
+              "binStart": 0.625,
+              "binEnd": 0.65,
+              "count": 43
+            },
+            {
+              "binStart": 0.65,
+              "binEnd": 0.675,
+              "count": 8
+            },
+            {
+              "binStart": 0.675,
+              "binEnd": 0.7,
+              "count": 0
+            },
+            {
+              "binStart": 0.7,
+              "binEnd": 0.725,
+              "count": 1
+            },
+            {
+              "binStart": 0.725,
+              "binEnd": 0.75,
+              "count": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "query": "question about pricing",
+      "audioMap": {
+        "x": 0.6969,
+        "y": 0.4054
+      },
+      "textMap": {
+        "x": 0.9333,
+        "y": 0.3331
+      },
+      "results": [
+        {
+          "id": "librispeech-2035-147961-0027",
+          "score": 5.101,
+          "matches": [
+            "text",
+            "sound"
+          ]
+        },
+        {
+          "id": "librispeech-2428-83699-0003",
+          "score": 4.423,
+          "matches": [
+            "text"
+          ]
+        },
+        {
+          "id": "librispeech-84-121123-0007",
+          "score": 4.25,
+          "matches": [
+            "text"
+          ]
+        },
+        {
+          "id": "commonvoice-common_voice_en_32117455",
+          "score": 3.924,
+          "matches": [
+            "text"
+          ]
+        },
+        {
+          "id": "librispeech-2428-83699-0022",
+          "score": 3.787,
+          "matches": [
+            "text"
+          ]
+        },
+        {
+          "id": "librispeech-2277-149897-0008",
+          "score": 3.735,
+          "matches": [
+            "text"
+          ]
+        },
+        {
+          "id": "librispeech-3576-138058-0031",
+          "score": 3.654,
+          "matches": [
+            "text"
+          ]
+        },
+        {
+          "id": "commonvoice-common_voice_en_17906456",
+          "score": 3.542,
+          "matches": [
+            "text"
+          ]
+        },
+        {
+          "id": "librispeech-5338-284437-0014",
+          "score": 3.48,
+          "matches": [
+            "text"
+          ]
+        },
+        {
+          "id": "commonvoice-common_voice_en_17274875",
+          "score": 3.459,
+          "matches": [
+            "text",
+            "sound"
+          ]
+        }
+      ],
+      "similarity": {
+        "text": {
+          "p10": 0.554,
+          "p50": 0.582,
+          "p90": 0.62,
+          "histogram": [
+            {
+              "binStart": 0.25,
+              "binEnd": 0.275,
+              "count": 0
+            },
+            {
+              "binStart": 0.275,
+              "binEnd": 0.3,
+              "count": 0
+            },
+            {
+              "binStart": 0.3,
+              "binEnd": 0.325,
+              "count": 0
+            },
+            {
+              "binStart": 0.325,
+              "binEnd": 0.35,
+              "count": 0
+            },
+            {
+              "binStart": 0.35,
+              "binEnd": 0.375,
+              "count": 0
+            },
+            {
+              "binStart": 0.375,
+              "binEnd": 0.4,
+              "count": 0
+            },
+            {
+              "binStart": 0.4,
+              "binEnd": 0.425,
+              "count": 0
+            },
+            {
+              "binStart": 0.425,
+              "binEnd": 0.45,
+              "count": 0
+            },
+            {
+              "binStart": 0.45,
+              "binEnd": 0.475,
+              "count": 0
+            },
+            {
+              "binStart": 0.475,
+              "binEnd": 0.5,
+              "count": 0
+            },
+            {
+              "binStart": 0.5,
+              "binEnd": 0.525,
+              "count": 13
+            },
+            {
+              "binStart": 0.525,
+              "binEnd": 0.55,
+              "count": 198
+            },
+            {
+              "binStart": 0.55,
+              "binEnd": 0.575,
+              "count": 1103
+            },
+            {
+              "binStart": 0.575,
+              "binEnd": 0.6,
+              "count": 1208
+            },
+            {
+              "binStart": 0.6,
+              "binEnd": 0.625,
+              "count": 550
+            },
+            {
+              "binStart": 0.625,
+              "binEnd": 0.65,
+              "count": 202
+            },
+            {
+              "binStart": 0.65,
+              "binEnd": 0.675,
+              "count": 45
+            },
+            {
+              "binStart": 0.675,
+              "binEnd": 0.7,
+              "count": 8
+            },
+            {
+              "binStart": 0.7,
+              "binEnd": 0.725,
+              "count": 2
+            },
+            {
+              "binStart": 0.725,
+              "binEnd": 0.75,
+              "count": 0
+            }
+          ]
+        },
+        "audio": {
+          "p10": 0.483,
+          "p50": 0.521,
+          "p90": 0.563,
+          "histogram": [
+            {
+              "binStart": 0.25,
+              "binEnd": 0.275,
+              "count": 1
+            },
+            {
+              "binStart": 0.275,
+              "binEnd": 0.3,
+              "count": 0
+            },
+            {
+              "binStart": 0.3,
+              "binEnd": 0.325,
+              "count": 1
+            },
+            {
+              "binStart": 0.325,
+              "binEnd": 0.35,
+              "count": 0
+            },
+            {
+              "binStart": 0.35,
+              "binEnd": 0.375,
+              "count": 4
+            },
+            {
+              "binStart": 0.375,
+              "binEnd": 0.4,
+              "count": 8
+            },
+            {
+              "binStart": 0.4,
+              "binEnd": 0.425,
+              "count": 6
+            },
+            {
+              "binStart": 0.425,
+              "binEnd": 0.45,
+              "count": 36
+            },
+            {
+              "binStart": 0.45,
+              "binEnd": 0.475,
+              "count": 148
+            },
+            {
+              "binStart": 0.475,
+              "binEnd": 0.5,
+              "count": 612
+            },
+            {
+              "binStart": 0.5,
+              "binEnd": 0.525,
+              "count": 1053
+            },
+            {
+              "binStart": 0.525,
+              "binEnd": 0.55,
+              "count": 851
+            },
+            {
+              "binStart": 0.55,
+              "binEnd": 0.575,
+              "count": 431
+            },
+            {
+              "binStart": 0.575,
+              "binEnd": 0.6,
+              "count": 141
+            },
+            {
+              "binStart": 0.6,
+              "binEnd": 0.625,
+              "count": 33
+            },
+            {
+              "binStart": 0.625,
+              "binEnd": 0.65,
+              "count": 3
+            },
+            {
+              "binStart": 0.65,
+              "binEnd": 0.675,
+              "count": 1
+            },
+            {
+              "binStart": 0.675,
+              "binEnd": 0.7,
+              "count": 0
+            },
+            {
+              "binStart": 0.7,
+              "binEnd": 0.725,
+              "count": 0
+            },
+            {
+              "binStart": 0.725,
+              "binEnd": 0.75,
+              "count": 0
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

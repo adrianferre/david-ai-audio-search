@@ -1,0 +1,403 @@
+{
+  "generatedAt": "2026-11-24T19:15:37.004Z",
+  "model": "google/gemini-embedding-2",
+  "dimensions": 768,
+  "umap": {
+    "metric": "cosine",
+    "nNeighbors": 15,
+    "minDist": 0.1,
+    "seed": 42
+  },
+  "clips": {
+    "total": 3329,
+    "librispeech": 2703,
+    "audiocaps": 426,
+    "commonvoice": 200,
+    "totalDurationHours": 6.88
+  },
+  "librispeech": {
+    "speakers": 40,
+    "speakersBySex": {
+      "M": 20,
+      "F": 20
+    },
+    "chapters": 97,
+    "books": 63
+  },
+  "audiocaps": {
+    "labelled": 426,
+    "withSpeech": 156,
+    "withMusic": 0,
+    "soundFamilies": {
+      "Vehicles": 123,
+      "Animals": 97,
+      "Household & other": 76,
+      "Human sounds": 53,
+      "Tools & machines": 39,
+      "Water & weather": 38
+    },
+    "soundFamilyRule": "First family, in this order, with a label matching its pattern (case-insensitive): Vehicles /vehicle|car\\b|aircraft|boat|train|bus|motorcycle|truck|engine|race car|accelerat|helicopter|jet|siren/; Animals /animal|bird|insect|bee|dog|cat|bark|chirp|duck|goose|pigeon|frog|cricket|livestock|horse|sheep|goat|cattle|rooster|chicken|fowl|pig|owl|crow/; Water & weather /water|rain|stream|ocean|wave|wind|thunder|splash|drip|pour|gurgl/; Human sounds /laugh|cry|baby|sneez|cough|snor|breath|whistl|clap|applause|footstep|burp|giggl|scream|cheer|crowd|chatter/; Tools & machines /tool|drill|saw|hammer|machine|mechanism|buzz|hum|vacuum|sewing|printer|clock|tick|alarm|bell|beep|typing|power/; anything else is Household & other.",
+    "topLabels": {
+      "Speech": 156,
+      "Vehicle": 96,
+      "Animal": 40,
+      "Car": 29,
+      "Bird": 26,
+      "Insect": 15,
+      "Tick-tock": 15,
+      "Bee, wasp, etc.": 14,
+      "Outside, urban or manmade": 14,
+      "Race car, auto racing": 14,
+      "Inside, small room": 14,
+      "Chirp, tweet": 14,
+      "Aircraft": 14,
+      "Outside, rural or natural": 13,
+      "Boat, Water vehicle": 13,
+      "Domestic animals, pets": 13,
+      "Bird vocalization, bird call, bird song": 13,
+      "Motorcycle": 12,
+      "Motorboat, speedboat": 12,
+      "Rain": 12,
+      "Accelerating, revving, vroom": 11,
+      "Train": 11,
+      "Snoring": 11,
+      "Bus": 11,
+      "Water": 11
+    }
+  },
+  "commonvoice": {
+    "speakers": 200,
+    "byGender": {
+      "male_masculine": 123,
+      "female_feminine": 77
+    },
+    "byAge": {
+      "twenties": 84,
+      "thirties": 50,
+      "fourties": 23,
+      "teens": 23,
+      "fifties": 13,
+      "sixties": 5,
+      "eighties": 1,
+      "seventies": 1
+    },
+    "accents": 39,
+    "genderChancePercent": 52.6
+  },
+  "neighbors": {
+    "k": 10,
+    "note": "Exact cosine nearest neighbours in the 768-d space, the clip itself excluded.",
+    "audio": {
+      "sameDatasetPercent": {
+        "librispeech": 99,
+        "audiocaps": 98.5,
+        "commonvoice": 33.6
+      },
+      "speechNeighborsPercent": {
+        "note": "Share of neighbours that are speech clips (LibriSpeech or Common Voice).",
+        "ofSpeechClips": 99.1,
+        "librispeech": 99.8,
+        "audiocaps": 1.5,
+        "commonvoice": 90.6
+      },
+      "clipsWithMostlyOtherKindNeighbors": {
+        "note": "Clips with at least half of their neighbours of the other kind (sound clips for speech, speech clips for sounds).",
+        "librispeech": 4,
+        "audiocaps": 5,
+        "commonvoice": 15
+      },
+      "librispeech": {
+        "pool": "LibriSpeech",
+        "sameSpeakerPercent": 39.3,
+        "sameChapterPercent": 31.6,
+        "sameSpeakerOtherChapterPercent": 7.6,
+        "sameSexAmongOtherSpeakersPercent": 53.1
+      },
+      "commonvoice": {
+        "pool": "Common Voice",
+        "sameGenderPercent": 58.7
+      }
+    },
+    "text": {
+      "sameDatasetPercent": {
+        "librispeech": 98,
+        "audiocaps": 99.8,
+        "commonvoice": 20.6
+      },
+      "speechNeighborsPercent": {
+        "note": "Share of neighbours that are speech clips (LibriSpeech or Common Voice).",
+        "ofSpeechClips": 99.8,
+        "librispeech": 99.9,
+        "audiocaps": 0.2,
+        "commonvoice": 98.3
+      },
+      "clipsWithMostlyOtherKindNeighbors": {
+        "note": "Clips with at least half of their neighbours of the other kind (sound clips for speech, speech clips for sounds).",
+        "librispeech": 0,
+        "audiocaps": 0,
+        "commonvoice": 3
+      },
+      "librispeech": {
+        "pool": "LibriSpeech",
+        "sameSpeakerPercent": 36.2,
+        "sameChapterPercent": 30.5,
+        "sameSpeakerOtherChapterPercent": 5.7,
+        "sameSexAmongOtherSpeakersPercent": 47.6
+      },
+      "commonvoice": {
+        "pool": "Common Voice",
+        "sameGenderPercent": 53.2
+      }
+    }
+  },
+  "groupAgreement": {
+    "note": "Share of a clip's 10 nearest neighbours, among clips of the same dataset (the pool), that share the group: in the 768-d space (exact cosine) and on each 2D map (Euclidean), next to chance (Σ share²).",
+    "audiocapsSoundFamily": {
+      "clips": 426,
+      "groups": 6,
+      "chancePercent": 19.9,
+      "audio768d": 52.9,
+      "text768d": 73.4,
+      "audioMap2d": 51.3,
+      "textMap2d": 73.7
+    },
+    "librispeechBook": {
+      "clips": 2703,
+      "groups": 63,
+      "chancePercent": 2.2,
+      "audio768d": 39.1,
+      "text768d": 36.5,
+      "audioMap2d": 32.1,
+      "textMap2d": 29.7
+    },
+    "librispeechChapter": {
+      "clips": 2703,
+      "groups": 97,
+      "chancePercent": 1.3,
+      "audio768d": 31.6,
+      "text768d": 30.5,
+      "audioMap2d": 25.5,
+      "textMap2d": 24.2
+    },
+    "librispeechSpeaker": {
+      "clips": 2703,
+      "groups": 40,
+      "chancePercent": 2.6,
+      "audio768d": 39.3,
+      "text768d": 36.2,
+      "audioMap2d": 32.5,
+      "textMap2d": 29.1
+    },
+    "librispeechSex": {
+      "clips": 2703,
+      "groups": 2,
+      "chancePercent": 50,
+      "audio768d": 72.3,
+      "text768d": 67.1,
+      "audioMap2d": 66.4,
+      "textMap2d": 63.2
+    },
+    "librispeechSexOtherSpeakers": {
+      "clips": 2703,
+      "groups": 2,
+      "chancePercent": 50,
+      "audio768d": 53.1,
+      "text768d": 47.6,
+      "audioMap2d": 47.7,
+      "textMap2d": 46.6
+    },
+    "commonvoiceGender": {
+      "clips": 200,
+      "groups": 2,
+      "chancePercent": 52.6,
+      "audio768d": 58.7,
+      "text768d": 53.2,
+      "audioMap2d": 49.3,
+      "textMap2d": 54.3
+    },
+    "commonvoiceAccent": {
+      "clips": 200,
+      "groups": 39,
+      "chancePercent": 12.4,
+      "audio768d": 17.8,
+      "text768d": 14.3,
+      "audioMap2d": 12.7,
+      "textMap2d": 11.7
+    },
+    "audiocapsHasSpeech": {
+      "note": "AudioCaps clips with and without a Speech label: share of their 10 nearest audio neighbours (full catalog) that are speech clips.",
+      "withSpeech": {
+        "clips": 156,
+        "speechNeighborsPercent": 2.3
+      },
+      "withoutSpeech": {
+        "clips": 270,
+        "speechNeighborsPercent": 1
+      }
+    }
+  },
+  "maps": {
+    "note": "How much of the 768-d structure the 2D maps keep: mean distance between clips of each pair of datasets (coordinates in [0, 1]), and the share of a clip's 10 nearest neighbours in 2D from its own dataset.",
+    "audio": {
+      "meanDistance": {
+        "audiocaps↔audiocaps": 0.0948,
+        "audiocaps↔commonvoice": 0.6516,
+        "audiocaps↔librispeech": 0.7709,
+        "commonvoice↔commonvoice": 0.252,
+        "commonvoice↔librispeech": 0.2728,
+        "librispeech↔librispeech": 0.2402
+      },
+      "sameDataset2dNeighborsPercent": {
+        "audiocaps": 96,
+        "commonvoice": 40.2,
+        "librispeech": 96.2
+      },
+      "soundFamilyCentroids": {
+        "Human sounds": {
+          "x": 0.313,
+          "y": 0.9304,
+          "count": 53
+        },
+        "Vehicles": {
+          "x": 0.2018,
+          "y": 0.8883,
+          "count": 123
+        },
+        "Household & other": {
+          "x": 0.2412,
+          "y": 0.9309,
+          "count": 76
+        },
+        "Animals": {
+          "x": 0.2858,
+          "y": 0.9195,
+          "count": 97
+        },
+        "Water & weather": {
+          "x": 0.1959,
+          "y": 0.9252,
+          "count": 38
+        },
+        "Tools & machines": {
+          "x": 0.2372,
+          "y": 0.9261,
+          "count": 39
+        }
+      },
+      "datasetCentroids": {
+        "audiocaps": {
+          "x": 0.2445,
+          "y": 0.915,
+          "count": 426
+        },
+        "commonvoice": {
+          "x": 0.4906,
+          "y": 0.3322,
+          "count": 200
+        },
+        "librispeech": {
+          "x": 0.5796,
+          "y": 0.2431,
+          "count": 2703
+        }
+      }
+    },
+    "text": {
+      "meanDistance": {
+        "audiocaps↔audiocaps": 0.0899,
+        "audiocaps↔commonvoice": 0.9446,
+        "audiocaps↔librispeech": 0.9732,
+        "commonvoice↔commonvoice": 0.1717,
+        "commonvoice↔librispeech": 0.2162,
+        "librispeech↔librispeech": 0.2029
+      },
+      "sameDataset2dNeighborsPercent": {
+        "audiocaps": 99.5,
+        "commonvoice": 32.8,
+        "librispeech": 95.3
+      },
+      "soundFamilyCentroids": {
+        "Human sounds": {
+          "x": 0.149,
+          "y": 0.8284,
+          "count": 53
+        },
+        "Vehicles": {
+          "x": 0.0726,
+          "y": 0.964,
+          "count": 123
+        },
+        "Household & other": {
+          "x": 0.0765,
+          "y": 0.8711,
+          "count": 76
+        },
+        "Animals": {
+          "x": 0.144,
+          "y": 0.8946,
+          "count": 97
+        },
+        "Water & weather": {
+          "x": 0.0508,
+          "y": 0.8857,
+          "count": 38
+        },
+        "Tools & machines": {
+          "x": 0.1063,
+          "y": 0.9155,
+          "count": 39
+        }
+      },
+      "datasetCentroids": {
+        "audiocaps": {
+          "x": 0.1002,
+          "y": 0.9033,
+          "count": 426
+        },
+        "commonvoice": {
+          "x": 0.8354,
+          "y": 0.322,
+          "count": 200
+        },
+        "librispeech": {
+          "x": 0.7975,
+          "y": 0.2375,
+          "count": 2703
+        }
+      }
+    }
+  },
+  "exampleQueries": {
+    "note": "Query similarity against every clip, averaged over the 5 example queries (see queries.json).",
+    "text": {
+      "p10": 0.56,
+      "p50": 0.593,
+      "p90": 0.633
+    },
+    "audio": {
+      "p10": 0.48,
+      "p50": 0.517,
+      "p90": 0.567
+    }
+  },
+  "fromEvaluation": {
+    "note": "From the retrieval evaluation (eval/report.md); quoted, not recomputed by this script.",
+    "querySimilarity": {
+      "text": {
+        "p10": 0.537,
+        "p50": 0.587,
+        "p90": 0.64
+      },
+      "audio": {
+        "p10": 0.328,
+        "p50": 0.481,
+        "p90": 0.566
+      }
+    },
+    "precisionAt10": {
+      "dog barking": 0.7,
+      "baby crying": 0.9,
+      "someone sneezing": 0.3
+    }
+  }
+}

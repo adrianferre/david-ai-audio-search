@@ -180,6 +180,7 @@ the AI Gateway tab of the Vercel team. To use an API key instead of OIDC, set `A
 | `pnpm embed-catalog` | Embed the clips that have no vector yet (see Search) |
 | `pnpm import-commonvoice` | Add the Common Voice sample to the database and Blob store (see Search) |
 | `pnpm compute-waveforms` | Compute the waveform overviews of the clips that have none yet (see Waveforms) |
+| `pnpm export-embedding-map` | Regenerate the Embedding Map design data in `design/embedding-map/` (read-only) |
 
 ## Project layout
 
@@ -189,7 +190,8 @@ the AI Gateway tab of the Vercel team. To use an API key instead of OIDC, set `A
 - `src/lib/` – shared utilities
 - `src/server/db/` – Neon client, the catalog schema (`schema.sql`) and its migrations
 - `src/server/search/` – embedding settings and the query embedding call
-- `scripts/` – one-off scripts (`embed-catalog.mts`, `import-commonvoice.mts`, `compute-waveforms.mts`)
+- `scripts/` – one-off scripts (`embed-catalog.mts`, `import-commonvoice.mts`, `compute-waveforms.mts`, `export-embedding-map.mts`)
+- `design/embedding-map/` – design prompt and real data (UMAP maps, neighbours, example queries) for the Embedding Map view
 - `src/env.ts` – typed, validated environment variables (`import { env } from "@/env"`)
 
 ## API
