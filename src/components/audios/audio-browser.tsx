@@ -9,9 +9,16 @@ import { useMicrophoneRecorder } from "@/lib/audio/use-microphone-recorder";
 
 import { AudioDetailPanel } from "./audio-detail-panel";
 import { AudioList } from "./audio-list";
-import { AudioSearchBar, type ExampleStatus } from "./audio-search-bar";
-import { SOURCE_LABEL } from "./datasets";
-import { type AudioExample, type AudioListView, type ReferenceClip, useListView } from "./queries";
+import { AudioSearchBar, type ExampleStatus, type TranscriptLine } from "./audio-search-bar";
+import { displayText, SOURCE_LABEL } from "./datasets";
+import {
+  type AudioExample,
+  type AudioListView,
+  type ClipMatch,
+  type ReferenceClip,
+  useListView,
+  useTranscriptSearch,
+} from "./queries";
 import { type RecentSearch, useRecentSearches } from "./recent-searches";
 import { SelectionBar, useSelection } from "./selection";
 import { Sidebar } from "./sidebar";
@@ -51,6 +58,8 @@ export function AudioBrowser() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [match, setMatch] = useState<SearchMatchFilterV1>("all");
+  // A search with a clip compares its sound unless the user picks Words or Meaning.
+  const [clipMatch, setClipMatch] = useState<ClipMatch>("sound");
   const [similarTo, setSimilarTo] = useState<ReferenceClip | null>(null);
   const [example, setExample] = useState<AudioExample | null>(null);
   const [exampleStatus, setExampleStatus] = useState<ExampleStatus>(null);
@@ -71,13 +80,28 @@ export function AudioBrowser() {
   const searchQuery = query.trim() === "" ? "" : debouncedQuery;
 
   const view: AudioListView = example
-    ? { kind: "file", example, source }
+    ? { kind: "file", example, source, match: clipMatch }
     : similarTo
-      ? { kind: "similar", reference: similarTo, source }
+      ? { kind: "similar", reference: similarTo, source, match: clipMatch }
       : searchQuery
         ? { kind: "search", q: searchQuery, match, source }
         : { kind: "browse", source };
   const { summary } = useListView(view);
+  const { transcript } = useTranscriptSearch(view);
+  const transcriptLine: TranscriptLine | null =
+    view.kind === "browse" || view.kind === "search" || view.match === "sound"
+      ? null
+      : transcript.status === "success"
+        ? {
+            status: "success",
+            // LibriSpeech transcripts are in capitals; show them like the list does.
+            text:
+              view.kind === "similar"
+                ? displayText({ source: view.reference.source, text: transcript.data.text })
+                : transcript.data.text,
+            generated: transcript.data.generated,
+          }
+        : { status: transcript.status };
   const selection = useSelection();
 
   // The list searches as you type, so a text search is kept once it settles
@@ -114,6 +138,7 @@ export function AudioBrowser() {
     setQuery("");
     clearExample();
     setSimilarTo(clip);
+    setClipMatch("sound");
     remember({ kind: "similar", reference: clip, source });
   };
 
@@ -146,6 +171,7 @@ export function AudioBrowser() {
       };
       setQuery("");
       setSimilarTo(null);
+      setClipMatch("sound");
       setExample(searched);
       setExampleStatus(null);
       remember({ kind: "audio", example: searched, source });
@@ -203,6 +229,7 @@ export function AudioBrowser() {
         setQuery("");
         clearExample();
         setSimilarTo(entry.reference);
+        setClipMatch("sound");
         break;
       case "audio":
         // Same id as when it first ran, so its results come from the cache.
@@ -210,6 +237,7 @@ export function AudioBrowser() {
         attachToken.current++;
         setQuery("");
         setSimilarTo(null);
+        setClipMatch("sound");
         setExample(entry.example);
         setExampleStatus(null);
         break;
@@ -253,11 +281,9 @@ export function AudioBrowser() {
         Results for <span className="text-muted-foreground">“{view.q}”</span>
       </>
     ) : view.kind === "similar" ? (
-      "Sounds similar"
-    ) : view.example.source === "recording" ? (
-      "Sounds like your recording"
+      view.match === "sound" ? "Sounds similar" : "Says something similar"
     ) : (
-      "Sounds like your file"
+      `${view.match === "sound" ? "Sounds like" : "Says what’s in"} your ${view.example.source === "recording" ? "recording" : "file"}`
     );
   const scope = source && view.kind !== "browse" ? `${SOURCE_LABEL[source]} only` : null;
 
@@ -285,6 +311,9 @@ export function AudioBrowser() {
             }}
             match={match}
             onMatchChange={setMatch}
+            clipMatch={clipMatch}
+            onClipMatchChange={setClipMatch}
+            transcript={transcriptLine}
             similarTo={similarTo}
             similarPlayback={{
               status:
@@ -338,6 +367,7 @@ export function AudioBrowser() {
             player={player}
             recovery={{
               onMatchAll: () => setMatch("all"),
+              onClipMatch: setClipMatch,
               onClearSearch: () => setQuery(""),
               onClearSource: () => setSource(null),
             }}

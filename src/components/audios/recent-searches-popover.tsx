@@ -13,7 +13,8 @@ import { formatClock, Waveform } from "./waveform";
 /** The search bar's match options, as a recent text search names them. */
 const MATCH_LABEL: Record<SearchMatchFilterV1, string> = {
   all: "All",
-  text: "Words",
+  exact: "Words",
+  text: "Meaning",
   sound: "Sound",
 };
 

@@ -8,6 +8,7 @@ import type {
   DatasetsResponseV1,
   SearchMatchFilterV1,
   SimilarAudiosResponseV1,
+  TranscriptResponseV1,
 } from "./types";
 
 const BASE = "/api/v1";
@@ -119,6 +120,23 @@ export async function searchByAudioFile(params: {
   });
   await ensureOk(res);
   return res.json() as Promise<SimilarAudiosResponseV1>;
+}
+
+/** What's said in an audio of the catalog: its transcript, or one made by a speech-to-text model. */
+export function fetchAudioTranscript(id: string, signal?: AbortSignal): Promise<TranscriptResponseV1> {
+  return getJson(`${BASE}/audios/${encodeURIComponent(id)}/transcript`, signal);
+}
+
+/** What's said in a WAV clip of the user's, by a speech-to-text model. */
+export async function transcribeAudioFile(params: { wav: Blob; signal?: AbortSignal }): Promise<TranscriptResponseV1> {
+  const res = await fetch(`${BASE}/transcriptions`, {
+    method: "POST",
+    body: params.wav,
+    headers: { accept: "application/json", "content-type": "audio/wav" },
+    signal: params.signal,
+  });
+  await ensureOk(res);
+  return res.json() as Promise<TranscriptResponseV1>;
 }
 
 /** The audio's FLAC as a stream, to save to disk. */

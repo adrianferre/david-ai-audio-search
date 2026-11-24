@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
-import type { AudioSearchResponseV1 } from "@/lib/api/v1/types";
+import { type AudioSearchResponseV1, MAX_SEARCH_QUERY_LENGTH } from "@/lib/api/v1/types";
 import { apiError, internalError } from "@/server/api/errors";
 import { sourceQuerySchema } from "@/server/api/source-filter";
 import { toAudioSearchResultV1 } from "@/server/api/v1/audios";
@@ -13,7 +13,7 @@ const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
 
 const querySchema = z.object({
-  q: z.string().trim().min(1).max(200),
+  q: z.string().trim().min(1).max(MAX_SEARCH_QUERY_LENGTH),
   match: z.enum(["all", "text", "sound", "exact"]).default("all"),
   limit: z.coerce.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
 }).extend(sourceQuerySchema.shape);

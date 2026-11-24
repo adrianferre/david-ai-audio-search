@@ -65,3 +65,10 @@ export async function getAudioFile(
     headers,
   };
 }
+
+/** The whole FLAC as bytes, for the server to process (not to stream). Null when the blob doesn't exist. */
+export async function readAudioFile(pathname: string, signal?: AbortSignal): Promise<Uint8Array | null> {
+  const file = await getAudioFile(pathname, { signal });
+  if (!file?.body) return null;
+  return new Uint8Array(await new Response(file.body).arrayBuffer());
+}

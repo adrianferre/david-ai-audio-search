@@ -23,10 +23,14 @@ import { DatasetTag, displayText, displayTitle, SOURCE_LABEL } from "./datasets"
 import {
   type AudioListView,
   catalogQuery,
+  type ClipMatch,
+  type ClipView,
   fileQuery,
   type ReferenceClip,
+  searchesTranscript,
   searchQuery,
   similarQuery,
+  useTranscriptSearch,
 } from "./queries";
 import { clearOnEscape, SelectAllCheckbox, type Selection, withRows } from "./selection";
 import { type AudioPlayer, type PlayerStatus, playbackOf } from "./use-audio-player";
@@ -84,6 +88,8 @@ type RowActions = {
 /** Ways out of an empty result, offered by the "nothing matches" message. */
 export type ListRecovery = {
   onMatchAll: () => void;
+  /** Search with the clip another way: its sound, or the exact words or meaning of what's said. */
+  onClipMatch: (match: ClipMatch) => void;
   onClearSearch: () => void;
   onClearSource: () => void;
 };
@@ -130,7 +136,10 @@ export function AudioList({
           recovery={recovery}
         />
       )}
-      {view.kind === "similar" && (
+      {searchesTranscript(view) && (
+        <TranscriptResults view={view} actions={actions} recovery={recovery} />
+      )}
+      {view.kind === "similar" && view.match === "sound" && (
         <SimilarResults
           rowsQuery={similarQuery(view.reference.id, view.source)}
           pendingMessage="Finding the clips that sound like this one…"
@@ -139,7 +148,7 @@ export function AudioList({
           recovery={recovery}
         />
       )}
-      {view.kind === "file" && (
+      {view.kind === "file" && view.match === "sound" && (
         <SimilarResults
           rowsQuery={fileQuery(view.example, view.source)}
           pendingMessage={
@@ -218,16 +227,24 @@ function SearchResults({
   q,
   match,
   source,
+  excludeId = null,
   actions,
   recovery,
+  empty,
 }: {
   q: string;
   match: SearchMatchFilterV1;
   source: AudioSource | null;
+  /** An audio to leave out of the results (see `searchQuery`). */
+  excludeId?: string | null;
   actions: RowActions;
   recovery: ListRecovery;
+  /** Shown instead of the usual "nothing matches" message. */
+  empty?: ReactNode;
 }) {
-  const { data, status, error, refetch, isPlaceholderData } = useQuery(searchQuery(q, match, source));
+  const { data, status, error, refetch, isPlaceholderData } = useQuery(
+    searchQuery(q, match, source, excludeId),
+  );
   const searching = status === "pending" || isPlaceholderData;
 
   if (status === "pending") return <LoadingRows label="Searching" />;
@@ -243,6 +260,7 @@ function SearchResults({
   }));
 
   if (rows.length === 0 && !searching) {
+    if (empty) return empty;
     const where = source ? ` in ${SOURCE_LABEL[source]}` : "";
     return (
       <EmptyResults
@@ -269,6 +287,83 @@ function SearchResults({
       rows={rows}
       actions={actions}
       dimmed={searching}
+    />
+  );
+}
+
+/**
+ * A search by what's said in a clip: "Transcribing…" until its transcript is
+ * back, then the text search (Words) with it.
+ */
+function TranscriptResults({
+  view,
+  actions,
+  recovery,
+}: {
+  view: ClipView & { match: "exact" | "text" };
+  actions: RowActions;
+  recovery: ListRecovery;
+}) {
+  const { transcript, q, excludeId } = useTranscriptSearch(view);
+  const yours = view.kind === "file";
+  const what = !yours ? "this clip" : view.example.source === "recording" ? "your recording" : "your file";
+
+  if (transcript.status === "pending") {
+    return <LoadingRows label={`Transcribing what’s said in ${what}`} />;
+  }
+  if (transcript.status === "error") {
+    return (
+      <ListProblem
+        title={`Couldn’t transcribe ${what}`}
+        message={transcript.error.message}
+        onRetry={() => transcript.refetch()}
+      />
+    );
+  }
+  if (q === "") {
+    return (
+      <EmptyResults
+        title={`Nobody speaks in ${what}`}
+        message={`${FILTER_LABEL[view.match]} searches with what’s said in the clip, and the speech-to-text model heard no words. Its sound can still find similar clips.`}
+      >
+        <Button onClick={() => recovery.onClipMatch("sound")}>Search by sound instead</Button>
+      </EmptyResults>
+    );
+  }
+  const where = view.source ? ` in ${SOURCE_LABEL[view.source]}` : "";
+  return (
+    <SearchResults
+      q={q}
+      match={view.match}
+      source={view.source}
+      excludeId={excludeId}
+      actions={actions}
+      recovery={recovery}
+      empty={
+        <EmptyResults
+          title={`No clip${where} says anything like ${what}`}
+          message={
+            view.match === "exact"
+              ? "Words looks for every word said in the clip, as said, in the transcripts and captions. Meaning also finds other ways of saying it, and its sound may still match."
+              : "Meaning compares what’s said in the clip with the transcripts and captions. Its sound may still match."
+          }
+        >
+          {view.match === "exact" && (
+            <Button onClick={() => recovery.onClipMatch("text")}>Search by meaning instead</Button>
+          )}
+          <Button
+            variant={view.match === "exact" ? "outline" : "default"}
+            onClick={() => recovery.onClipMatch("sound")}
+          >
+            Search by sound instead
+          </Button>
+          {view.source && (
+            <Button variant="outline" onClick={recovery.onClearSource}>
+              Search every dataset
+            </Button>
+          )}
+        </EmptyResults>
+      }
     />
   );
 }
