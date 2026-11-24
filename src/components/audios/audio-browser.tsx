@@ -5,8 +5,9 @@ import { useEffect, useState } from "react";
 import type { SearchMatchFilterV1 } from "@/lib/api/v1/types";
 
 import { AudioDetailPanel } from "./audio-detail-panel";
-import { AudioList, type AudioListView } from "./audio-list";
+import { AudioList } from "./audio-list";
 import { AudioSearchBar } from "./audio-search-bar";
+import { type AudioListView, useListSummary } from "./queries";
 
 /** Wait for a pause in typing: every search embeds the query on the server. */
 const SEARCH_DEBOUNCE_MS = 300;
@@ -35,6 +36,7 @@ export function AudioBrowser() {
     : searchQuery
       ? { kind: "search", q: searchQuery, match }
       : { kind: "browse" };
+  const summary = useListSummary(view);
 
   const showSimilar = (audio: { id: string; title: string }) => {
     setQuery("");
@@ -54,6 +56,7 @@ export function AudioBrowser() {
         onMatchChange={setMatch}
         similarTo={similarTo}
         onClearSimilar={() => setSimilarTo(null)}
+        summary={summary}
       />
       <div className="flex min-h-0 flex-1">
         <AudioList

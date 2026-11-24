@@ -1,6 +1,6 @@
 "use client";
 
-import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   AudioWaveformIcon,
@@ -12,7 +12,8 @@ import {
 import { type ReactNode, useCallback, useEffect, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
-import { ApiError, fetchAudios, fetchSimilarAudios, searchAudios } from "@/lib/api/v1/client";
+import { IconButton } from "@/components/ui/icon-button";
+import { ApiError } from "@/lib/api/v1/client";
 import type {
   AudioListItemV1,
   AudioSource,
@@ -21,9 +22,9 @@ import type {
 } from "@/lib/api/v1/types";
 import { cn } from "@/lib/utils";
 
+import { type AudioListView, catalogQuery, searchQuery, similarQuery } from "./queries";
 import { type PlayerStatus, useAudioPlayer } from "./use-audio-player";
 
-const PAGE_SIZE = 50;
 const ROW_HEIGHT = 72;
 
 const SOURCE_LABEL: Record<AudioSource, string> = {
@@ -43,12 +44,6 @@ function matchLabel(match: SearchMatchV1, source: AudioSource) {
 }
 
 const FILTER_LABEL: Record<SearchMatchV1, string> = { text: "Words", sound: "Sound" };
-
-/** What the list shows: the whole catalog, a text search, or the audios similar to one. */
-export type AudioListView =
-  | { kind: "browse" }
-  | { kind: "search"; q: string; match: SearchMatchFilterV1 }
-  | { kind: "similar"; id: string };
 
 /** A list item, plus why it is in the results when it comes from a search. */
 type Row = AudioListItemV1 & { matches?: SearchMatchV1[]; similarity?: number };
@@ -101,16 +96,9 @@ function BrowseList({ actions }: { actions: RowActions }) {
     isFetchingNextPage,
     isFetchNextPageError,
     fetchNextPage,
-  } = useInfiniteQuery({
-    queryKey: ["v1", "audios", { pageSize: PAGE_SIZE }],
-    queryFn: ({ pageParam, signal }) =>
-      fetchAudios({ page: pageParam, pageSize: PAGE_SIZE, signal }),
-    initialPageParam: 1,
-    getNextPageParam: (lastPage) => lastPage.pagination.nextPage ?? undefined,
-  });
+  } = useInfiniteQuery(catalogQuery());
 
   const rows: Row[] = data?.pages.flatMap((p) => p.data) ?? [];
-  const total = data?.pages[0]?.pagination.total ?? 0;
 
   // Infinite scroll: load the next page once the loader row comes into view.
   const loadMore = useCallback(() => {
@@ -121,11 +109,6 @@ function BrowseList({ actions }: { actions: RowActions }) {
 
   return (
     <>
-      <ListSummary>
-        {data
-          ? `${rows.length.toLocaleString()} of ${total.toLocaleString()} audios`
-          : "Loading audios…"}
-      </ListSummary>
       {status === "pending" && <ListMessage>Loading…</ListMessage>}
       {/* A failed next page keeps `data`, so only show this when nothing loaded. */}
       {status === "error" && !data && (
@@ -169,24 +152,12 @@ function SearchResults({
   match: SearchMatchFilterV1;
   actions: RowActions;
 }) {
-  const { data, status, error, refetch, isPlaceholderData } = useQuery({
-    queryKey: ["v1", "search", { q, match }],
-    queryFn: ({ signal }) => searchAudios({ q, match, signal }),
-    // Keep the previous results on screen while the next query loads.
-    placeholderData: keepPreviousData,
-  });
+  const { data, status, error, refetch, isPlaceholderData } = useQuery(searchQuery(q, match));
   const rows = data?.data;
   const searching = status === "pending" || isPlaceholderData;
 
   return (
     <>
-      <ListSummary>
-        {searching || !rows
-          ? status === "error"
-            ? "Search failed"
-            : "Searching…"
-          : `${rows.length.toLocaleString()} ${rows.length === 1 ? "result" : "results"} for “${q}”`}
-      </ListSummary>
       {status === "pending" && <ListMessage>Searching…</ListMessage>}
       {status === "error" && <ListError message={error.message} onRetry={() => refetch()} />}
       {rows && rows.length === 0 && !searching && (
@@ -205,23 +176,11 @@ function SearchResults({
 }
 
 function SimilarResults({ id, actions }: { id: string; actions: RowActions }) {
-  const { data, status, error, refetch } = useQuery({
-    queryKey: ["v1", "audio", id, "similar"],
-    queryFn: ({ signal }) => fetchSimilarAudios(id, signal),
-  });
+  const { data, status, error, refetch } = useQuery(similarQuery(id));
   const rows = data?.data;
 
   return (
     <>
-      <ListSummary>
-        {status === "pending"
-          ? "Finding similar audios…"
-          : status === "error"
-            ? "Search failed"
-            : rows?.length === 0
-              ? "No similar audios"
-              : `The ${rows?.length.toLocaleString()} audios that sound most like it, most similar first`}
-      </ListSummary>
       {status === "pending" && <ListMessage>Loading…</ListMessage>}
       {status === "error" && <ListError message={error.message} onRetry={() => refetch()} />}
       {rows && rows.length === 0 && (
@@ -230,17 +189,6 @@ function SimilarResults({ id, actions }: { id: string; actions: RowActions }) {
       {/* Keyed by the example so the scroll position resets with it. */}
       {rows && rows.length > 0 && <AudioRows key={id} rows={rows} actions={actions} />}
     </>
-  );
-}
-
-function ListSummary({ children }: { children: ReactNode }) {
-  return (
-    <div
-      aria-live="polite"
-      className="flex h-10 shrink-0 items-center border-b px-4 text-sm text-muted-foreground"
-    >
-      {children}
-    </div>
   );
 }
 
@@ -403,16 +351,15 @@ function AudioRow({
         </div>
         <p className="truncate text-sm text-muted-foreground">{audio.text}</p>
       </button>
-      <Button
+      <IconButton
         variant="ghost"
-        size="icon"
         className="mr-3 text-muted-foreground"
+        label="Find similar sound"
         aria-label={`Find audios that sound like ${audio.title}`}
-        title="Find similar audios"
         onClick={() => onFindSimilar({ id: audio.id, title: audio.title })}
       >
         <AudioWaveformIcon />
-      </Button>
+      </IconButton>
     </div>
   );
 }
@@ -427,20 +374,19 @@ function PlayButton({
   onClick: () => void;
 }) {
   const playing = status === "playing" || status === "loading";
-  const label =
+  const [label, ariaLabel] =
     status === "error"
-      ? `Couldn't play ${title}. Try again`
+      ? ["Couldn't load this audio. Click to retry", `Couldn't play ${title}. Try again`]
       : playing
-        ? `Pause ${title}`
-        : `Play ${title}`;
+        ? ["Pause", `Pause ${title}`]
+        : ["Play", `Play ${title}`];
 
   return (
-    <Button
+    <IconButton
       variant={status === "error" ? "destructive" : "outline"}
-      size="icon"
       className="ml-4 rounded-full"
-      aria-label={label}
-      title={status === "error" ? "Couldn't load this audio. Click to retry." : undefined}
+      label={label}
+      aria-label={ariaLabel}
       onClick={onClick}
     >
       {status === "loading" ? (
@@ -452,6 +398,6 @@ function PlayButton({
       ) : (
         <PlayIcon />
       )}
-    </Button>
+    </IconButton>
   );
 }
