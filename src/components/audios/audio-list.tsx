@@ -1,18 +1,24 @@
 "use client";
 
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
+  AudioWaveformIcon,
   CircleAlertIcon,
   LoaderCircleIcon,
   PauseIcon,
   PlayIcon,
 } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { type ReactNode, useCallback, useEffect, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
-import { fetchAudios } from "@/lib/api/v1/client";
-import type { AudioListItemV1, AudioSource } from "@/lib/api/v1/types";
+import { fetchAudios, fetchSimilarAudios, searchAudios } from "@/lib/api/v1/client";
+import type {
+  AudioListItemV1,
+  AudioSource,
+  SearchMatchFilterV1,
+  SearchMatchV1,
+} from "@/lib/api/v1/types";
 import { cn } from "@/lib/utils";
 
 import { type PlayerStatus, useAudioPlayer } from "./use-audio-player";
@@ -25,21 +31,59 @@ const SOURCE_LABEL: Record<AudioSource, string> = {
   audiocaps: "AudioCaps",
 };
 
+const MATCH_LABEL: Record<SearchMatchV1, { label: string; title: string }> = {
+  transcript: { label: "Said", title: "Matches what is said (the transcript)" },
+  sound: { label: "Sounds like", title: "Matches what the audio sounds like" },
+};
+
+/** What the list shows: the whole catalog, a text search, or the audios similar to one. */
+export type AudioListView =
+  | { kind: "browse" }
+  | { kind: "search"; q: string; match: SearchMatchFilterV1 }
+  | { kind: "similar"; id: string };
+
+/** A list item, plus why it is in the results when it comes from a search. */
+type Row = AudioListItemV1 & { matches?: SearchMatchV1[]; similarity?: number };
+
+type RowActions = {
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onFindSimilar: (audio: { id: string; title: string }) => void;
+  player: ReturnType<typeof useAudioPlayer>;
+};
+
 function formatDuration(seconds: number) {
   const total = Math.round(seconds);
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
 }
 
 export function AudioList({
+  view,
   selectedId,
   onSelect,
+  onFindSimilar,
 }: {
+  view: AudioListView;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  onFindSimilar: (audio: { id: string; title: string }) => void;
 }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
+  // Lives here, above the views, so playback continues when the view changes.
   const player = useAudioPlayer();
+  const actions: RowActions = { selectedId, onSelect, onFindSimilar, player };
 
+  return (
+    <section className="flex min-w-0 flex-1 flex-col" aria-label="Audios">
+      {view.kind === "browse" && <BrowseList actions={actions} />}
+      {view.kind === "search" && (
+        <SearchResults q={view.q} match={view.match} actions={actions} />
+      )}
+      {view.kind === "similar" && <SimilarResults id={view.id} actions={actions} />}
+    </section>
+  );
+}
+
+function BrowseList({ actions }: { actions: RowActions }) {
   const {
     data,
     status,
@@ -57,12 +101,168 @@ export function AudioList({
     getNextPageParam: (lastPage) => lastPage.pagination.nextPage ?? undefined,
   });
 
-  const rows: AudioListItemV1[] = data?.pages.flatMap((p) => p.data) ?? [];
+  const rows: Row[] = data?.pages.flatMap((p) => p.data) ?? [];
   const total = data?.pages[0]?.pagination.total ?? 0;
+
+  // Infinite scroll: load the next page once the loader row comes into view.
+  const loadMore = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage && !isFetchNextPageError) {
+      void fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage]);
+
+  return (
+    <>
+      <ListSummary>
+        {data
+          ? `${rows.length.toLocaleString()} of ${total.toLocaleString()} audios`
+          : "Loading audios…"}
+      </ListSummary>
+      {status === "pending" && <ListMessage>Loading…</ListMessage>}
+      {/* A failed next page keeps `data`, so only show this when nothing loaded. */}
+      {status === "error" && !data && (
+        <ListError message={error.message} onRetry={() => refetch()} />
+      )}
+      {data && (
+        <AudioRows
+          rows={rows}
+          actions={actions}
+          onEndReached={loadMore}
+          tail={
+            !hasNextPage ? null : isFetchNextPageError ? (
+              <div className="flex h-full items-center gap-3 px-4 text-sm">
+                <span className="text-destructive">Couldn&apos;t load more audios.</span>
+                <Button variant="outline" size="sm" onClick={() => fetchNextPage()}>
+                  Retry
+                </Button>
+              </div>
+            ) : (
+              <div className="flex h-full items-center px-4 text-sm text-muted-foreground">
+                Loading more…
+              </div>
+            )
+          }
+        />
+      )}
+    </>
+  );
+}
+
+function SearchResults({
+  q,
+  match,
+  actions,
+}: {
+  q: string;
+  match: SearchMatchFilterV1;
+  actions: RowActions;
+}) {
+  const { data, status, error, refetch, isPlaceholderData } = useQuery({
+    queryKey: ["v1", "search", { q, match }],
+    queryFn: ({ signal }) => searchAudios({ q, match, signal }),
+    // Keep the previous results on screen while the next query loads.
+    placeholderData: keepPreviousData,
+  });
+  const rows = data?.data;
+  const searching = status === "pending" || isPlaceholderData;
+
+  return (
+    <>
+      <ListSummary>
+        {searching || !rows
+          ? status === "error"
+            ? "Search failed"
+            : "Searching…"
+          : `${rows.length.toLocaleString()} ${rows.length === 1 ? "result" : "results"} for “${q}”`}
+      </ListSummary>
+      {status === "pending" && <ListMessage>Searching…</ListMessage>}
+      {status === "error" && <ListError message={error.message} onRetry={() => refetch()} />}
+      {rows && rows.length === 0 && !searching && (
+        <ListMessage>
+          Nothing in the catalog matches “{q}”
+          {match === "all" ? "." : ` under “${MATCH_LABEL[match].label}”. Try “All”.`} Search by the
+          words that are said, or describe a sound.
+        </ListMessage>
+      )}
+      {rows && rows.length > 0 && <AudioRows rows={rows} actions={actions} dimmed={searching} />}
+    </>
+  );
+}
+
+function SimilarResults({ id, actions }: { id: string; actions: RowActions }) {
+  const { data, status, error, refetch } = useQuery({
+    queryKey: ["v1", "audio", id, "similar"],
+    queryFn: ({ signal }) => fetchSimilarAudios(id, signal),
+  });
+  const rows = data?.data;
+
+  return (
+    <>
+      <ListSummary>
+        {status === "pending"
+          ? "Finding similar audios…"
+          : status === "error"
+            ? "Search failed"
+            : `The ${rows?.length.toLocaleString()} audios that sound most like it, most similar first`}
+      </ListSummary>
+      {status === "pending" && <ListMessage>Loading…</ListMessage>}
+      {status === "error" && <ListError message={error.message} onRetry={() => refetch()} />}
+      {rows && rows.length === 0 && (
+        <ListMessage>This audio can&apos;t be compared yet.</ListMessage>
+      )}
+      {/* Keyed by the example so the scroll position resets with it. */}
+      {rows && rows.length > 0 && <AudioRows key={id} rows={rows} actions={actions} />}
+    </>
+  );
+}
+
+function ListSummary({ children }: { children: ReactNode }) {
+  return (
+    <div
+      aria-live="polite"
+      className="flex h-10 shrink-0 items-center border-b px-4 text-sm text-muted-foreground"
+    >
+      {children}
+    </div>
+  );
+}
+
+function ListMessage({ children }: { children: ReactNode }) {
+  return <p className="p-4 text-sm text-muted-foreground">{children}</p>;
+}
+
+function ListError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="flex items-center gap-3 p-4 text-sm">
+      <span className="text-destructive">{message}</span>
+      <Button variant="outline" size="sm" onClick={onRetry}>
+        Retry
+      </Button>
+    </div>
+  );
+}
+
+/** The virtualized rows. `tail` is an extra last row (loader or error). */
+function AudioRows({
+  rows,
+  actions,
+  tail = null,
+  onEndReached,
+  dimmed = false,
+}: {
+  rows: Row[];
+  actions: RowActions;
+  tail?: ReactNode;
+  onEndReached?: () => void;
+  /** The rows are stale: newer results are loading. */
+  dimmed?: boolean;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const { selectedId, onSelect, onFindSimilar, player } = actions;
 
   // eslint-disable-next-line react-hooks/incompatible-library -- known TanStack Virtual limitation; nothing here memoizes its return value.
   const virtualizer = useVirtualizer({
-    count: hasNextPage ? rows.length + 1 : rows.length,
+    count: tail ? rows.length + 1 : rows.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: 10,
@@ -70,97 +270,45 @@ export function AudioList({
   const virtualItems = virtualizer.getVirtualItems();
   const lastIndex = virtualItems.at(-1)?.index ?? -1;
 
-  // Infinite scroll: load the next page once the loader row comes into view.
   useEffect(() => {
-    if (
-      lastIndex >= rows.length - 1 &&
-      hasNextPage &&
-      !isFetchingNextPage &&
-      !isFetchNextPageError
-    ) {
-      void fetchNextPage();
-    }
-  }, [lastIndex, rows.length, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage]);
+    if (lastIndex >= rows.length - 1) onEndReached?.();
+  }, [lastIndex, rows.length, onEndReached]);
 
   return (
-    <section className="flex min-w-0 flex-1 flex-col" aria-label="Audios">
-      <div className="flex h-10 shrink-0 items-center border-b px-4 text-sm text-muted-foreground">
-        {data
-          ? `${rows.length.toLocaleString()} of ${total.toLocaleString()} audios`
-          : "Loading audios…"}
-      </div>
-
-      {status === "pending" && (
-        <p className="p-4 text-sm text-muted-foreground">Loading…</p>
-      )}
-
-      {/* A failed next page keeps `data`, so only show this when nothing loaded. */}
-      {status === "error" && !data && (
-        <div className="flex items-center gap-3 p-4 text-sm">
-          <span className="text-destructive">{error.message}</span>
-          <Button variant="outline" size="sm" onClick={() => refetch()}>
-            Retry
-          </Button>
-        </div>
-      )}
-
-      {data && (
-        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
-          <ul
-            className="relative w-full"
-            style={{ height: virtualizer.getTotalSize() }}
-          >
-            {virtualItems.map((item) => {
-              const row = rows[item.index];
-              return (
-                <li
-                  key={row?.id ?? "loader"}
-                  className="absolute top-0 left-0 w-full"
-                  style={{
-                    height: item.size,
-                    transform: `translateY(${item.start}px)`,
-                  }}
-                >
-                  {row ? (
-                    <AudioRow
-                      audio={row}
-                      selected={row.id === selectedId}
-                      onSelect={onSelect}
-                      playback={
-                        player.state.id === row.id
-                          ? {
-                              status: player.state.status,
-                              currentTime: player.state.currentTime,
-                            }
-                          : null
-                      }
-                      onTogglePlay={player.toggle}
-                    />
-                  ) : isFetchNextPageError ? (
-                    <div className="flex h-full items-center gap-3 px-4 text-sm">
-                      <span className="text-destructive">
-                        Couldn&apos;t load more audios.
-                      </span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => fetchNextPage()}
-                      >
-                        Retry
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="flex h-full items-center px-4 text-sm text-muted-foreground">
-                      Loading more…
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
-    </section>
+    <div
+      ref={scrollRef}
+      className={cn("min-h-0 flex-1 overflow-y-auto transition-opacity", dimmed && "opacity-60")}
+    >
+      <ul className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
+        {virtualItems.map((item) => {
+          const row = rows[item.index];
+          return (
+            <li
+              key={row?.id ?? "tail"}
+              className="absolute top-0 left-0 w-full"
+              style={{ height: item.size, transform: `translateY(${item.start}px)` }}
+            >
+              {row ? (
+                <AudioRow
+                  audio={row}
+                  selected={row.id === selectedId}
+                  onSelect={onSelect}
+                  onFindSimilar={onFindSimilar}
+                  playback={
+                    player.state.id === row.id
+                      ? { status: player.state.status, currentTime: player.state.currentTime }
+                      : null
+                  }
+                  onTogglePlay={player.toggle}
+                />
+              ) : (
+                tail
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 
@@ -168,12 +316,14 @@ function AudioRow({
   audio,
   selected,
   onSelect,
+  onFindSimilar,
   playback,
   onTogglePlay,
 }: {
-  audio: AudioListItemV1;
+  audio: Row;
   selected: boolean;
   onSelect: (id: string) => void;
+  onFindSimilar: (audio: { id: string; title: string }) => void;
   /** Set when this row is the player's current audio. */
   playback: { status: PlayerStatus; currentTime: number } | null;
   onTogglePlay: (id: string) => void;
@@ -181,7 +331,7 @@ function AudioRow({
   return (
     <div
       className={cn(
-        "flex h-full w-full items-center border-b hover:bg-muted/60 has-[>button:last-child:focus-visible]:bg-muted",
+        "flex h-full w-full items-center border-b hover:bg-muted/60 has-[>[data-row-select]:focus-visible]:bg-muted",
         selected && "bg-muted",
       )}
     >
@@ -192,9 +342,10 @@ function AudioRow({
       />
       <button
         type="button"
+        data-row-select
         onClick={() => onSelect(audio.id)}
         aria-current={selected || undefined}
-        className="flex h-full min-w-0 flex-1 flex-col justify-center gap-1 pr-4 pl-2 text-left outline-none"
+        className="flex h-full min-w-0 flex-1 flex-col justify-center gap-1 pr-2 pl-2 text-left outline-none"
       >
         <div className="flex min-w-0 items-center gap-2">
           <span
@@ -208,14 +359,40 @@ function AudioRow({
             {SOURCE_LABEL[audio.source]}
           </span>
           <span className="truncate text-sm font-medium">{audio.title}</span>
-          <span className="ml-auto shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
-            {playback && playback.status !== "error"
-              ? `${formatDuration(playback.currentTime)} / ${formatDuration(audio.durationSeconds)}`
-              : formatDuration(audio.durationSeconds)}
+          <span className="ml-auto flex shrink-0 items-center gap-1.5">
+            {audio.matches?.map((match) => (
+              <span
+                key={match}
+                title={MATCH_LABEL[match].title}
+                className="rounded border px-1.5 py-0.5 text-[0.7rem] font-medium text-muted-foreground"
+              >
+                {MATCH_LABEL[match].label}
+              </span>
+            ))}
+            {audio.similarity !== undefined && (
+              <span className="rounded border px-1.5 py-0.5 text-[0.7rem] font-medium text-muted-foreground tabular-nums">
+                {Math.round(audio.similarity * 100)}% similar
+              </span>
+            )}
+            <span className="font-mono text-xs text-muted-foreground tabular-nums">
+              {playback && playback.status !== "error"
+                ? `${formatDuration(playback.currentTime)} / ${formatDuration(audio.durationSeconds)}`
+                : formatDuration(audio.durationSeconds)}
+            </span>
           </span>
         </div>
         <p className="truncate text-sm text-muted-foreground">{audio.text}</p>
       </button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="mr-3 text-muted-foreground"
+        aria-label={`Find audios that sound like ${audio.title}`}
+        title="Find similar audios"
+        onClick={() => onFindSimilar({ id: audio.id, title: audio.title })}
+      >
+        <AudioWaveformIcon />
+      </Button>
     </div>
   );
 }

@@ -1,7 +1,12 @@
 import "server-only";
 
-import type { AudioDetailV1, AudioListItemV1 } from "@/lib/api/v1/types";
-import type { AudioRecord } from "@/server/audios/types";
+import type {
+  AudioDetailV1,
+  AudioListItemV1,
+  AudioSearchResultV1,
+  SimilarAudioV1,
+} from "@/lib/api/v1/types";
+import type { AudioRecord, AudioSearchHit, SimilarAudioHit } from "@/server/audios/types";
 
 function titleOf(record: AudioRecord): string {
   if (record.source === "librispeech") {
@@ -56,4 +61,12 @@ export function toAudioDetailV1(record: AudioRecord): AudioDetailV1 {
       ...file,
     },
   };
+}
+
+export function toAudioSearchResultV1(hit: AudioSearchHit): AudioSearchResultV1 {
+  return { ...toAudioListItemV1(hit.record), score: hit.score, matches: hit.matches };
+}
+
+export function toSimilarAudioV1(hit: SimilarAudioHit): SimilarAudioV1 {
+  return { ...toAudioListItemV1(hit.record), similarity: hit.similarity };
 }

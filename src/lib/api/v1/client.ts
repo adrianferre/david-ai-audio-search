@@ -2,6 +2,9 @@ import type {
   ApiErrorBody,
   AudioDetailResponseV1,
   AudioListResponseV1,
+  AudioSearchResponseV1,
+  SearchMatchFilterV1,
+  SimilarAudiosResponseV1,
 } from "./types";
 
 const BASE = "/api/v1";
@@ -47,6 +50,24 @@ export function fetchAudio(
   signal?: AbortSignal,
 ): Promise<AudioDetailResponseV1> {
   return getJson(`${BASE}/audios/${encodeURIComponent(id)}`, signal);
+}
+
+/** Text search: what is said, what it sounds like, or both (`match: "all"`). */
+export function searchAudios(params: {
+  q: string;
+  match: SearchMatchFilterV1;
+  signal?: AbortSignal;
+}): Promise<AudioSearchResponseV1> {
+  const search = new URLSearchParams({ q: params.q, match: params.match });
+  return getJson(`${BASE}/search?${search}`, params.signal);
+}
+
+/** Search by example: the audios that sound most like `id`. */
+export function fetchSimilarAudios(
+  id: string,
+  signal?: AbortSignal,
+): Promise<SimilarAudiosResponseV1> {
+  return getJson(`${BASE}/audios/${encodeURIComponent(id)}/similar`, signal);
 }
 
 /** URL of the audio's FLAC, streamed by the API. Use it as an <audio> src. */

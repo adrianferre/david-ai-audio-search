@@ -21,6 +21,9 @@ export const env = createEnv({
     // Private Vercel Blob store holding the FLAC files. Set by the Blob integration;
     // reads authenticate with the Vercel OIDC token (VERCEL_OIDC_TOKEN locally).
     BLOB_STORE_ID: z.string().min(1),
+    // Vercel AI Gateway (query embeddings for search). Optional: without it the AI SDK
+    // authenticates with the Vercel OIDC token, like the Blob store.
+    AI_GATEWAY_API_KEY: z.string().min(1).optional(),
   },
   client: {
     // NEXT_PUBLIC_EXAMPLE_URL: z.url(),

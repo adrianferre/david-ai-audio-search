@@ -70,3 +70,23 @@ export type AudioDetailV1 =
 
 export type AudioListResponseV1 = PaginatedResponse<AudioListItemV1>;
 export type AudioDetailResponseV1 = DataResponse<AudioDetailV1>;
+
+/** Why a search result matched: what is said (transcript) or what it sounds like (audio). */
+export type SearchMatchV1 = "transcript" | "sound";
+
+/** `match` query parameter of the search endpoint. */
+export type SearchMatchFilterV1 = "all" | SearchMatchV1;
+
+export type AudioSearchResultV1 = AudioListItemV1 & {
+  /** How far the audio stands out for this query, higher is better. Only comparable within one response. */
+  score: number;
+  matches: SearchMatchV1[];
+};
+
+export type SimilarAudioV1 = AudioListItemV1 & {
+  /** Cosine similarity to the example audio, at most 1. */
+  similarity: number;
+};
+
+export type AudioSearchResponseV1 = DataResponse<AudioSearchResultV1[]>;
+export type SimilarAudiosResponseV1 = DataResponse<SimilarAudioV1[]>;

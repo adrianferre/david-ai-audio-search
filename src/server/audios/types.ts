@@ -39,3 +39,19 @@ export type AudioCapsRecord = AudioFileInfo &
   AudioCapsMetadata & { id: string; source: "audiocaps" };
 
 export type AudioRecord = LibriSpeechRecord | AudioCapsRecord;
+
+/** Why a search result matched: what is said (transcript) or what it sounds like (audio). */
+export type SearchMatch = "transcript" | "sound";
+
+export type AudioSearchHit = {
+  record: AudioRecord;
+  /** Relevance, higher is better. Only comparable within one result list. */
+  score: number;
+  matches: SearchMatch[];
+};
+
+export type SimilarAudioHit = {
+  record: AudioRecord;
+  /** Cosine similarity of the two audio vectors, at most 1. */
+  similarity: number;
+};

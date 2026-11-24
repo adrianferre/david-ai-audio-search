@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { getSql } from "@/server/db";
 
-import type { AudioRecord } from "./types";
+import type { AudioRecord, AudioSearchHit, SearchMatch, SimilarAudioHit } from "./types";
 
 // Columns of the `audios` table (schema: src/server/db/schema.sql).
 const speakerSchema = z.object({ id: z.string(), sex: z.string().nullable(), name: z.string().nullable() });
@@ -87,4 +87,117 @@ export async function getAudio(id: string): Promise<AudioRecord | null> {
     WHERE id = ${id}
   `;
   return rows[0] ? toRecord(rows[0]) : null;
+}
+
+/** pgvector's text format, cast with `::vector` in the query. */
+function toVector(embedding: number[] | undefined): string | null {
+  return embedding ? `[${embedding.join(",")}]` : null;
+}
+
+/**
+ * Similarities are compared as z-scores: how many standard deviations a clip
+ * stands above the catalog's mean for this query. That puts text-to-text and
+ * text-to-audio similarity on one scale (their raw values differ, and both
+ * shift from query to query), so the two signals can be ranked together.
+ *
+ * A vector list has no natural end, since every clip has some similarity to
+ * every query. Below this z-score a clip is not a match. It trims the tail; it
+ * cannot tell that a query has no good answer (the nearest clips to nonsense
+ * still stand out a little).
+ */
+const MIN_Z_SCORE = 3;
+/** Added when the transcript contains every word of the query: worth one clear match. */
+const EXACT_WORDS_BONUS = 3;
+
+/**
+ * Text search over two signals:
+ *  - what is said: `vectors.transcript` against the transcript vectors, plus
+ *    full-text search on the transcript for exact words,
+ *  - what it sounds like: `vectors.sound` against the audio vectors.
+ * A clip's score is its best signal, not the sum: speech shows up in both (the
+ * audio vector carries the spoken words too), so adding them would count it twice.
+ * A signal whose vector is missing is skipped.
+ *
+ * It scores every clip: fine for a few thousand rows. At a much larger scale,
+ * take the top candidates per signal from a vector index and estimate the
+ * mean and deviation from a sample.
+ */
+export async function searchAudios({
+  query,
+  vectors,
+  limit,
+}: {
+  query: string;
+  vectors: Partial<Record<SearchMatch, number[]>>;
+  limit: number;
+}): Promise<AudioSearchHit[]> {
+  const rows = await getSql()`
+    WITH q AS (
+      SELECT ${toVector(vectors.transcript)}::vector AS transcript_vector,
+             ${toVector(vectors.sound)}::vector AS sound_vector,
+             websearch_to_tsquery('english', ${query}) AS words
+    ),
+    scored AS (
+      SELECT a.id,
+             (q.transcript_vector IS NOT NULL AND a.search_text @@ q.words) AS has_words,
+             (s.said - avg(s.said) OVER ()) / nullif(stddev_samp(s.said) OVER (), 0) AS said_z,
+             (s.sound - avg(s.sound) OVER ()) / nullif(stddev_samp(s.sound) OVER (), 0) AS sound_z
+      FROM audios a
+      CROSS JOIN q
+      CROSS JOIN LATERAL (
+        SELECT 1 - (a.text_embedding <=> q.transcript_vector) AS said,
+               1 - (a.audio_embedding <=> q.sound_vector) AS sound
+      ) s
+    ),
+    signals AS (
+      SELECT id,
+             CASE
+               WHEN has_words THEN ${EXACT_WORDS_BONUS}::float8 + greatest(said_z, 0)
+               WHEN said_z >= ${MIN_Z_SCORE}::float8 THEN said_z
+               ELSE 0
+             END AS said,
+             CASE WHEN sound_z >= ${MIN_Z_SCORE}::float8 THEN sound_z ELSE 0 END AS sound
+      FROM scored
+    )
+    SELECT a.id, a.source, a.file_name, a.blob_pathname, a.duration_seconds, a.sample_rate, a.channels,
+           a.metadata, greatest(g.said, g.sound)::float8 AS score, g.said > 0 AS said, g.sound > 0 AS sound
+    FROM signals g
+    JOIN audios a USING (id)
+    WHERE g.said > 0 OR g.sound > 0
+    ORDER BY score DESC, a.id
+    LIMIT ${limit}
+  `;
+  return rows.map((row) => ({
+    record: toRecord(row),
+    score: row.score as number,
+    matches: [...(row.said ? ["transcript" as const] : []), ...(row.sound ? ["sound" as const] : [])],
+  }));
+}
+
+/**
+ * Search by example: the clips whose audio vector is nearest to the one of
+ * `id`, most similar first. Returns null when `id` doesn't exist, and an empty
+ * list when it has no vector yet.
+ */
+export async function findSimilarAudios(id: string, limit: number): Promise<SimilarAudioHit[] | null> {
+  const sql = getSql();
+  const [found, rows] = await sql.transaction(
+    [
+      sql`SELECT 1 FROM audios WHERE id = ${id}`,
+      sql`
+        SELECT a.id, a.source, a.file_name, a.blob_pathname, a.duration_seconds, a.sample_rate, a.channels,
+               a.metadata, (1 - (a.audio_embedding <=> example.audio_embedding))::float8 AS similarity
+        FROM audios a
+        JOIN audios example ON example.id = ${id}
+        WHERE a.id <> example.id
+          AND a.audio_embedding IS NOT NULL
+          AND example.audio_embedding IS NOT NULL
+        ORDER BY a.audio_embedding <=> example.audio_embedding, a.id
+        LIMIT ${limit}
+      `,
+    ],
+    { readOnly: true },
+  );
+  if (found.length === 0) return null;
+  return rows.map((row) => ({ record: toRecord(row), similarity: row.similarity as number }));
 }
