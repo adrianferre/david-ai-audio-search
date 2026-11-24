@@ -4,13 +4,13 @@ import { z } from "zod";
 import type { AudioListResponseV1 } from "@/lib/api/v1/types";
 import { apiError, internalError } from "@/server/api/errors";
 import { pageOffset, paginationQuerySchema, toPaginatedResponse } from "@/server/api/pagination";
-import { sourceQuerySchema } from "@/server/api/source-filter";
+import { catalogFilterQuerySchema, durationRange } from "@/server/api/source-filter";
 import { toAudioListItemV1 } from "@/server/api/v1/audios";
 import { listAudios } from "@/server/audios/repository";
 
-const querySchema = paginationQuerySchema.extend(sourceQuerySchema.shape);
+const querySchema = paginationQuerySchema.extend(catalogFilterQuerySchema.shape);
 
-/** GET /api/v1/audios?page=1&pageSize=50&source=audiocaps */
+/** GET /api/v1/audios?page=1&pageSize=50&source=audiocaps&minDuration=5&maxDuration=12 */
 export async function GET(request: NextRequest) {
   const parsed = querySchema.safeParse(
     Object.fromEntries(request.nextUrl.searchParams),
@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
       offset: pageOffset(parsed.data),
       limit: parsed.data.pageSize,
       source: parsed.data.source,
+      duration: durationRange(parsed.data),
     });
   } catch (error) {
     return internalError(error);

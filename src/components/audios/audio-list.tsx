@@ -16,10 +16,17 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { IconButton } from "@/components/ui/icon-button";
 import { ApiError } from "@/lib/api/v1/client";
-import type { AudioListItemV1, AudioSource, SearchMatchFilterV1, SearchMatchV1 } from "@/lib/api/v1/types";
+import type {
+  AudioListItemV1,
+  AudioSource,
+  DurationRangeV1,
+  SearchMatchFilterV1,
+  SearchMatchV1,
+} from "@/lib/api/v1/types";
 import { cn } from "@/lib/utils";
 
 import { DatasetTag, displayText, displayTitle, SOURCE_LABEL } from "./datasets";
+import { describeDuration, isAnyDuration } from "./duration-filter";
 import {
   type AudioListView,
   catalogQuery,
@@ -68,6 +75,15 @@ const EMPTY_HINT: Record<SearchMatchFilterV1, string> = {
   sound: "Sound only looks at what the clips sound like. Their words may still match.",
 };
 
+/**
+ * Where the list looks, for its messages: " in AudioCaps", " (5–12 s)",
+ * " in AudioCaps (5–12 s)", or "" with no filter.
+ */
+function scopeWords(source: AudioSource | null, duration: DurationRangeV1): string {
+  const length = describeDuration(duration);
+  return `${source ? ` in ${SOURCE_LABEL[source]}` : ""}${length ? ` (${length})` : ""}`;
+}
+
 const RELEVANCE_WORDS = ["low", "fair", "good", "high", "very high"];
 /**
  * The most bars a result gets when nothing clearly matches the search
@@ -100,7 +116,36 @@ export type ListRecovery = {
   onClipMatch: (match: ClipMatch) => void;
   onClearSearch: () => void;
   onClearSource: () => void;
+  onClearDuration: () => void;
 };
+
+/** The buttons that lift the sidebar's filters, for an empty result. The first is primary unless `outline`. */
+function ClearFilterButtons({
+  source,
+  duration,
+  recovery,
+  outline = false,
+}: {
+  source: AudioSource | null;
+  duration: DurationRangeV1;
+  recovery: ListRecovery;
+  outline?: boolean;
+}) {
+  return (
+    <>
+      {source && (
+        <Button variant={outline ? "outline" : "default"} onClick={recovery.onClearSource}>
+          Search every dataset
+        </Button>
+      )}
+      {!isAnyDuration(duration) && (
+        <Button variant={outline || source ? "outline" : "default"} onClick={recovery.onClearDuration}>
+          Any length
+        </Button>
+      )}
+    </>
+  );
+}
 
 /** True when the click that changed a checkbox had Shift held. */
 function withShift(event: Event) {
@@ -134,12 +179,15 @@ export function AudioList({
       aria-label="Clips"
       onKeyDown={clearOnEscape(selection)}
     >
-      {view.kind === "browse" && <BrowseList source={view.source} actions={actions} />}
+      {view.kind === "browse" && (
+        <BrowseList source={view.source} duration={view.duration} actions={actions} recovery={recovery} />
+      )}
       {view.kind === "search" && (
         <SearchResults
           q={view.q}
           match={view.match}
           source={view.source}
+          duration={view.duration}
           actions={actions}
           recovery={recovery}
         />
@@ -149,22 +197,24 @@ export function AudioList({
       )}
       {view.kind === "similar" && view.match === "sound" && (
         <SimilarResults
-          rowsQuery={similarQuery(view.reference.id, view.source)}
+          rowsQuery={similarQuery(view.reference.id, view.source, view.duration)}
           pendingMessage="Finding the clips that sound like this one…"
           source={view.source}
+          duration={view.duration}
           actions={actions}
           recovery={recovery}
         />
       )}
       {view.kind === "file" && view.match === "sound" && (
         <SimilarResults
-          rowsQuery={fileQuery(view.example, view.source)}
+          rowsQuery={fileQuery(view.example, view.source, view.duration)}
           pendingMessage={
             view.example.source === "recording"
               ? "Finding the clips that sound like your recording…"
               : `Finding the clips that sound like “${view.example.name}”…`
           }
           source={view.source}
+          duration={view.duration}
           actions={actions}
           recovery={recovery}
         />
@@ -173,7 +223,17 @@ export function AudioList({
   );
 }
 
-function BrowseList({ source, actions }: { source: AudioSource | null; actions: RowActions }) {
+function BrowseList({
+  source,
+  duration,
+  actions,
+  recovery,
+}: {
+  source: AudioSource | null;
+  duration: DurationRangeV1;
+  actions: RowActions;
+  recovery: ListRecovery;
+}) {
   const {
     data,
     status,
@@ -183,7 +243,7 @@ function BrowseList({ source, actions }: { source: AudioSource | null; actions: 
     isFetchingNextPage,
     isFetchNextPageError,
     fetchNextPage,
-  } = useInfiniteQuery(catalogQuery(source));
+  } = useInfiniteQuery(catalogQuery(source, duration));
 
   const rows: Row[] = data?.pages.flatMap((p) => p.data) ?? [];
 
@@ -201,9 +261,19 @@ function BrowseList({ source, actions }: { source: AudioSource | null; actions: 
       <ListProblem title="The catalog didn’t load" message={error.message} onRetry={() => refetch()} />
     );
   }
+  if (rows.length === 0) {
+    return (
+      <EmptyResults
+        title={`No clip${scopeWords(source, duration)}`}
+        message="Widen the length range in the sidebar, or look in every dataset."
+      >
+        <ClearFilterButtons source={source} duration={duration} recovery={recovery} />
+      </EmptyResults>
+    );
+  }
   return (
     <AudioTable
-      key={source ?? "all"}
+      key={JSON.stringify([source, duration])}
       kind="browse"
       rows={rows}
       actions={actions}
@@ -235,6 +305,7 @@ function SearchResults({
   q,
   match,
   source,
+  duration,
   excludeId = null,
   sound = null,
   actions,
@@ -245,6 +316,7 @@ function SearchResults({
   q: string;
   match: SearchMatchFilterV1;
   source: AudioSource | null;
+  duration: DurationRangeV1;
   /** An audio to leave out of the results (see `searchQuery`). */
   excludeId?: string | null;
   /** A clip whose own sound is compared, instead of the text of `q`. */
@@ -256,7 +328,7 @@ function SearchResults({
   /** What was searched with, as the "nothing clearly matches" notice names it. */
   subject?: string;
 }) {
-  const rowsQuery = searchQuery(q, match, source, excludeId, sound);
+  const rowsQuery = searchQuery(q, match, source, duration, excludeId, sound);
   const { data, status, error, refetch, isPlaceholderData } = useQuery(rowsQuery);
   const searching = status === "pending" || isPlaceholderData;
 
@@ -276,18 +348,14 @@ function SearchResults({
 
   if (rows.length === 0 && !searching) {
     if (empty) return empty;
-    const where = source ? ` in ${SOURCE_LABEL[source]}` : "";
+    const where = scopeWords(source, duration);
     return (
       <EmptyResults
         title={`Nothing matches “${q}”${match === "all" ? "" : ` under ${FILTER_LABEL[match]}`}${where}`}
         message={EMPTY_HINT[match]}
       >
         {match !== "all" && <Button onClick={recovery.onMatchAll}>Search All instead</Button>}
-        {source && (
-          <Button variant={match === "all" ? "default" : "outline"} onClick={recovery.onClearSource}>
-            Search every dataset
-          </Button>
-        )}
+        <ClearFilterButtons source={source} duration={duration} recovery={recovery} outline={match !== "all"} />
         <Button variant="outline" onClick={recovery.onClearSearch}>
           Clear search
         </Button>
@@ -303,7 +371,7 @@ function SearchResults({
         <p className="flex items-center gap-2 border-t px-6 py-3 text-sm text-muted-foreground">
           <CircleAlertIcon aria-hidden="true" className="size-4 shrink-0" />
           Nothing clearly matches {subject}
-          {source ? ` in ${SOURCE_LABEL[source]}` : ""}. These are the closest clips.
+          {scopeWords(source, duration)}. These are the closest clips.
         </p>
       )}
       <AudioTable
@@ -363,12 +431,13 @@ function TranscriptResults({
       </EmptyResults>
     );
   }
-  const where = view.source ? ` in ${SOURCE_LABEL[view.source]}` : "";
+  const where = scopeWords(view.source, view.duration);
   return (
     <SearchResults
       q={q}
       match={view.match}
       source={view.source}
+      duration={view.duration}
       excludeId={excludeId}
       sound={sound}
       subject={what}
@@ -394,11 +463,7 @@ function TranscriptResults({
           >
             Search by sound instead
           </Button>
-          {view.source && (
-            <Button variant="outline" onClick={recovery.onClearSource}>
-              Search every dataset
-            </Button>
-          )}
+          <ClearFilterButtons source={view.source} duration={view.duration} recovery={recovery} outline />
         </EmptyResults>
       }
     />
@@ -409,12 +474,14 @@ function SimilarResults({
   rowsQuery,
   pendingMessage,
   source,
+  duration,
   actions,
   recovery,
 }: {
   rowsQuery: ReturnType<typeof similarQuery> | ReturnType<typeof fileQuery>;
   pendingMessage: string;
   source: AudioSource | null;
+  duration: DurationRangeV1;
   actions: RowActions;
   recovery: ListRecovery;
 }) {
@@ -429,10 +496,14 @@ function SimilarResults({
   if (data.data.length === 0) {
     return (
       <EmptyResults
-        title={source ? `No clip in ${SOURCE_LABEL[source]} to compare with` : "No clip can be compared yet"}
+        title={
+          source || !isAnyDuration(duration)
+            ? `No clip${scopeWords(source, duration)} to compare with`
+            : "No clip can be compared yet"
+        }
         message="Clips are compared by their sound once they are embedded."
       >
-        {source && <Button onClick={recovery.onClearSource}>Search every dataset</Button>}
+        <ClearFilterButtons source={source} duration={duration} recovery={recovery} />
       </EmptyResults>
     );
   }

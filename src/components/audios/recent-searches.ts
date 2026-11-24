@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import type { AudioSource, SearchMatchFilterV1 } from "@/lib/api/v1/types";
+import type { AudioSource, DurationRangeV1, SearchMatchFilterV1 } from "@/lib/api/v1/types";
 
+import { sameDuration } from "./duration-filter";
 import type { AudioExample, ClipMatch, ReferenceClip } from "./queries";
 
 /** The search bar offers this many of the latest searches. */
@@ -12,9 +13,11 @@ export const MAX_RECENT_SEARCHES = 5;
 /**
  * A search the user ran, with what it takes to run it again: the text, the
  * catalog clip "Find similar" was used on, or the user's own file, link or
- * recording (its WAV included). `source` is the dataset filter it ran with.
+ * recording (its WAV included). `source` and `duration` are the dataset and
+ * length filters it ran with; `duration` is missing from entries saved before
+ * the length filter existed (any length).
  */
-export type RecentSearch = { id: string; at: number; source: AudioSource | null } & (
+export type RecentSearch = { id: string; at: number; source: AudioSource | null; duration?: DurationRangeV1 } & (
   | { kind: "text"; q: string; match: SearchMatchFilterV1 }
   | ({ kind: "similar"; reference: ReferenceClip } & ClipSearchState)
   | ({ kind: "audio"; example: AudioExample } & ClipSearchState)
@@ -85,12 +88,13 @@ export const SUGGESTED_SEARCHES: readonly SuggestedSearch[] = [
 ];
 
 /**
- * Whether `search` is one of the suggestions as offered (same match and dataset
- * filter), so it isn't added to the recent searches as well.
+ * Whether `search` is one of the suggestions as offered (same match, dataset
+ * and length filters), so it isn't added to the recent searches as well.
  */
 export function isSuggested(search: NewRecentSearch | RecentSearch): boolean {
   return SUGGESTED_SEARCHES.some((suggested) => {
     if (suggested.kind !== search.kind || suggested.source !== search.source) return false;
+    if (!sameDuration(suggested.duration, search.duration)) return false;
     if (suggested.kind === "text" && search.kind === "text") {
       return suggested.match === search.match && normalize(suggested.q) === normalize(search.q);
     }
@@ -158,7 +162,7 @@ const normalize = (q: string) => q.trim().toLowerCase();
 /**
  * Whether `next` is the same search as `entry`, so the older one goes. A file
  * attached again counts. A search with a clip is one entry whatever its match
- * and dataset filter: it is saved again as they change, and keeps the latest.
+ * and filters: it is saved again as they change, and keeps the latest.
  */
 function repeats(entry: RecentSearch, next: NewRecentSearch): boolean {
   if (entry.kind !== next.kind) return false;
@@ -167,6 +171,7 @@ function repeats(entry: RecentSearch, next: NewRecentSearch): boolean {
       return (
         entry.kind === "text" &&
         entry.source === next.source &&
+        sameDuration(entry.duration, next.duration) &&
         entry.match === next.match &&
         normalize(entry.q) === normalize(next.q)
       );
@@ -197,8 +202,8 @@ const REFINE_WINDOW_MS = 30_000;
 
 /**
  * Whether `next` refines `latest`, the newest search, so it takes its place:
- * typing on ("dog", "dog bark", "dog barking"), or changing its match or
- * dataset right after.
+ * typing on ("dog", "dog bark", "dog barking"), or changing its match,
+ * dataset or length right after.
  */
 function refines(latest: RecentSearch | undefined, next: NewRecentSearch): boolean {
   if (latest?.kind !== "text" || next.kind !== "text") return false;
