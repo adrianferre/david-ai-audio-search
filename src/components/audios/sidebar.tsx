@@ -83,8 +83,8 @@ export function Sidebar({
           Search by sound
         </p>
         <p className="text-[0.8rem] leading-[19px] text-muted-foreground">
-          Record up to 30 s, or drop any audio file on the page, to find the clips that sound like
-          it.
+          Record up to 30 s, drop any audio file on the page, or paste a link to one, to find the
+          clips that sound like it.
         </p>
       </div>
     </nav>

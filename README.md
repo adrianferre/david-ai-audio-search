@@ -349,6 +349,19 @@ and body errors as `/search/audio`; `503 transcription_unavailable` when the mod
 The clip is transcribed and discarded. The UI uses it when All, Words or Meaning is picked for a file or
 a recording, then searches with the text.
 
+### `GET /api/v1/remote-audio?url=…`
+
+The audio or video file at a public `http(s)` link, as the site serves it. The server fetches it
+because most sites don't let a browser read their files from another origin; the UI then decodes
+it like a file the user attaches (a link pasted into the search box, or typed and sent with Enter). Nothing is stored. It follows up to 5 redirects, gives up after 30 s and only reaches
+public addresses: loopback, private, link-local and other reserved ranges are refused, checked as
+each connection is made.
+
+`400 invalid_url` for a malformed, non-http(s) or non-public link, `415 not_audio` when the link
+opens a web page (YouTube, SoundCloud and the like serve pages, not files), `413 payload_too_large`
+over 20 MB, `502 remote_fetch_failed` when the site errors or can't be reached and
+`504 remote_timeout`.
+
 Errors always look like `{ "error": { "code", "message", "details"? } }`: `400 invalid_request`, `404 not_found`, `413 payload_too_large`, `415 unsupported_media_type`, `500 internal_error` (e.g. the database is unreachable), `503 search_unavailable` and `503 transcription_unavailable`.
 
 ### Rate limits

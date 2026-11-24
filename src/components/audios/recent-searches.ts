@@ -11,7 +11,7 @@ export const MAX_RECENT_SEARCHES = 5;
 
 /**
  * A search the user ran, with what it takes to run it again: the text, the
- * catalog clip "Find similar" was used on, or the user's own file or
+ * catalog clip "Find similar" was used on, or the user's own file, link or
  * recording (its WAV included). `source` is the dataset filter it ran with.
  */
 export type RecentSearch = { id: string; at: number; source: AudioSource | null } & (
@@ -104,6 +104,9 @@ function repeats(entry: RecentSearch, next: NewRecentSearch): boolean {
     case "audio": {
       if (entry.kind !== "audio") return false;
       if (entry.example.id === next.example.id) return true;
+      if (next.example.source === "link") {
+        return entry.example.source === "link" && entry.example.url === next.example.url;
+      }
       return (
         next.example.source === "file" &&
         entry.example.source === "file" &&

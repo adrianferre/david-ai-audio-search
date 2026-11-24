@@ -126,7 +126,9 @@ export type AudioExample = {
   /** New for every file attached, so attaching the same file again searches again. */
   id: string;
   name: string;
-  source: "file" | "recording";
+  source: "file" | "recording" | "link";
+  /** The link it was downloaded from, for `source: "link"`. */
+  url?: string;
   wav: Blob;
   /** Of the part that is searched. */
   durationSeconds: number;
