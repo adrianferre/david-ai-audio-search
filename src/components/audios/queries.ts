@@ -20,11 +20,14 @@ import type {
 } from "@/lib/api/v1/types";
 
 export const PAGE_SIZE = 50;
-/**
- * Search and "similar" return at most this many audios. Sent explicitly so the
- * summary can tell a full list ("50+ results") from every match there is.
- */
+/** Search and "similar" show at most this many audios. */
 export const RESULTS_LIMIT = 50;
+
+/**
+ * A search's results, cut to `RESULTS_LIMIT`. The query asks for one more, so
+ * `hasMore` tells exactly 50 matches from more than 50 ("50+ results").
+ */
+export type SearchResultsData = AudioSearchResponseV1 & { hasMore: boolean };
 
 /**
  * The queries behind the audio list. Shared with the search bar (its count and
@@ -42,11 +45,21 @@ export const catalogQuery = () =>
 
 export const searchQuery = (q: string, match: SearchMatchFilterV1) =>
   queryOptions({
-    queryKey: ["v1", "search", { q, match, limit: RESULTS_LIMIT }],
-    queryFn: ({ signal }) => searchAudios({ q, match, limit: RESULTS_LIMIT, signal }),
+    queryKey: ["v1", "search", { q, match, limit: RESULTS_LIMIT + 1 }],
+    queryFn: ({ signal }) => searchAudios({ q, match, limit: RESULTS_LIMIT + 1, signal }),
     // Keep the previous results on screen while the next query loads.
     placeholderData: keepPreviousData,
+    select: cutToLimit,
   });
+
+// Module-level, so React Query can reuse its result between renders.
+function cutToLimit(response: AudioSearchResponseV1): SearchResultsData {
+  return {
+    ...response,
+    data: response.data.slice(0, RESULTS_LIMIT),
+    hasMore: response.data.length > RESULTS_LIMIT,
+  };
+}
 
 export const similarQuery = (id: string) =>
   queryOptions({
@@ -102,7 +115,7 @@ function summarize(
     similar,
   }: {
     catalog: UseInfiniteQueryResult<InfiniteData<AudioListResponseV1>>;
-    search: UseQueryResult<AudioSearchResponseV1>;
+    search: UseQueryResult<SearchResultsData>;
     similar: UseQueryResult<SimilarAudiosResponseV1>;
   },
 ): string {
@@ -119,7 +132,7 @@ function summarize(
       if (search.status === "error") return "Search failed";
       if (search.status === "pending" || search.isPlaceholderData) return "Searching…";
       const count = search.data.data.length;
-      if (count >= RESULTS_LIMIT) return `${count.toLocaleString()}+ results${ofTotal}`;
+      if (search.data.hasMore) return `${count.toLocaleString()}+ results${ofTotal}`;
       return `${count.toLocaleString()} ${count === 1 ? "result" : "results"}${ofTotal}`;
     }
     case "similar": {

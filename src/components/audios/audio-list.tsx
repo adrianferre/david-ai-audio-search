@@ -24,7 +24,7 @@ import type {
 import { cn } from "@/lib/utils";
 
 import { type AudioListView, catalogQuery, searchQuery, similarQuery } from "./queries";
-import type { Selection } from "./selection";
+import { clearOnEscape, type Selection } from "./selection";
 import { type PlayerStatus, useAudioPlayer } from "./use-audio-player";
 
 const ROW_HEIGHT = 72;
@@ -101,9 +101,7 @@ export function AudioList({
     <section
       className="flex min-w-0 flex-1 flex-col"
       aria-label="Audios"
-      onKeyDown={(event) => {
-        if (event.key === "Escape" && selection.checked.size > 0) selection.setChecked(new Set());
-      }}
+      onKeyDown={clearOnEscape(selection)}
     >
       {view.kind === "browse" && <BrowseList actions={actions} />}
       {view.kind === "search" && (

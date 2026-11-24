@@ -2,7 +2,7 @@
 
 import { useMutation } from "@tanstack/react-query";
 import { DownloadIcon, LoaderCircleIcon } from "lucide-react";
-import { useState } from "react";
+import { type KeyboardEvent, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -79,6 +79,17 @@ export function useSelection(): Selection {
   };
 }
 
+/**
+ * Escape unchecks every row. For the list and for the selection controls in
+ * the search bar, so it works wherever the focus is after checking rows, but
+ * not in the search input or the details panel.
+ */
+export function clearOnEscape(selection: Selection) {
+  return (event: KeyboardEvent) => {
+    if (event.key === "Escape" && selection.checked.size > 0) selection.setChecked(new Set());
+  };
+}
+
 /** Checks or unchecks every row the list shows; mixed when only some are checked. */
 export function SelectAllCheckbox({
   rows,
@@ -110,6 +121,7 @@ export function SelectAllCheckbox({
       indeterminate={checkedHere > 0 && !allChecked}
       disabled={rows.length === 0 || selection.locked}
       onCheckedChange={checkAll}
+      onKeyDown={clearOnEscape(selection)}
     />
   );
 }
@@ -121,7 +133,10 @@ export function SelectionActions({ selection }: { selection: Selection }) {
   const tooMany = checked.size > MAX_EXPORT_IDS;
 
   return (
-    <div className="flex min-w-0 shrink-0 items-center gap-3 text-sm text-muted-foreground">
+    <div
+      className="flex min-w-0 shrink-0 items-center gap-3 text-sm text-muted-foreground"
+      onKeyDown={clearOnEscape(selection)}
+    >
       {download.error ? (
         <span className="truncate text-destructive" role="alert">
           {download.error.message}
