@@ -88,6 +88,37 @@ export function fetchSimilarAudios(params: {
   return getJson(`${BASE}/audios/${encodeURIComponent(params.id)}/similar${query}`, params.signal);
 }
 
+/** Search by an outside example: the audios that sound most like a WAV clip. */
+export async function searchByAudioFile(params: {
+  wav: Blob;
+  /** At most this many audios; the API defaults to 50. */
+  limit?: number;
+  signal?: AbortSignal;
+}): Promise<SimilarAudiosResponseV1> {
+  const search = new URLSearchParams();
+  if (params.limit !== undefined) search.set("limit", String(params.limit));
+  const query = search.size > 0 ? `?${search}` : "";
+  const res = await fetch(`${BASE}/search/audio${query}`, {
+    method: "POST",
+    body: params.wav,
+    headers: { accept: "application/json", "content-type": "audio/wav" },
+    signal: params.signal,
+  });
+  await ensureOk(res);
+  return res.json() as Promise<SimilarAudiosResponseV1>;
+}
+
+/** The audio's FLAC as a stream, to save to disk. */
+export async function downloadAudioFile(
+  id: string,
+  signal?: AbortSignal,
+): Promise<ReadableStream<Uint8Array>> {
+  const res = await fetch(audioFileUrl(id), { signal, headers: { accept: "audio/flac" } });
+  await ensureOk(res);
+  if (!res.body) throw new ApiError(res.status, "empty_response", "The audio came back empty");
+  return res.body;
+}
+
 /** URL of the audio's FLAC, streamed by the API. Use it as an <audio> src. */
 export function audioFileUrl(id: string): string {
   return `${BASE}/audios/${encodeURIComponent(id)}/audio`;

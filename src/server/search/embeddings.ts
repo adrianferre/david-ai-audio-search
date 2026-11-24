@@ -1,12 +1,13 @@
 import "server-only";
 
-import { embedMany } from "ai";
+import { embed, embedMany } from "ai";
 
 import type { SearchMatch } from "@/server/audios/types";
 
 import {
   EMBEDDING_DIMENSIONS,
   EMBEDDING_MODEL,
+  toAudioInput,
   toSoundQuery,
   toTextQuery,
 } from "./embedding-config";
@@ -35,4 +36,18 @@ export async function embedQuery(
     abortSignal,
   });
   return Object.fromEntries(signals.map((signal, i) => [signal, embeddings[i]]));
+}
+
+/**
+ * Embeds an audio clip (16 kHz mono WAV) the same way the catalog's audio was
+ * embedded, so it can be compared with `audio_embedding`.
+ */
+export async function embedAudioQuery(wav: Uint8Array, abortSignal?: AbortSignal): Promise<number[]> {
+  const { embedding } = await embed({
+    model: EMBEDDING_MODEL,
+    ...toAudioInput(Buffer.from(wav).toString("base64")),
+    dimensions: EMBEDDING_DIMENSIONS,
+    abortSignal,
+  });
+  return embedding;
 }
