@@ -266,6 +266,8 @@ Paginated list of every audio in the catalog: LibriSpeech first, then AudioCaps,
 | `page` | `1` | integer ≥ 1 (pages past the end return `data: []`) |
 | `pageSize` | `50` | integer 1–100 |
 | `source` | every dataset | `librispeech`, `audiocaps` or `commonvoice`: only that dataset (`total` counts only it) |
+| `minDuration` | none | seconds, 0–3,600: only audios at least that long (`total` counts only them) |
+| `maxDuration` | none | seconds, 0–3,600: only audios at most that long (`total` counts only them) |
 
 ```json
 {
@@ -281,12 +283,15 @@ Paginated list of every audio in the catalog: LibriSpeech first, then AudioCaps,
 
 ### `GET /api/v1/datasets`
 
-Every dataset of the catalog (the `datasets` table) with its number of audios, the split the catalog took from it and its original format, in the list's order. The UI shows them as the sidebar's filters.
+Every dataset of the catalog (the `datasets` table) with its number of audios, the length of its shortest and longest audio, the split the catalog took from it and its original format, in the list's order. The UI shows them as the sidebar's filters, and sets the length slider's end from the longest audio. With `minDuration` and/or `maxDuration` (as in `/audios`), `count` is of the audios of that length only; `durationSeconds` stays the whole dataset's.
 
 ```json
-{ "data": [ { "source": "librispeech", "count": 2703, "split": "dev-clean", "originalFormat": "FLAC", "lossyOrigin": false },
-            { "source": "audiocaps", "count": 426, "split": "val", "originalFormat": "YouTube audio", "lossyOrigin": true },
-            { "source": "commonvoice", "count": 200, "split": "dev", "originalFormat": "MP3", "lossyOrigin": true } ] }
+{ "data": [ { "source": "librispeech", "count": 2703, "durationSeconds": { "min": 1.445, "max": 32.645 },
+              "split": "dev-clean", "originalFormat": "FLAC", "lossyOrigin": false },
+            { "source": "audiocaps", "count": 426, "durationSeconds": { "min": 3.715, "max": 10 },
+              "split": "val", "originalFormat": "YouTube audio", "lossyOrigin": true },
+            { "source": "commonvoice", "count": 200, "durationSeconds": { "min": 2.136, "max": 16.512 },
+              "split": "dev", "originalFormat": "MP3", "lossyOrigin": true } ] }
 ```
 
 ### `GET /api/v1/audios/{id}`
@@ -318,6 +323,8 @@ relevant first. There is no pagination: it is a ranked top list.
 | `match` | `all` | `all`, `exact` (the exact words of the transcripts and captions, no vectors; "Words" in the UI), `text` (their meaning; "Meaning") or `sound` (the audio alone; "Sound") |
 | `limit` | `50` | integer 1–100 |
 | `source` | every dataset | `librispeech`, `audiocaps` or `commonvoice`: only that dataset's clips |
+| `minDuration` | none | seconds, 0–3,600: only clips at least that long |
+| `maxDuration` | none | seconds, 0–3,600: only clips at most that long |
 | `soundOf` | none | An audio's id: the sound signal compares with that audio's sound instead of the text of `q` (`404` for an unknown id) |
 | `exclude` | none | An audio's id to leave out: the clip searched with, which would come first and set the bar the others are cut against |
 
@@ -334,8 +341,8 @@ relevant first. There is no pagination: it is a ranked top list.
 
 `score` is how far the clip stands out from the rest of the catalog for this query, in standard
 deviations (plus bonuses for exact words and the exact phrase); compare it only within one response. The UI
-shows it next to the relevance bars in the list, which compare it with the best result. With `source`, clips
-are still scored against the whole catalog, so a score doesn't change with the filter. Clips that
+shows it next to the relevance bars in the list, which compare it with the best result. With `source`,
+`minDuration` or `maxDuration`, clips are still scored against the whole catalog, so a score doesn't change with the filters. Clips that
 don't stand out, or score under half of the best result returned, are left out, so the list is often shorter than `limit`.
 `strongMatch` is `false` when the best result scores under 5, unless it scores at least 4 and the
 best text match's cosine to the query is at least 0.735: nothing clearly matches, and the
@@ -356,7 +363,7 @@ transcript as `q`. The clip is embedded and discarded.
 ### `GET /api/v1/audios/{id}/similar`
 
 Search by example: the audios that sound most like `{id}`, most similar first. Each item is a list
-item plus `similarity` (cosine similarity, at most 1). `limit` and `source` work as above. `404` for an
+item plus `similarity` (cosine similarity, at most 1). `limit`, `source`, `minDuration` and `maxDuration` work as above. `404` for an
 unknown id.
 
 ### `GET /api/v1/audios/{id}/transcript`
@@ -386,7 +393,7 @@ The ZIP is streamed (so it isn't bound by the 4.5 MB function response limit) an
 
 Search by your own example: the audios that sound most like the clip in the request body, most
 similar first. Send a WAV file with `Content-Type: audio/wav` (at most 2 MB; 16 kHz mono, about a
-minute, is what the model was given for the catalog). Items, `limit` and `source` are as in `/similar`.
+minute, is what the model was given for the catalog). Items, `limit`, `source`, `minDuration` and `maxDuration` are as in `/similar`.
 The clip is embedded and discarded.
 
 ```sh

@@ -4,29 +4,37 @@ import { useQuery } from "@tanstack/react-query";
 import { AudioLinesIcon } from "lucide-react";
 
 import { DavidAiLogo } from "@/components/david-ai-logo";
-import type { AudioSource } from "@/lib/api/v1/types";
+import type { AudioSource, DurationRangeV1 } from "@/lib/api/v1/types";
 import { cn } from "@/lib/utils";
 
 import { SOURCE_LABEL, SOURCE_SWATCH_CLASS } from "./datasets";
+import { DurationFilter } from "./duration-filter";
 import { datasetsQuery } from "./queries";
 
 /** The speech datasets first, then the sound one. */
 const FILTER_ORDER: readonly AudioSource[] = ["librispeech", "commonvoice", "audiocaps"];
 
 /**
- * The left rail: the product, the dataset filter, and how to search by sound.
- * The filter applies to every view: browsing, text search and sound search.
+ * The left rail: the product, the dataset and length filters, and how to search
+ * by sound. The filters apply to every view: browsing, text search and sound
+ * search. Each dataset's count is of the clips of the chosen length.
  */
 export function Sidebar({
   source,
   onSourceChange,
+  duration,
+  onDurationChange,
 }: {
   source: AudioSource | null;
   onSourceChange: (source: AudioSource | null) => void;
+  duration: DurationRangeV1;
+  onDurationChange: (duration: DurationRangeV1) => void;
 }) {
-  const { data } = useQuery(datasetsQuery());
+  const { data } = useQuery(datasetsQuery(duration));
   const datasets = new Map(data?.data.map((dataset) => [dataset.source, dataset]));
   const total = data?.data.reduce((sum, dataset) => sum + dataset.count, 0);
+  const lengths = data?.data.flatMap((dataset) => (dataset.durationSeconds ? [dataset.durationSeconds.max] : []));
+  const longestSeconds = lengths && lengths.length > 0 ? Math.max(...lengths) : undefined;
 
   const items: { value: AudioSource | null; label: string; split?: string; swatch: string; count?: number }[] = [
     { value: null, label: "All", swatch: "bg-foreground", count: total },
@@ -85,6 +93,8 @@ export function Sidebar({
           })}
         </div>
       </div>
+
+      <DurationFilter duration={duration} longestSeconds={longestSeconds} onDurationChange={onDurationChange} />
 
       <div className="flex flex-col gap-2.5 rounded-[14px] border bg-background p-4">
         <p className="flex items-center gap-2 text-sm font-medium">

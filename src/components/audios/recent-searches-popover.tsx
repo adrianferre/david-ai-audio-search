@@ -7,6 +7,7 @@ import type { SearchMatchFilterV1 } from "@/lib/api/v1/types";
 import { cn } from "@/lib/utils";
 
 import { displayText, SOURCE_LABEL } from "./datasets";
+import { describeDuration, isAnyDuration } from "./duration-filter";
 import type { RecentSearch, SuggestedSearch } from "./recent-searches";
 import { formatClock, Waveform } from "./waveform";
 
@@ -176,6 +177,9 @@ function RecentSearchRow({ entry, label: suggestionLabel }: { entry: RecentSearc
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {entry.source && (
         <span className="shrink-0 text-xs text-muted-foreground">{SOURCE_LABEL[entry.source]}</span>
+      )}
+      {entry.duration && !isAnyDuration(entry.duration) && (
+        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{describeDuration(entry.duration)}</span>
       )}
       {match && (
         // Like an unselected option of the search bar's match toggle. On the
