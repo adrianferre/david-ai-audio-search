@@ -4,7 +4,23 @@ Next.js 16 (App Router, Turbopack, Cache Components) with TypeScript, Tailwind C
 
 ## Getting started
 
-### 1. Prerequisites
+### Quick start (no credentials)
+
+```bash
+git clone <this repo> && cd david-ai-audio-search
+pnpm install
+pnpm dev                     # http://localhost:3000
+```
+
+Without a `DATABASE_URL`, the dev server proxies `/api/*` to the deployed API
+(`https://david-ai-audio-search.vercel.app`, override with `API_UPSTREAM_URL`) and logs
+`No DATABASE_URL: /api/* is proxied to …` at startup. You get the production catalog, subject
+to the public [rate limit](#rate-limits). You only need Node.js 20.9+ and pnpm (`corepack enable`).
+
+### With database access
+
+To serve the API from your own machine (needed to change the route handlers or queries),
+pull the project credentials. You need:
 
 | Tool | Why | Install |
 | --- | --- | --- |
@@ -12,22 +28,18 @@ Next.js 16 (App Router, Turbopack, Cache Components) with TypeScript, Tailwind C
 | pnpm | Package manager (version pinned in `package.json`) | `corepack enable` |
 | Vercel CLI | Links the project and pulls its credentials | `npm i -g vercel` then `vercel login` |
 
-You also need access to the Vercel team `adrian-ferre`.
+and access to the Vercel team `adrian-ferre`.
 
-### 2. Install and connect to Vercel
-
-There is no local data to download. The app reads its catalog straight from the Vercel
-project [`adrian-ferre/david-ai-audio-search`](https://vercel.com/adrian-ferre/david-ai-audio-search):
-the catalog is in Neon Postgres and the FLAC files in a private Vercel Blob store. Every
+The catalog lives in the Vercel project
+[`adrian-ferre/david-ai-audio-search`](https://vercel.com/adrian-ferre/david-ai-audio-search):
+the rows are in Neon Postgres and the FLAC files in a private Vercel Blob store. Every
 environment (development, preview, production) shares that database and store, so
 `pnpm dev` serves the same data as production.
 
 ```bash
-git clone <this repo> && cd david-ai-audio-search
-pnpm install
 vercel link --yes --project david-ai-audio-search --scope adrian-ferre
 vercel env pull .env.local   # writes the credentials; gitignored, never commit it
-pnpm dev                     # http://localhost:3000
+pnpm dev                     # http://localhost:3000, API served locally
 ```
 
 `.env.local` holds secrets: keep it out of git (`.env*` is ignored), logs and screenshots.
@@ -49,7 +61,7 @@ The table is described in [`src/server/db/schema.sql`](src/server/db/schema.sql)
 
 | Command          | What it does                         |
 | ---------------- | ------------------------------------ |
-| `pnpm dev`       | Start the dev server (needs `.env.local`, see Getting started) |
+| `pnpm dev`       | Start the dev server (uses the deployed API without `.env.local`, see Getting started) |
 | `pnpm build`     | Production build                     |
 | `pnpm start`     | Serve the production build           |
 | `pnpm lint`      | ESLint                               |
@@ -97,6 +109,16 @@ One audio: the list fields plus a dataset-specific `metadata` object (speaker/ch
 The audio's FLAC (`audio/flac`), streamed from the private Blob store. Supports `Range` requests (`206`, or `416` for an unsatisfiable range) and `If-None-Match` (`304`). The UI uses it as the `<audio>` source of the row's play button. The Blob store stays private: deployments are behind Vercel Authentication, which is what keeps the AudioCaps audio from being public.
 
 Errors always look like `{ "error": { "code", "message", "details"? } }`: `400 invalid_request`, `404 not_found` and `500 internal_error` (e.g. the database is unreachable).
+
+### Rate limits
+
+The API is public and needs no key. The deployed app limits `/api/*` to **120 requests per
+minute per IP** with a Vercel Firewall rule ("Rate limit API", in the project's Firewall
+settings, not in this repo). Over the limit, requests get `429` with the firewall's own body
+(not the JSON error shape above) until the minute is over; the UI shows "Too many requests" and
+doesn't retry. Browsing the UI stays far below it (one request per 50 items scrolled or per
+audio opened). Local dev servers without credentials proxy to the deployed API, so they share
+the limit of your IP; with `.env.local` the local API isn't limited.
 
 ### Where the code lives
 
