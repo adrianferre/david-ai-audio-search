@@ -1,6 +1,6 @@
 "use client";
 
-import { AudioLinesIcon, FileAudioIcon, MicIcon, SearchIcon } from "lucide-react";
+import { AudioLinesIcon, FileAudioIcon, LinkIcon, MicIcon, SearchIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { SearchMatchFilterV1 } from "@/lib/api/v1/types";
@@ -116,7 +116,14 @@ function RecentSearchRow({ entry }: { entry: RecentSearch }) {
       break;
     }
     case "audio": {
-      icon = entry.example.source === "recording" ? <MicIcon /> : <FileAudioIcon />;
+      icon =
+        entry.example.source === "recording" ? (
+          <MicIcon />
+        ) : entry.example.source === "link" ? (
+          <LinkIcon />
+        ) : (
+          <FileAudioIcon />
+        );
       const said = spokenText(entry);
       const name = entry.example.source === "recording" ? "your recording" : entry.example.name;
       label = said ? (

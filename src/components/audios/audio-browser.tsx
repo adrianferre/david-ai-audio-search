@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { AudioLinesIcon, ChartScatterIcon, ListIcon } from "lucide-react";
 import { type DragEvent, useEffect, useRef, useState } from "react";
 
+import { ApiError, fetchRemoteAudio } from "@/lib/api/v1/client";
 import type { AudioSource, SearchMatchFilterV1 } from "@/lib/api/v1/types";
 import { MAX_EXAMPLE_SECONDS, toExampleClip, UnreadableAudioError } from "@/lib/audio/to-wav";
 import { useMicrophoneRecorder } from "@/lib/audio/use-microphone-recorder";
@@ -14,7 +15,7 @@ import { useViewLayout, type ViewLayout } from "../map/use-view-layout";
 
 import { AudioDetailPanel } from "./audio-detail-panel";
 import { AudioList } from "./audio-list";
-import { AudioSearchBar, type ExampleStatus, type TranscriptLine } from "./audio-search-bar";
+import { AudioSearchBar, type ExampleStatus, parseLink, type TranscriptLine } from "./audio-search-bar";
 import { displayText, SOURCE_LABEL } from "./datasets";
 import {
   type AudioExample,
@@ -55,6 +56,17 @@ const MAX_FILE_BYTES = 20 * 1024 * 1024;
 /** The name a recording goes by ("Sounds like your recording"); the search bar shows its length next to it. */
 const RECORDING_NAME = "your recording";
 
+/** What a link goes by in the search bar: its file name, or its site when the path has none. */
+function linkName(url: URL): string {
+  const last = url.pathname.split("/").filter(Boolean).at(-1);
+  if (!last) return url.hostname;
+  try {
+    return decodeURIComponent(last);
+  } catch {
+    return last;
+  }
+}
+
 function hasFiles(event: DragEvent) {
   return event.dataTransfer.types.includes("Files");
 }
@@ -74,6 +86,8 @@ export function AudioBrowser() {
   const dragDepth = useRef(0);
   // Only the last file attached wins when several are read at once.
   const attachToken = useRef(0);
+  // The link being downloaded, dropped when another clip, a query or the X replaces it.
+  const exampleDownload = useRef<AbortController | null>(null);
   // The user's clip as a URL the player can play, made when first played.
   const exampleUrl = useRef<{ id: string; url: string } | null>(null);
   // One player for the list, the details panel and the user's clip.
@@ -84,8 +98,9 @@ export function AudioBrowser() {
   const [layout, setLayout] = useViewLayout();
 
   const debouncedQuery = useDebouncedValue(query, SEARCH_DEBOUNCE_MS).trim();
-  // Clearing the box goes back to the full list at once, without the delay.
-  const searchQuery = query.trim() === "" ? "" : debouncedQuery;
+  // Clearing the box goes back to the full list at once, without the delay. A
+  // link isn't searched as text: Enter searches with the file it points to.
+  const searchQuery = query.trim() === "" || parseLink(debouncedQuery) ? "" : debouncedQuery;
 
   const view: AudioListView = example
     ? { kind: "file", example, source, match: clipMatch }
@@ -148,8 +163,14 @@ export function AudioBrowser() {
     [],
   );
 
-  const clearExample = () => {
+  /** Drops the file, link or recording being read, so it doesn't replace what comes next. */
+  const cancelPending = () => {
     attachToken.current++;
+    exampleDownload.current?.abort();
+  };
+
+  const clearExample = () => {
+    cancelPending();
     setExample(null);
     setExampleStatus(null);
   };
@@ -172,17 +193,31 @@ export function AudioBrowser() {
   const examplePlayback = example ? playbackOf(player, `example:${example.id}`) : null;
   const similarPlayback = similarTo ? playbackOf(player, similarTo.id) : null;
 
-  /** Converts a file or a recording to WAV and searches with it. */
-  const searchWithAudio = async (audio: Blob, name: string, kind: AudioExample["source"]) => {
+  /**
+   * Converts a file, a recording or a linked file to WAV and searches with it.
+   * `url` is the link to download the audio from, for a link.
+   */
+  const searchWithAudio = async (
+    audio: Blob | { url: string },
+    name: string,
+    kind: AudioExample["source"],
+  ) => {
     const token = ++attachToken.current;
-    setExampleStatus({ kind: "reading", name });
+    const download = audio instanceof Blob ? null : new AbortController();
+    exampleDownload.current?.abort();
+    exampleDownload.current = download;
+    setExampleStatus({ kind: "reading", name, downloading: download !== null });
     try {
-      const clip = await toExampleClip(audio);
+      const blob = audio instanceof Blob ? audio : await fetchRemoteAudio(audio.url, download?.signal);
+      if (token !== attachToken.current) return;
+      if (download) setExampleStatus({ kind: "reading", name, downloading: false });
+      const clip = await toExampleClip(blob);
       if (token !== attachToken.current) return;
       const searched: AudioExample = {
         id: crypto.randomUUID(),
         name,
         source: kind,
+        ...(audio instanceof Blob ? {} : { url: audio.url }),
         wav: clip.wav,
         durationSeconds: clip.durationSeconds,
         peaks: clip.peaks,
@@ -195,13 +230,17 @@ export function AudioBrowser() {
       setExampleStatus(null);
     } catch (error) {
       if (token !== attachToken.current) return;
-      if (!(error instanceof UnreadableAudioError)) console.error(error);
+      if (!(error instanceof UnreadableAudioError || error instanceof ApiError)) console.error(error);
       const message =
         kind === "recording"
           ? "Couldn’t read the recording. Try again, or record with another browser."
-          : error instanceof UnreadableAudioError
-            ? `${name}: ${error.message}`
-            : `Couldn’t read ${name}. Try a WAV, MP3 or M4A file.`;
+          : error instanceof ApiError
+            ? error.message
+            : error instanceof UnreadableAudioError
+              ? `${name}: ${error.message}`
+              : kind === "link"
+                ? `Couldn’t download ${name}. Check the link and try again.`
+                : `Couldn’t read ${name}. Try a WAV, MP3 or M4A file.`;
       setExampleStatus({ kind: "error", message });
     }
   };
@@ -214,7 +253,7 @@ export function AudioBrowser() {
 
   const startRecording = () => {
     // A file still being read would replace the recording when it is done.
-    attachToken.current++;
+    cancelPending();
     setExampleStatus(null);
     void recorder.start();
   };
@@ -223,7 +262,7 @@ export function AudioBrowser() {
     // A file dropped while recording wins over the recording.
     recorder.cancel();
     if (file.size > MAX_FILE_BYTES) {
-      attachToken.current++;
+      cancelPending();
       setExampleStatus({
         kind: "error",
         message: `${file.name} is too big. Use a file under 20 MB, or record the part you need.`,
@@ -231,6 +270,11 @@ export function AudioBrowser() {
       return;
     }
     void searchWithAudio(file, file.name, "file");
+  };
+
+  const attachLink = (url: URL) => {
+    recorder.cancel();
+    void searchWithAudio({ url: url.href }, linkName(url), "link");
   };
 
   /** Runs a recent search again, with the dataset filter it ran with. */
@@ -259,7 +303,7 @@ export function AudioBrowser() {
       case "audio":
         // Same id as when it first ran, so its results come from the cache.
         recorder.cancel();
-        attachToken.current++;
+        cancelPending();
         setQuery("");
         setSimilarTo(null);
         setClipMatch(entry.match ?? "sound");
@@ -306,11 +350,11 @@ export function AudioBrowser() {
         Results for <span className="text-muted-foreground">“{view.q}”</span>
       </>
     ) : view.kind === "similar" ? (
-      { all: "Similar", exact: "Says something similar", text: "Says something similar", sound: "Sounds similar" }[
+      { all: "Similar", exact: "Says something similar", text: "Means something similar", sound: "Sounds similar" }[
         view.match
       ]
     ) : (
-      `${{ all: "Like", exact: "Says what’s in", text: "Says what’s in", sound: "Sounds like" }[view.match]} your ${view.example.source === "recording" ? "recording" : "file"}`
+      `${{ all: "Like", exact: "Says what’s in", text: "Means what’s in", sound: "Sounds like" }[view.match]} your ${view.example.source}`
     );
   const scope = source && view.kind !== "browse" ? `${SOURCE_LABEL[source]} only` : null;
 
@@ -371,6 +415,7 @@ export function AudioBrowser() {
             }}
             onToggleExample={toggleExample}
             onAttachFile={attachFile}
+            onAttachLink={attachLink}
             onClearExample={clearExample}
             recorder={{
               status: recorder.status,
@@ -384,6 +429,7 @@ export function AudioBrowser() {
             recentSearches={recent.entries}
             onPickRecent={rerun}
             onClearRecent={recent.clear}
+            hideRecent={dragging}
             onCommitQuery={commitQuery}
           />
         </header>

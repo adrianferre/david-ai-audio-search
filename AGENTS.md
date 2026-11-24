@@ -10,4 +10,4 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## UI rules
 
-- **Every icon-only button has a tooltip that names its action.** Use `IconButton` from `@/components/ui/icon-button` with a `label` that says what clicking does ("Close details", "Play", "Find similar sound"), not what the icon is. The label is the tooltip and, unless you pass a more specific `aria-label`, the accessible name. Don't use `<Button size="icon…">` or a native `title` for this; ESLint rejects the former.
+- **Every icon-only button has a tooltip that names its action.** Use `IconButton` from `@/components/ui/icon-button` with a `label` that says what clicking does ("Close details", "Play", "Find similar"), not what the icon is. The label is the tooltip and, unless you pass a more specific `aria-label`, the accessible name. Don't use `<Button size="icon…">` or a native `title` for this; ESLint rejects the former.

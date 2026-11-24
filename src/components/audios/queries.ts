@@ -126,7 +126,9 @@ export type AudioExample = {
   /** New for every file attached, so attaching the same file again searches again. */
   id: string;
   name: string;
-  source: "file" | "recording";
+  source: "file" | "recording" | "link";
+  /** The link it was downloaded from, for `source: "link"`. */
+  url?: string;
   wav: Blob;
   /** Of the part that is searched. */
   durationSeconds: number;
@@ -145,7 +147,7 @@ export const fileQuery = (example: AudioExample | null, source: AudioSource | nu
     staleTime: Infinity,
   });
 
-/** The clip "Find similar sound" was used on, as the list and its header show it. */
+/** The clip "Find similar" was used on, as the list and its header show it. */
 export type ReferenceClip = {
   id: string;
   source: AudioSource;

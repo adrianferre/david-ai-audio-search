@@ -160,6 +160,16 @@ export async function transcribeAudioFile(params: { wav: Blob; signal?: AbortSig
   return res.json() as Promise<TranscriptResponseV1>;
 }
 
+/**
+ * The audio or video file at a public link, downloaded through the API (most
+ * sites don't let the browser read their files directly).
+ */
+export async function fetchRemoteAudio(url: string, signal?: AbortSignal): Promise<Blob> {
+  const res = await fetch(`${BASE}/remote-audio${queryString({ url })}`, { signal });
+  await ensureOk(res);
+  return res.blob();
+}
+
 /** The audio's FLAC as a stream, to save to disk. */
 export async function downloadAudioFile(
   id: string,

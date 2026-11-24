@@ -187,7 +187,7 @@ function BrowseList({ source, actions }: { source: AudioSource | null; actions: 
     }
   }, [hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage]);
 
-  if (status === "pending") return <LoadingRows label="Loading the catalog" />;
+  if (status === "pending") return <LoadingRows kind="browse" label="Loading the catalog" selection={actions.selection} />;
   // A failed next page keeps `data`, so only show this when nothing loaded.
   if (status === "error" && !data) {
     return (
@@ -250,7 +250,7 @@ function SearchResults({
   const { data, status, error, refetch, isPlaceholderData } = useQuery(rowsQuery);
   const searching = status === "pending" || isPlaceholderData;
 
-  if (status === "pending") return <LoadingRows label="Searching" />;
+  if (status === "pending") return <LoadingRows kind="search" label="Searching" selection={actions.selection} />;
   if (status === "error") {
     return (
       <ListProblem title="The search didn’t go through" message={error.message} onRetry={() => refetch()} />
@@ -309,10 +309,16 @@ function TranscriptResults({
 }) {
   const { transcript, q, excludeId, sound, searchable } = useTranscriptSearch(view);
   const yours = view.kind === "file";
-  const what = !yours ? "this clip" : view.example.source === "recording" ? "your recording" : "your file";
+  const what = yours ? `your ${view.example.source}` : "this clip";
 
   if (transcript.status === "pending") {
-    return <LoadingRows label={`Transcribing what’s said in ${what}`} />;
+    return (
+      <LoadingRows
+        kind="search"
+        label={`Transcribing what’s said in ${what}`}
+        selection={actions.selection}
+      />
+    );
   }
   if (transcript.status === "error") {
     return (
@@ -389,7 +395,7 @@ function SimilarResults({
 }) {
   const { data, status, error, refetch } = useQuery(rowsQuery);
 
-  if (status === "pending") return <LoadingRows label={pendingMessage} />;
+  if (status === "pending") return <LoadingRows kind="similar" label={pendingMessage} selection={actions.selection} />;
   if (status === "error") {
     return (
       <ListProblem title="The search didn’t go through" message={error.message} onRetry={() => refetch()} />
@@ -411,27 +417,41 @@ function SimilarResults({
   );
 }
 
-/** Placeholder rows while the first results load. */
-function LoadingRows({ label }: { label: string }) {
+/**
+ * Placeholder rows while the first results load, under the same column headers
+ * and in the same columns as the table that replaces them, so nothing moves.
+ */
+function LoadingRows({ kind, label, selection }: { kind: TableKind; label: string; selection: Selection }) {
+  const { ref, width } = useWidth();
+  const columns = useColumns(kind, width);
+
   return (
-    <div role="status" aria-label={label} className="flex min-h-0 flex-1 flex-col border-t">
-      <p className="sr-only">{label}…</p>
-      {Array.from({ length: 7 }, (_, i) => (
-        <div
-          key={i}
-          aria-hidden="true"
-          className="flex h-[68px] shrink-0 animate-pulse items-center gap-3.5 border-b border-hairline px-6"
-          style={{ animationDelay: `${i * 80}ms` }}
-        >
-          <span className="size-4 rounded-[4px] bg-accent" />
-          <span className="size-9 rounded-full bg-accent" />
-          <span className="flex flex-1 flex-col gap-2">
-            <span className="h-2.5 rounded bg-border" style={{ width: `${70 - (i % 3) * 12}%` }} />
-            <span className="h-2 w-1/3 rounded bg-accent" />
-          </span>
-          <span className="h-5 w-24 rounded-full bg-accent" />
-        </div>
-      ))}
+    <div ref={ref} className="flex min-h-0 flex-1 flex-col">
+      <TableHeader kind={kind} columns={columns} select={<SelectAllCheckbox rows={[]} selection={selection} />} />
+      <div role="status" aria-label={label} className="min-h-0 flex-1 overflow-hidden">
+        <p className="sr-only">{label}…</p>
+        {Array.from({ length: 2 }, (_, i) => (
+          <div
+            key={i}
+            aria-hidden="true"
+            className="grid animate-pulse items-center gap-3.5 border-b border-hairline px-6"
+            style={{ height: ROW_HEIGHT, gridTemplateColumns: columns.template, animationDelay: `${i * 80}ms` }}
+          >
+            <span className="size-4 rounded-[4px] bg-accent" />
+            <span className="size-9 rounded-full bg-accent" />
+            <span className="flex flex-col gap-2">
+              <span className="h-2.5 rounded bg-border" style={{ width: `${70 - (i % 3) * 12}%` }} />
+              <span className="h-2 w-1/3 rounded bg-accent" />
+            </span>
+            {columns.matched && <span />}
+            {columns.waveform && <span className="h-2 rounded bg-accent" />}
+            <span className="h-5 w-24 rounded-full bg-accent" />
+            {columns.score && <span className="h-2.5 w-10 rounded bg-accent" />}
+            <span className="h-2.5 w-7 justify-self-end rounded bg-accent" />
+            <span />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -494,6 +514,34 @@ function useWidth() {
   return { ref, width };
 }
 
+/** The column headers; `select` is the select-all checkbox. */
+function TableHeader({
+  kind,
+  columns,
+  select,
+}: {
+  kind: TableKind;
+  columns: ReturnType<typeof useColumns>;
+  select: ReactNode;
+}) {
+  return (
+    <div
+      className="grid h-9 shrink-0 items-center gap-3.5 border-y px-6 text-xs font-medium text-muted-foreground"
+      style={{ gridTemplateColumns: columns.template }}
+    >
+      {select}
+      <span />
+      <span>Clip</span>
+      {columns.matched && <span>Matched on</span>}
+      {columns.waveform && <span>Waveform</span>}
+      <span>Dataset</span>
+      {columns.score && <span>{kind === "search" ? "Relevance" : "Similarity"}</span>}
+      <span className="text-right">Length</span>
+      <span />
+    </div>
+  );
+}
+
 /** The column headers and the virtualized rows. `tail` is an extra last row (loader or error). */
 function AudioTable({
   kind,
@@ -543,20 +591,7 @@ function AudioTable({
 
   return (
     <div ref={tableRef} className="flex min-h-0 flex-1 flex-col">
-      <div
-        className="grid h-9 shrink-0 items-center gap-3.5 border-y px-6 text-xs font-medium text-muted-foreground"
-        style={{ gridTemplateColumns: columns.template }}
-      >
-        <SelectAllCheckbox rows={rows} selection={selection} />
-        <span />
-        <span>Clip</span>
-        {columns.matched && <span>Matched on</span>}
-        {columns.waveform && <span>Waveform</span>}
-        <span>Dataset</span>
-        {columns.score && <span>{kind === "search" ? "Relevance" : "Similarity"}</span>}
-        <span className="text-right">Length</span>
-        <span />
-      </div>
+      <TableHeader kind={kind} columns={columns} select={<SelectAllCheckbox rows={rows} selection={selection} />} />
       <div
         ref={scrollRef}
         className={cn("min-h-0 flex-1 overflow-y-auto transition-opacity", dimmed && "opacity-60")}
@@ -702,8 +737,8 @@ function AudioRow({
         variant="ghost"
         size="icon-sm"
         className="relative z-10 text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-        label="Find similar sound"
-        aria-label={`Find clips that sound like “${text}”`}
+        label="Find similar"
+        aria-label={`Find clips similar to “${text}”`}
         onClick={() =>
           onFindSimilar({
             id: audio.id,
