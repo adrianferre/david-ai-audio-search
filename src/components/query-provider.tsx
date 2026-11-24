@@ -9,7 +9,7 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            // The datasets are static files, so cached responses stay valid.
+            // The catalog rarely changes, so cached responses stay valid.
             staleTime: 5 * 60 * 1000,
             refetchOnWindowFocus: false,
           },

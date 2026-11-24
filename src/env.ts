@@ -16,7 +16,8 @@ export const env = createEnv({
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
-    // EXAMPLE_API_KEY: z.string().min(1),
+    // Neon Postgres (pooled). Set by the Neon integration: `vercel env pull .env.local`.
+    DATABASE_URL: z.url(),
   },
   client: {
     // NEXT_PUBLIC_EXAMPLE_URL: z.url(),

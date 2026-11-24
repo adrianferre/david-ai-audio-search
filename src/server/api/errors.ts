@@ -13,3 +13,12 @@ export function apiError(
   };
   return Response.json(body, { status });
 }
+
+/**
+ * 500 with the standard error body. Logs the cause server-side and keeps it
+ * out of the response (it can carry connection or query details).
+ */
+export function internalError(error: unknown): Response {
+  console.error("[api] Unhandled error:", error);
+  return apiError(500, "internal_error", "Internal server error");
+}

@@ -3,29 +3,28 @@ import "server-only";
 /**
  * Internal, version-agnostic representation of an audio file.
  * API versions map this to their own public shapes (see src/server/api/vN).
+ *
+ * Records live in the `audios` table in Neon Postgres (src/server/db/schema.sql)
+ * and the FLAC files in a private Vercel Blob store.
  */
 
 type AudioFileInfo = {
-  /** Absolute path on disk. Never exposed through the API. */
-  filePath: string;
+  /** Pathname of the FLAC in the private Blob store. Never exposed through the API. */
+  blobPathname: string;
   fileName: string;
   durationSeconds: number;
   sampleRate: number;
   channels: number;
 };
 
-export type LibriSpeechRecord = AudioFileInfo & {
-  id: string;
-  source: "librispeech";
+export type LibriSpeechMetadata = {
   utteranceId: string;
   speaker: { id: string; sex: string | null; name: string | null };
   chapter: { id: string; title: string | null; bookTitle: string | null };
   transcript: string;
 };
 
-export type AudioCapsRecord = AudioFileInfo & {
-  id: string;
-  source: "audiocaps";
+export type AudioCapsMetadata = {
   clipId: string;
   youtubeId: string;
   startTime: number;
@@ -33,9 +32,10 @@ export type AudioCapsRecord = AudioFileInfo & {
   audiocapIds: number[];
 };
 
-export type AudioRecord = LibriSpeechRecord | AudioCapsRecord;
+export type LibriSpeechRecord = AudioFileInfo &
+  LibriSpeechMetadata & { id: string; source: "librispeech" };
 
-/** A record before its FLAC header has been read. */
-export type PendingRecord<T extends AudioRecord = AudioRecord> = T extends AudioRecord
-  ? Omit<T, "durationSeconds" | "sampleRate" | "channels">
-  : never;
+export type AudioCapsRecord = AudioFileInfo &
+  AudioCapsMetadata & { id: string; source: "audiocaps" };
+
+export type AudioRecord = LibriSpeechRecord | AudioCapsRecord;
