@@ -53,7 +53,9 @@ it from local scripts or a SQL console unless you mean to change production.
 - **AudioCaps val**: 426 ten-second sound clips with 5 captions each, from
   [AudioCaps](https://github.com/cdjkim/audiocaps). Captions are MIT; the audio was cut from
   YouTube videos and belongs to their uploaders. That is why the Blob store is private:
-  don't make it public or serve AudioCaps audio to the public.
+  don't make it public. The private store only blocks direct access to the files; the
+  production app still streams them to anyone (see
+  [`GET /api/v1/audios/{id}/audio`](#get-apiv1audiosidaudio)).
 - **Common Voice 17.0 en (sample)**: 200 crowd-sourced recordings of volunteers reading a
   sentence, with the sentence as transcript, from [Mozilla Common Voice](https://commonvoice.mozilla.org).
   License CC0. One clip per speaker from the dev split, among clips with at least 2 up-votes,
@@ -216,7 +218,7 @@ One audio: the list fields plus a dataset-specific `metadata` object (speaker/ch
 
 ### `GET /api/v1/audios/{id}/audio`
 
-The audio's FLAC (`audio/flac`), streamed from the private Blob store. Supports `Range` requests (`206`, or `416` for an unsatisfiable range) and `If-None-Match` (`304`). The UI uses it as the `<audio>` source of the row's play button. The Blob store stays private: deployments are behind Vercel Authentication, which is what keeps the AudioCaps audio from being public.
+The audio's FLAC (`audio/flac`), streamed from the private Blob store. Supports `Range` requests (`206`, or `416` for an unsatisfiable range) and `If-None-Match` (`304`). The UI uses it as the `<audio>` source of the row's play button. The Blob store is private, so its files can't be fetched directly, but this route streams any clip, AudioCaps included, to anyone who can reach the app. The project uses Vercel Authentication with Standard Protection: preview and generated deployment URLs require a Vercel login, the production domain `david-ai-audio-search.vercel.app` does not. Known gap: AudioCaps audio is publicly reachable through the production API. The fix is to protect this route or the production domain; that is not done yet.
 
 ### `GET /api/v1/search`
 
@@ -285,7 +287,8 @@ Errors always look like `{ "error": { "code", "message", "details"? } }`: `400 i
 
 ### Rate limits
 
-The API is public and needs no key. The deployed app limits `/api/*` to **120 requests per
+The production API (`david-ai-audio-search.vercel.app`) is public and needs no key; preview
+deployments require a Vercel login. The deployed app limits `/api/*` to **120 requests per
 minute per IP** with a Vercel Firewall rule ("Rate limit API", in the project's Firewall
 settings, not in this repo). Over the limit, requests get `429` with the firewall's own body
 (not the JSON error shape above) until the minute is over; the UI shows "Too many requests" and
