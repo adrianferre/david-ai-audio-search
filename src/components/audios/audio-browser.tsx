@@ -12,6 +12,7 @@ import { AudioList } from "./audio-list";
 import { AudioSearchBar, type ExampleStatus } from "./audio-search-bar";
 import { SOURCE_LABEL } from "./datasets";
 import { type AudioExample, type AudioListView, type ReferenceClip, useListView } from "./queries";
+import { type RecentSearch, useRecentSearches } from "./recent-searches";
 import { SelectionBar, useSelection } from "./selection";
 import { Sidebar } from "./sidebar";
 import { playbackOf, useAudioPlayer } from "./use-audio-player";
@@ -27,6 +28,9 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
   }, [value, delayMs]);
   return debounced;
 }
+
+/** A text search left unchanged this long counts as done, and joins the recent searches. */
+const TEXT_SEARCH_SETTLED_MS = 2000;
 
 /**
  * The whole file is decoded before it is cut to 30 s, and decoded audio is
@@ -59,6 +63,8 @@ export function AudioBrowser() {
   const exampleUrl = useRef<{ id: string; url: string } | null>(null);
   // One player for the list, the details panel and the user's clip.
   const player = useAudioPlayer();
+  const recent = useRecentSearches();
+  const { remember } = recent;
 
   const debouncedQuery = useDebouncedValue(query, SEARCH_DEBOUNCE_MS).trim();
   // Clearing the box goes back to the full list at once, without the delay.
@@ -73,6 +79,23 @@ export function AudioBrowser() {
         : { kind: "browse", source };
   const { summary } = useListView(view);
   const selection = useSelection();
+
+  // The list searches as you type, so a text search is kept once it settles
+  // (or on Enter, or on leaving the input: `commitQuery`), not at every pause.
+  const settledText = view.kind === "search" ? searchQuery : "";
+  useEffect(() => {
+    if (!settledText) return;
+    const timeout = setTimeout(
+      () => remember({ kind: "text", q: settledText, match, source }),
+      TEXT_SEARCH_SETTLED_MS,
+    );
+    return () => clearTimeout(timeout);
+  }, [settledText, match, source, remember]);
+
+  const commitQuery = () => {
+    const q = query.trim();
+    if (q && !similarTo && !example) remember({ kind: "text", q, match, source });
+  };
 
   useEffect(
     () => () => {
@@ -91,6 +114,7 @@ export function AudioBrowser() {
     setQuery("");
     clearExample();
     setSimilarTo(clip);
+    remember({ kind: "similar", reference: clip, source });
   };
 
   const toggleExample = () => {
@@ -111,9 +135,7 @@ export function AudioBrowser() {
     try {
       const clip = await toExampleClip(audio);
       if (token !== attachToken.current) return;
-      setQuery("");
-      setSimilarTo(null);
-      setExample({
+      const searched: AudioExample = {
         id: crypto.randomUUID(),
         name,
         source: kind,
@@ -121,8 +143,12 @@ export function AudioBrowser() {
         durationSeconds: clip.durationSeconds,
         peaks: clip.peaks,
         trimmed: clip.trimmed,
-      });
+      };
+      setQuery("");
+      setSimilarTo(null);
+      setExample(searched);
       setExampleStatus(null);
+      remember({ kind: "audio", example: searched, source });
     } catch (error) {
       if (token !== attachToken.current) return;
       if (!(error instanceof UnreadableAudioError)) console.error(error);
@@ -161,6 +187,34 @@ export function AudioBrowser() {
       return;
     }
     void searchWithAudio(file, file.name, "file");
+  };
+
+  /** Runs a recent search again, with the dataset filter it ran with. */
+  const rerun = (entry: RecentSearch) => {
+    setSource(entry.source);
+    switch (entry.kind) {
+      case "text":
+        setSimilarTo(null);
+        clearExample();
+        setQuery(entry.q);
+        setMatch(entry.match);
+        break;
+      case "similar":
+        setQuery("");
+        clearExample();
+        setSimilarTo(entry.reference);
+        break;
+      case "audio":
+        // Same id as when it first ran, so its results come from the cache.
+        recorder.cancel();
+        attachToken.current++;
+        setQuery("");
+        setSimilarTo(null);
+        setExample(entry.example);
+        setExampleStatus(null);
+        break;
+    }
+    recent.promote(entry);
   };
 
   const dropHandlers = {
@@ -268,6 +322,10 @@ export function AudioBrowser() {
               onStop: recorder.stop,
               onCancel: recorder.cancel,
             }}
+            recentSearches={recent.entries}
+            onPickRecent={rerun}
+            onClearRecent={recent.clear}
+            onCommitQuery={commitQuery}
           />
         </header>
         <div className="relative flex min-h-0 flex-1 flex-col">
