@@ -226,12 +226,17 @@ async function fullText(query: Extract<EvalQuery, { kind: "text" }>): Promise<Fu
 /**
  * The clips whose text contains the query as typed (production's `has_phrase`):
  * the `simple` parser, no stemming or stop words, words in a row, on the same
- * per-clip document as the Words filter. A caption query's own caption is left out.
+ * per-clip document as the Words filter. None when the query excludes a word (`-dog`). A caption query's own caption is left out.
  */
 async function phraseMatches(query: Extract<EvalQuery, { kind: "text" }>): Promise<string[]> {
   const statements = [
     sql`
-      WITH q AS (SELECT phraseto_tsquery('simple', ${query.text}) AS phrase)
+      WITH q AS (
+        SELECT CASE WHEN websearch_to_tsquery('simple', ${query.text})::text LIKE '%!%'
+                 THEN ''::tsquery
+                 ELSE phraseto_tsquery('simple', ${query.text})
+               END AS phrase
+      )
       SELECT id FROM audios CROSS JOIN q
       WHERE numnode(q.phrase) > 0
         AND coalesce(to_tsvector('simple', metadata->>'transcript'), to_tsvector('simple', metadata->'captions')) @@ q.phrase
@@ -239,7 +244,8 @@ async function phraseMatches(query: Extract<EvalQuery, { kind: "text" }>): Promi
   ];
   if (query.heldOut) {
     statements.push(sql`
-      SELECT to_tsvector('simple', ${JSON.stringify(query.heldOut.captions)}::jsonb) @@ phraseto_tsquery('simple', ${query.text}) AS phrase
+      SELECT websearch_to_tsquery('simple', ${query.text})::text NOT LIKE '%!%'
+             AND to_tsvector('simple', ${JSON.stringify(query.heldOut.captions)}::jsonb) @@ phraseto_tsquery('simple', ${query.text}) AS phrase
     `);
   }
   const [rows, held] = (await sql.transaction(statements, { readOnly: true })) as Record<string, unknown>[][];
@@ -856,7 +862,10 @@ for (const q of textQueries.filter((x) => x.set === "concept").slice(0, 7)) {
           SELECT ${t}::vector AS text_vector,
                  ${s}::vector AS sound_vector,
                  websearch_to_tsquery('english', ${q.text}) AS words,
-                 phraseto_tsquery('simple', ${q.text}) AS phrase,
+                 CASE WHEN websearch_to_tsquery('simple', ${q.text})::text LIKE '%!%'
+                   THEN ''::tsquery
+                   ELSE phraseto_tsquery('simple', ${q.text})
+                 END AS phrase,
                  replace(plainto_tsquery('english', ${q.text})::text, '&', '|')::tsquery AS any_word
         ),
         scored AS (

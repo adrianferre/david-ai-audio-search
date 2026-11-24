@@ -216,7 +216,12 @@ export async function searchAudios({
              ) AS sound_vector,
              websearch_to_tsquery('english', ${query}) AS words,
              -- The query as typed: no stemming or stop words, words in a row.
-             phraseto_tsquery('simple', ${query}) AS phrase,
+             -- None when it excludes a word (-dog): the phrase would drop the
+             -- minus and match the very words the query leaves out.
+             CASE WHEN websearch_to_tsquery('simple', ${query})::text LIKE '%!%'
+               THEN ''::tsquery
+               ELSE phraseto_tsquery('simple', ${query})
+             END AS phrase,
              -- Any of the query's words, to pick the caption to show.
              replace(plainto_tsquery('english', ${query})::text, '&', '|')::tsquery AS any_word
     ),

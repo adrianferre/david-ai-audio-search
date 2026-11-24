@@ -30,6 +30,7 @@ export const EXACT_WORDS_BONUS = 3;
 /**
  * Added on top when the text contains the query as typed, words in a row and
  * unstemmed ("thank you", not "thanked" or "thanks for"): the line itself.
+ * Not when the query excludes a word (`cat -dog`): the phrase drops the `-`.
  */
 export const EXACT_PHRASE_BONUS = 1.5;
 

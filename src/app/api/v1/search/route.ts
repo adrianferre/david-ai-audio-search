@@ -114,7 +114,8 @@ async function search(request: NextRequest, example: SoundExample | null) {
       query: q,
       vectors,
       soundOf: example?.kind === "audio" && signals.includes("sound") ? example.id : null,
-      soundIsExample: example !== null,
+      // Only when the example's sound is searched with: with Meaning alone it is a typed search.
+      soundIsExample: example !== null && signals.includes("sound"),
       limit,
       source,
       exclude,
