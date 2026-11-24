@@ -90,7 +90,12 @@ Each clip has up to three things to match against, all in the `audios` table:
   on "sounds like" (audio vector). Raw similarities are not comparable: text-to-text
   and text-to-audio sit on different scales, and both shift from query to query. So each is
   turned into a z-score, how far the clip stands above the catalog's average for that query.
-  A clip's score is its best signal, and clips below 3 standard deviations are dropped. Each
+  A clip's score is its best signal, and clips below 3 standard deviations are dropped (4 for
+  "sounds like" next to the text: typed text against audio is the weak signal, and at 3 it lets
+  in sound effects that sit near any short query, such as bells and sirens for "hello"). A clip
+  whose text has the query as typed, words in a row ("thank you", not "thanks"), gets a further
+  bonus. Then **results under half of the best one are dropped**: one clip that says "hello"
+  doesn't come with twenty that merely stand out a little. Each
   result says why it matched: `text` (shown as "Said" for a transcript, "Caption" for captions),
   `sound` ("Sounds like") or both.
 - **Exact words** (the "Words" filter, `match=exact`) skips the vectors: a clip matches when its
@@ -130,10 +135,25 @@ Each clip has up to three things to match against, all in the `audios` table:
   captions; a result shows the one that shares most words with the query.
 - **Speech also matches "sounds like".** The audio vector carries the spoken words as well as
   the acoustics, so a clip where someone says "raining" can appear next to clips of rain.
-- **The cut-off trims, it doesn't judge.** Nearest-neighbour search always has a nearest clip,
-  so a query with no good answer in the catalog still returns a handful of weak results.
+- **The cut-off trims; the top score judges.** Nearest-neighbour search always has a nearest clip,
+  so a query with no good answer in the catalog still returns a handful of weak results. When
+  the best of them scores under 5, the response says so (`strongMatch: false`) and the list
+  opens with "Nothing clearly matches". In the evaluation that flags 10 of 11 queries without an
+  answer and 3.5% of those with one.
 - **No vector index.** With about 3,300 clips an exact scan takes a few milliseconds and returns
   the true nearest neighbours. An HNSW index is the next step at a much larger scale.
+
+### How good is it?
+
+[`eval/`](eval/README.md) measures it: 3,341 queries whose answers come from the datasets
+(AudioCaps captions, AudioSet labels, transcripts), production ranking vs 9 variants and
+baselines, with 95% bootstrap intervals and a parity check against the live API. Latest numbers
+in [`eval/report.md`](eval/report.md). In short: R@10 90% for a held-out AudioCaps caption
+(32% from the audio vector alone; LAION-CLAP reports 83%), 100% for transcript fragments, 99% for
+paraphrases. The cut-offs never return an empty list for a query with no answer, but the top
+score tells those apart (AUC 0.98), which is what `strongMatch` uses. Lists are half as long as
+before the share-of-best cut-off and the phrase bonus, with 4–5 times the share of relevant
+results, for 0.8 points of caption R@10. `pnpm eval` reruns it, read-only.
 
 ### Embedding the catalog
 
@@ -240,6 +260,8 @@ the AI Gateway tab of the Vercel team. To use an API key instead of OIDC, set `A
 | `pnpm compute-waveforms` | Compute the waveform overviews of the clips that have none yet (see Waveforms) |
 | `pnpm export-embedding-map` | Regenerate the Embedding Map data in `design/embedding-map/` (read-only) |
 | `pnpm build-embedding-map` | Build `public/embedding-map.json`, the Map view's data, from `design/embedding-map/` |
+| `pnpm test`      | Unit tests (the evaluation's metrics) |
+| `pnpm eval`      | Retrieval evaluation, read-only (see [eval/](eval/README.md)) |
 
 ## Project layout
 
@@ -248,9 +270,10 @@ the AI Gateway tab of the Vercel team. To use an API key instead of OIDC, set `A
 - `src/components/` – app components (theme provider/toggle)
 - `src/lib/` – shared utilities
 - `src/server/db/` – Neon client, the catalog schema (`schema.sql`) and its migrations
-- `src/server/search/` – embedding settings and the query embedding call
+- `src/server/search/` – embedding and ranking settings, and the query embedding call
 - `src/components/map/` – the Map view: the canvas scatter, its colourings, overlays and story
 - `scripts/` – one-off scripts (`embed-catalog.mts`, `import-commonvoice.mts`, `import-audioset-labels.mts`, `compute-waveforms.mts`, `export-embedding-map.mts`, `build-embedding-map.mts`)
+- `scripts/eval/`, `eval/` – the retrieval evaluation: code, query sets, results
 - `design/embedding-map/` – design prompt and real data (UMAP maps, neighbours, example queries) for the Embedding Map view; `public/embedding-map.json` is built from it
 - `src/env.ts` – typed, validated environment variables (`import { env } from "@/env"`)
 
@@ -320,6 +343,7 @@ relevant first. There is no pagination: it is a ranked top list.
 | `limit` | `50` | integer 1–100 |
 | `source` | every dataset | `librispeech`, `audiocaps` or `commonvoice`: only that dataset's clips |
 | `soundOf` | none | An audio's id: the sound signal compares with that audio's sound instead of the text of `q` (`404` for an unknown id) |
+| `exclude` | none | An audio's id to leave out: the clip searched with, which would come first and set the bar the others are cut against |
 
 ```json
 {
@@ -327,19 +351,23 @@ relevant first. There is no pagination: it is a ranked top list.
     { "id": "audiocaps-...", "source": "audiocaps", "title": "Dog, Speech · YouTube ... @ 30s",
       "text": "A dog barks and a man speaks", "durationSeconds": 10,
       "score": 8.27, "matches": ["text", "sound"] }
-  ]
+  ],
+  "strongMatch": true
 }
 ```
 
 `score` is how far the clip stands out from the rest of the catalog for this query, in standard
-deviations (plus a bonus for exact words); compare it only within one response. The UI shows it next
-to the relevance bars (list and map), which compare it with the best result. With `source`, clips
+deviations (plus bonuses for exact words and the exact phrase); compare it only within one response. The UI
+shows it next to the relevance bars (list and map), which compare it with the best result. With `source`, clips
 are still scored against the whole catalog, so a score doesn't change with the filter. Clips that
-don't stand out are left out, so the list is often shorter than `limit`.
+don't stand out, or score under half of the best result returned, are left out, so the list is often shorter than `limit`.
+`strongMatch` is `false` when the best result scores under 5: nothing clearly matches, and the
+results are only the closest clips (an empty list is never a strong match). It is only judged for
+typed queries: with an example's sound (`soundOf`, a WAV body) it is `true` whenever there are results.
 Returns `503 search_unavailable` when the embedding model can't be reached.
 
 With `match=exact` there is no model call and no cut-off: every clip whose text contains all the
-query's words as written is returned (up to `limit`), with `matches: ["text"]`. `score` is then
+query's words as written is returned (up to `limit`), with `matches: ["text"]` and `strongMatch: true` when there is any. `score` is then
 Postgres's `ts_rank_cd` (more and closer occurrences rank higher). The query takes web-search
 syntax: `"a phrase"`, `or`, `-word`.
 

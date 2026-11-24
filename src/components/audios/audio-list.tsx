@@ -69,6 +69,11 @@ const EMPTY_HINT: Record<SearchMatchFilterV1, string> = {
 };
 
 const RELEVANCE_WORDS = ["low", "fair", "good", "high", "very high"];
+/**
+ * The most bars a result gets when nothing clearly matches the search
+ * (`strongMatch: false`): the best of weak results is still weak ("fair").
+ */
+const WEAK_MATCH_RELEVANCE = 2;
 
 /** A list item, plus why it is in the results when it comes from a search. */
 type Row = AudioListItemV1 & {
@@ -235,6 +240,7 @@ function SearchResults({
   actions,
   recovery,
   empty,
+  subject = `“${q}”`,
 }: {
   q: string;
   match: SearchMatchFilterV1;
@@ -247,6 +253,8 @@ function SearchResults({
   recovery: ListRecovery;
   /** Shown instead of the usual "nothing matches" message. */
   empty?: ReactNode;
+  /** What was searched with, as the "nothing clearly matches" notice names it. */
+  subject?: string;
 }) {
   const rowsQuery = searchQuery(q, match, source, excludeId, sound);
   const { data, status, error, refetch, isPlaceholderData } = useQuery(rowsQuery);
@@ -259,9 +267,11 @@ function SearchResults({
     );
   }
   const best = data.data[0]?.score ?? 0;
+  // Relative to the best result, which gets every bar only when it clearly matches.
+  const top = relevanceTop(data.strongMatch);
   const rows: Row[] = data.data.map((hit) => ({
     ...hit,
-    relevance: relevanceLevel(hit.score, best),
+    relevance: relevanceLevel(hit.score, best, top),
   }));
 
   if (rows.length === 0 && !searching) {
@@ -284,16 +294,27 @@ function SearchResults({
       </EmptyResults>
     );
   }
+  // `strongMatch` is missing from an API that predates it: treat its results as matches.
+  const weak = data.strongMatch === false && !searching;
   // Keyed by the search so the scroll position resets with it.
   return (
-    <AudioTable
-      key={JSON.stringify(rowsQuery.queryKey)}
-      kind="search"
-      rows={rows}
-      actions={actions}
-      dimmed={searching}
-      exactScores={match === "exact"}
-    />
+    <>
+      {weak && (
+        <p className="flex items-center gap-2 border-t px-6 py-3 text-sm text-muted-foreground">
+          <CircleAlertIcon aria-hidden="true" className="size-4 shrink-0" />
+          Nothing clearly matches {subject}
+          {source ? ` in ${SOURCE_LABEL[source]}` : ""}. These are the closest clips.
+        </p>
+      )}
+      <AudioTable
+        key={JSON.stringify(rowsQuery.queryKey)}
+        kind="search"
+        rows={rows}
+        actions={actions}
+        dimmed={searching}
+        exactScores={match === "exact"}
+      />
+    </>
   );
 }
 
@@ -350,6 +371,7 @@ function TranscriptResults({
       source={view.source}
       excludeId={excludeId}
       sound={sound}
+      subject={what}
       actions={actions}
       recovery={recovery}
       empty={
@@ -765,15 +787,24 @@ function AudioRow({
   );
 }
 
-/** 1 to 5: how a search result's score compares with the best result's. */
-export function relevanceLevel(score: number, best: number) {
-  return best > 0 ? Math.min(5, Math.max(1, Math.round((score / best) * 5))) : 1;
+/**
+ * 1 to `top`: how a search result's score compares with the best result's.
+ * `top` is 5, or WEAK_MATCH_RELEVANCE when nothing clearly matches the query.
+ */
+export function relevanceLevel(score: number, best: number, top: number = RELEVANCE_WORDS.length) {
+  return best > 0 ? Math.min(top, Math.max(1, Math.round((score / best) * top))) : 1;
+}
+
+/** The most bars a result gets in a search where nothing clearly matches (`strongMatch: false`). */
+export function relevanceTop(strongMatch: boolean | undefined) {
+  return strongMatch === false ? WEAK_MATCH_RELEVANCE : RELEVANCE_WORDS.length;
 }
 
 /**
- * Five bars, filled by how this result ranks next to the best one, and the
- * score itself: how many standard deviations the clip stands above the
- * catalog's average for this query (Words searches rank by text match instead).
+ * Five bars, filled by how this result ranks next to the best one (at most
+ * WEAK_MATCH_RELEVANCE when nothing clearly matches), and the score itself: how
+ * many standard deviations the clip stands above the catalog's average for this
+ * query (Words searches rank by text match instead).
  */
 export function RelevanceMeter({
   level,
@@ -788,7 +819,7 @@ export function RelevanceMeter({
   const figure = exact ? score.toFixed(2) : score.toFixed(1);
   const explanation = exact
     ? `Text-match rank ${figure} (more and closer occurrences of the words rank higher). The bars compare it with the best result.`
-    : `z = ${figure}: standard deviations above the catalog’s average for this query (results start at 3). The bars compare it with the best result.`;
+    : `z = ${figure}: standard deviations above the catalog’s average for this query. The bars compare it with the best result.`;
   return (
     <span
       role="img"

@@ -92,6 +92,8 @@ export async function searchAudios(params: {
   source?: AudioSource | null;
   soundOf?: string | null;
   wav?: Blob | null;
+  /** An audio to leave out of the results: the clip searched with. */
+  exclude?: string | null;
   signal?: AbortSignal;
 }): Promise<AudioSearchResponseV1> {
   const query = queryString({
@@ -100,6 +102,7 @@ export async function searchAudios(params: {
     limit: params.limit,
     source: params.source,
     soundOf: params.soundOf,
+    exclude: params.exclude,
   });
   if (!params.wav) return getJson(`${BASE}/search${query}`, params.signal);
   const res = await fetch(`${BASE}/search${query}`, {

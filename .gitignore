@@ -43,3 +43,6 @@ next-env.d.ts
 
 # datasets from before the catalog moved to Neon + Vercel Blob (no longer used)
 /data/
+
+# retrieval evaluation cache (query embeddings, full-text matches)
+/.eval-cache/

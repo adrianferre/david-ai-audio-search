@@ -11,7 +11,7 @@ import {
   UploadIcon,
   XIcon,
 } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
@@ -95,35 +95,6 @@ export function parseLink(text: string): URL | null {
 
 /** What's said in the clip searched by its words, as its chip shows it. */
 export type TranscriptLine = { status: "pending" } | { status: "error" } | { status: "success"; text: string };
-
-const MATCH_EXPLANATION: Record<SearchMatchFilterV1, ReactNode> = {
-  all: (
-    <>
-      <b className="font-medium text-foreground">All</b> matches the words, their meaning, and what the clip
-      sounds like. Use <b className="font-medium text-foreground">Words</b>,{" "}
-      <b className="font-medium text-foreground">Meaning</b> or{" "}
-      <b className="font-medium text-foreground">Sound</b> to narrow it.
-    </>
-  ),
-  exact: (
-    <>
-      <b className="font-medium text-foreground">Words</b> finds the transcripts and captions that contain every
-      word as typed. Use “quotes” for a phrase, <i>or</i> for either word, and -word to leave one out.
-    </>
-  ),
-  text: (
-    <>
-      <b className="font-medium text-foreground">Meaning</b> matches what the transcripts and captions mean, even
-      in other words, not the sound.
-    </>
-  ),
-  sound: (
-    <>
-      <b className="font-medium text-foreground">Sound</b> matches what the clips sound like, not their
-      words.
-    </>
-  ),
-};
 
 export function AudioSearchBar({
   query,
@@ -552,16 +523,10 @@ export function AudioSearchBar({
         )
       ) : (
         !recording &&
-        query.trim() !== "" && (
+        typedLink && (
           <p className="pl-1 text-[0.8rem] text-muted-foreground">
-            {typedLink ? (
-              <>
-                Press <b className="font-medium text-foreground">Enter</b> to find the clips that sound like
-                the audio or video file at this link.
-              </>
-            ) : (
-              MATCH_EXPLANATION[match]
-            )}
+            Press <b className="font-medium text-foreground">Enter</b> to find the clips that sound like the
+            audio or video file at this link.
           </p>
         )
       )}
