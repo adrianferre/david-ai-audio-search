@@ -309,7 +309,7 @@ function TranscriptResults({
 }) {
   const { transcript, q, excludeId, sound, searchable } = useTranscriptSearch(view);
   const yours = view.kind === "file";
-  const what = !yours ? "this clip" : view.example.source === "recording" ? "your recording" : "your file";
+  const what = yours ? `your ${view.example.source}` : "this clip";
 
   if (transcript.status === "pending") {
     return (

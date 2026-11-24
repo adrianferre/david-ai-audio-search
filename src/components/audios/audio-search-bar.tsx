@@ -423,8 +423,9 @@ export function AudioSearchBar({
                         event.preventDefault();
                         pickRecent(recentSearches[activeIndex]);
                       } else if (typedLink) {
+                        // The link stays in the box until its file is searched, so a link
+                        // that fails can be fixed and sent again.
                         event.preventDefault();
-                        onQueryChange("");
                         onAttachLink(typedLink);
                       } else if (query.trim()) {
                         onCommitQuery();
