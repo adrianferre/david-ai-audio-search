@@ -4,6 +4,8 @@ import type {
   AudioExportRequestV1,
   AudioListResponseV1,
   AudioSearchResponseV1,
+  AudioSource,
+  DatasetsResponseV1,
   SearchMatchFilterV1,
   SimilarAudiosResponseV1,
 } from "./types";
@@ -43,16 +45,29 @@ async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/** `?…` for these params, leaving out the unset ones; "" when none is set. */
+function queryString(params: Record<string, string | number | null | undefined>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null) search.set(key, String(value));
+  }
+  return search.size > 0 ? `?${search}` : "";
+}
+
 export function fetchAudios(params: {
   page: number;
   pageSize: number;
+  /** Only this dataset; every dataset when null or unset. */
+  source?: AudioSource | null;
   signal?: AbortSignal;
 }): Promise<AudioListResponseV1> {
-  const search = new URLSearchParams({
-    page: String(params.page),
-    pageSize: String(params.pageSize),
-  });
-  return getJson(`${BASE}/audios?${search}`, params.signal);
+  const query = queryString({ page: params.page, pageSize: params.pageSize, source: params.source });
+  return getJson(`${BASE}/audios${query}`, params.signal);
+}
+
+/** Every dataset of the catalog with its number of audios. */
+export function fetchDatasets(signal?: AbortSignal): Promise<DatasetsResponseV1> {
+  return getJson(`${BASE}/datasets`, signal);
 }
 
 export function fetchAudio(
@@ -68,11 +83,11 @@ export function searchAudios(params: {
   match: SearchMatchFilterV1;
   /** At most this many results; the API defaults to 50. */
   limit?: number;
+  source?: AudioSource | null;
   signal?: AbortSignal;
 }): Promise<AudioSearchResponseV1> {
-  const search = new URLSearchParams({ q: params.q, match: params.match });
-  if (params.limit !== undefined) search.set("limit", String(params.limit));
-  return getJson(`${BASE}/search?${search}`, params.signal);
+  const query = queryString({ q: params.q, match: params.match, limit: params.limit, source: params.source });
+  return getJson(`${BASE}/search${query}`, params.signal);
 }
 
 /** Search by example: the audios that sound most like `id`. */
@@ -80,11 +95,10 @@ export function fetchSimilarAudios(params: {
   id: string;
   /** At most this many audios; the API defaults to 50. */
   limit?: number;
+  source?: AudioSource | null;
   signal?: AbortSignal;
 }): Promise<SimilarAudiosResponseV1> {
-  const search = new URLSearchParams();
-  if (params.limit !== undefined) search.set("limit", String(params.limit));
-  const query = search.size > 0 ? `?${search}` : "";
+  const query = queryString({ limit: params.limit, source: params.source });
   return getJson(`${BASE}/audios/${encodeURIComponent(params.id)}/similar${query}`, params.signal);
 }
 
@@ -93,11 +107,10 @@ export async function searchByAudioFile(params: {
   wav: Blob;
   /** At most this many audios; the API defaults to 50. */
   limit?: number;
+  source?: AudioSource | null;
   signal?: AbortSignal;
 }): Promise<SimilarAudiosResponseV1> {
-  const search = new URLSearchParams();
-  if (params.limit !== undefined) search.set("limit", String(params.limit));
-  const query = search.size > 0 ? `?${search}` : "";
+  const query = queryString({ limit: params.limit, source: params.source });
   const res = await fetch(`${BASE}/search/audio${query}`, {
     method: "POST",
     body: params.wav,

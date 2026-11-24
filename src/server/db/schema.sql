@@ -23,6 +23,10 @@ CREATE TABLE IF NOT EXISTS audios (
   -- src/server/audios/types.ts).
   metadata         jsonb NOT NULL,
   updated_at       timestamptz NOT NULL DEFAULT now(),
+  -- Waveform overview (migrations/004_waveform_peaks.sql): 64 peak levels from 0 to 1
+  -- (src/lib/audio/peaks.ts), drawn by the UI. scripts/compute-waveforms.mts fills it;
+  -- NULL means "not computed yet".
+  waveform_peaks   real[] CHECK (waveform_peaks IS NULL OR (array_ndims(waveform_peaks) = 1 AND cardinality(waveform_peaks) = 64)),
 
   -- Search (migrations/001_search.sql). The vectors come from one multimodal model
   -- (src/server/search/embedding-config.ts), so text and audio share a vector space.

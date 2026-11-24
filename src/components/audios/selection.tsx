@@ -10,12 +10,20 @@ import { exportAudios } from "@/lib/api/v1/client";
 import { exportFileName, MAX_EXPORT_IDS } from "@/lib/api/v1/types";
 import { chooseSaveTarget, formatBytes, type SaveTarget, saveStream } from "@/lib/save-file";
 
-/** Rows checked for download, by id: they stay checked across pages and views. */
+import { formatClock } from "./waveform";
+
+/** A row the selection needs: its id, and its length for the total. */
+export type SelectableRow = { id: string; durationSeconds: number };
+
+/**
+ * Rows checked for download, by id, with their length in seconds: they stay
+ * checked across pages and views.
+ */
 export type Selection = {
-  checked: ReadonlySet<string>;
+  checked: ReadonlyMap<string, number>;
   /** While a download runs the selection can't change, so it matches the ZIP. */
   locked: boolean;
-  setChecked: (next: ReadonlySet<string>) => void;
+  setChecked: (next: ReadonlyMap<string, number>) => void;
   download: {
     /** From choosing where to save until the whole ZIP is written. */
     isPending: boolean;
@@ -26,12 +34,26 @@ export type Selection = {
   };
 };
 
+/** `checked` with `rows` checked (or unchecked when `value` is false). */
+export function withRows(
+  checked: ReadonlyMap<string, number>,
+  rows: readonly SelectableRow[],
+  value: boolean,
+): Map<string, number> {
+  const next = new Map(checked);
+  for (const row of rows) {
+    if (value) next.set(row.id, row.durationSeconds);
+    else next.delete(row.id);
+  }
+  return next;
+}
+
 /**
  * The checked rows and their ZIP download. Lives above the list and the search
  * bar, so checked rows survive searching and browsing and both can use them.
  */
 export function useSelection(): Selection {
-  const [checked, setCheckedState] = useState<ReadonlySet<string>>(() => new Set());
+  const [checked, setCheckedState] = useState<ReadonlyMap<string, number>>(() => new Map());
   // The save dialog is open: no download yet, but the selection is already in use.
   const [choosingTarget, setChoosingTarget] = useState(false);
   const [receivedBytes, setReceivedBytes] = useState<number | null>(null);
@@ -45,7 +67,7 @@ export function useSelection(): Selection {
   const busy = choosingTarget || download.isPending;
 
   const startDownload = async () => {
-    const ids = [...checked];
+    const ids = [...checked.keys()];
     setChoosingTarget(true);
     let target;
     try {
@@ -80,13 +102,13 @@ export function useSelection(): Selection {
 }
 
 /**
- * Escape unchecks every row. For the list and for the selection controls in
- * the search bar, so it works wherever the focus is after checking rows, but
- * not in the search input or the details panel.
+ * Escape unchecks every row. For the list and for the selection bar, so it
+ * works wherever the focus is after checking rows, but not in the search input
+ * or the details panel.
  */
 export function clearOnEscape(selection: Selection) {
   return (event: KeyboardEvent) => {
-    if (event.key === "Escape" && selection.checked.size > 0) selection.setChecked(new Set());
+    if (event.key === "Escape" && selection.checked.size > 0) selection.setChecked(new Map());
   };
 }
 
@@ -96,7 +118,7 @@ export function SelectAllCheckbox({
   selection,
   className,
 }: {
-  rows: readonly { id: string }[];
+  rows: readonly SelectableRow[];
   selection: Selection;
   className?: string;
 }) {
@@ -104,70 +126,91 @@ export function SelectAllCheckbox({
   const checkedHere = rows.filter((row) => checked.has(row.id)).length;
   const allChecked = rows.length > 0 && checkedHere === rows.length;
 
-  const checkAll = (value: boolean) => {
-    const next = new Set(checked);
-    for (const row of rows) {
-      if (value) next.add(row.id);
-      else next.delete(row.id);
-    }
-    setChecked(next);
-  };
-
   return (
     <Checkbox
       className={className}
-      aria-label="Select all audios in the list"
+      aria-label="Select all clips in the list"
       checked={allChecked}
       indeterminate={checkedHere > 0 && !allChecked}
       disabled={rows.length === 0 || selection.locked}
-      onCheckedChange={checkAll}
+      onCheckedChange={(value) => setChecked(withRows(checked, rows, value))}
       onKeyDown={clearOnEscape(selection)}
     />
   );
 }
 
-/** The count of checked rows and the download controls; nothing while none are checked. */
-export function SelectionActions({ selection }: { selection: Selection }) {
+/**
+ * Floats at the bottom of the list while rows are checked: how many, how much
+ * audio, and the ZIP download. Its own progress while the ZIP is written.
+ */
+export function SelectionBar({ selection }: { selection: Selection }) {
   const { checked, setChecked, download } = selection;
   if (checked.size === 0) return null;
   const tooMany = checked.size > MAX_EXPORT_IDS;
+  let seconds = 0;
+  for (const duration of checked.values()) seconds += duration;
+  const count = checked.size.toLocaleString();
 
   return (
-    <div
-      className="flex min-w-0 shrink-0 items-center gap-3 text-sm text-muted-foreground"
-      onKeyDown={clearOnEscape(selection)}
-    >
-      {download.error ? (
-        <span className="truncate text-destructive" role="alert">
-          {download.error.message}
-        </span>
-      ) : tooMany ? (
-        <span className="truncate">Up to {MAX_EXPORT_IDS} at a time</span>
-      ) : null}
-      <span className="shrink-0 text-foreground">{checked.size.toLocaleString()} selected</span>
-      <Button
-        variant="ghost"
-        size="sm"
-        disabled={selection.locked}
-        onClick={() => setChecked(new Set())}
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col items-center gap-2 px-4 pb-3">
+      <div
+        role="region"
+        aria-label="Selection"
+        className="pointer-events-auto flex max-w-full items-center gap-1.5 rounded-full bg-primary py-2 pr-2 pl-5 text-primary-foreground shadow-[0_12px_32px_rgba(26,26,25,0.22),0_2px_6px_rgba(26,26,25,0.12)]"
+        onKeyDown={clearOnEscape(selection)}
       >
-        Clear
-      </Button>
-      <Button size="sm" disabled={tooMany || download.isPending} onClick={download.start}>
-        {download.isPending ? (
-          <>
-            <LoaderCircleIcon className="animate-spin" />
-            {download.receivedBytes === null
-              ? "Preparing ZIP…"
-              : `Downloading… ${formatBytes(download.receivedBytes)}`}
-          </>
+        <span className="text-sm font-medium whitespace-nowrap">
+          {count} {checked.size === 1 ? "clip" : "clips"} selected
+        </span>
+        <span className="mr-2 text-[0.8rem] whitespace-nowrap text-[#b5b6ae] tabular-nums">
+          · {formatClock(seconds)} of audio
+        </span>
+        <Button
+          variant="ghost"
+          size="lg"
+          className="text-primary-foreground hover:bg-white/10 hover:text-primary-foreground"
+          disabled={selection.locked}
+          onClick={() => setChecked(new Map())}
+        >
+          Clear
+        </Button>
+        <Button
+          variant="outline"
+          size="lg"
+          className="border-transparent text-foreground hover:text-foreground"
+          disabled={tooMany || download.isPending}
+          onClick={download.start}
+        >
+          {download.isPending ? (
+            <>
+              <LoaderCircleIcon className="animate-spin" />
+              {download.receivedBytes === null
+                ? "Preparing ZIP…"
+                : `Downloading… ${formatBytes(download.receivedBytes)}`}
+            </>
+          ) : (
+            <>
+              <DownloadIcon />
+              {download.error ? "Retry download" : "Download ZIP"}
+            </>
+          )}
+        </Button>
+      </div>
+      <p
+        role={download.error || tooMany ? "alert" : undefined}
+        className="pointer-events-auto rounded-full bg-background/90 px-2 text-xs text-muted-foreground"
+      >
+        {download.error ? (
+          <span className="text-destructive">{download.error.message}</span>
+        ) : tooMany ? (
+          <span className="text-destructive">
+            Up to {MAX_EXPORT_IDS} clips per ZIP. Uncheck {(checked.size - MAX_EXPORT_IDS).toLocaleString()} to
+            download.
+          </span>
         ) : (
-          <>
-            <DownloadIcon />
-            {download.error ? "Retry download" : `Download (${checked.size})`}
-          </>
+          "FLAC audio + metadata.json for each clip · up to 200 clips per ZIP · Esc clears"
         )}
-      </Button>
+      </p>
     </div>
   );
 }

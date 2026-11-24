@@ -4,12 +4,15 @@ import { z } from "zod";
 import type { AudioListResponseV1 } from "@/lib/api/v1/types";
 import { apiError, internalError } from "@/server/api/errors";
 import { pageOffset, paginationQuerySchema, toPaginatedResponse } from "@/server/api/pagination";
+import { sourceQuerySchema } from "@/server/api/source-filter";
 import { toAudioListItemV1 } from "@/server/api/v1/audios";
 import { listAudios } from "@/server/audios/repository";
 
-/** GET /api/v1/audios?page=1&pageSize=50 */
+const querySchema = paginationQuerySchema.extend(sourceQuerySchema.shape);
+
+/** GET /api/v1/audios?page=1&pageSize=50&source=audiocaps */
 export async function GET(request: NextRequest) {
-  const parsed = paginationQuerySchema.safeParse(
+  const parsed = querySchema.safeParse(
     Object.fromEntries(request.nextUrl.searchParams),
   );
   if (!parsed.success) {
@@ -21,6 +24,7 @@ export async function GET(request: NextRequest) {
     page = await listAudios({
       offset: pageOffset(parsed.data),
       limit: parsed.data.pageSize,
+      source: parsed.data.source,
     });
   } catch (error) {
     return internalError(error);
