@@ -16,7 +16,8 @@ export type AudioCatalog = {
   byId: Map<string, AudioRecord>;
 };
 
-async function safeLoad<T>(name: string, load: () => Promise<T[]>): Promise<T[]> {
+/** Returns `null` (and warns) when the dataset can't be loaded. */
+async function safeLoad<T>(name: string, load: () => Promise<T[]>): Promise<T[] | null> {
   try {
     return await load();
   } catch (error) {
@@ -24,7 +25,7 @@ async function safeLoad<T>(name: string, load: () => Promise<T[]>): Promise<T[]>
       `[audios] Could not load dataset "${name}" (run \`pnpm data:setup\`):`,
       error instanceof Error ? error.message : error,
     );
-    return [];
+    return null;
   }
 }
 
@@ -48,14 +49,14 @@ async function mapConcurrent<T, R>(
 const byIdAsc = (a: { id: string }, b: { id: string }) =>
   a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 
-async function buildCatalog(): Promise<AudioCatalog> {
+async function buildCatalog(): Promise<{ catalog: AudioCatalog; complete: boolean }> {
   const [librispeech, audiocaps] = await Promise.all([
     safeLoad("librispeech", () => loadLibriSpeech(path.join(DATA_DIR, "librispeech"))),
     safeLoad("audiocaps", () => loadAudioCaps(path.join(DATA_DIR, "audiocaps"))),
   ]);
   const pending: PendingRecord[] = [
-    ...librispeech.sort(byIdAsc),
-    ...audiocaps.sort(byIdAsc),
+    ...(librispeech ?? []).sort(byIdAsc),
+    ...(audiocaps ?? []).sort(byIdAsc),
   ];
 
   const resolved = await mapConcurrent(pending, FLAC_READ_CONCURRENCY, async (record) => {
@@ -69,16 +70,29 @@ async function buildCatalog(): Promise<AudioCatalog> {
   });
   const items = resolved.filter((r): r is AudioRecord => r !== null);
 
-  return { items, byId: new Map(items.map((item) => [item.id, item])) };
+  return {
+    catalog: { items, byId: new Map(items.map((item) => [item.id, item])) },
+    complete: librispeech !== null && audiocaps !== null,
+  };
 }
 
 let catalogPromise: Promise<AudioCatalog> | undefined;
 
-/** Builds the in-memory index once per server process. */
+/**
+ * Builds the in-memory index once per server process. If a dataset couldn't
+ * be loaded (e.g. `data/` is still being downloaded), the partial catalog is
+ * served but not cached, so a later request picks up the missing dataset.
+ */
 export function getCatalog(): Promise<AudioCatalog> {
-  catalogPromise ??= buildCatalog().catch((error) => {
-    catalogPromise = undefined; // allow a retry on the next request
-    throw error;
-  });
+  catalogPromise ??= buildCatalog().then(
+    ({ catalog, complete }) => {
+      if (!complete) catalogPromise = undefined;
+      return catalog;
+    },
+    (error) => {
+      catalogPromise = undefined; // allow a retry on the next request
+      throw error;
+    },
+  );
   return catalogPromise;
 }
