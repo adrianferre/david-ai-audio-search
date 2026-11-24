@@ -301,11 +301,11 @@ export function AudioBrowser() {
         Results for <span className="text-muted-foreground">“{view.q}”</span>
       </>
     ) : view.kind === "similar" ? (
-      { all: "Similar", exact: "Says something similar", text: "Says something similar", sound: "Sounds similar" }[
+      { all: "Similar", exact: "Says something similar", text: "Means something similar", sound: "Sounds similar" }[
         view.match
       ]
     ) : (
-      `${{ all: "Like", exact: "Says what’s in", text: "Says what’s in", sound: "Sounds like" }[view.match]} your ${view.example.source === "recording" ? "recording" : "file"}`
+      `${{ all: "Like", exact: "Says what’s in", text: "Means what’s in", sound: "Sounds like" }[view.match]} your ${view.example.source === "recording" ? "recording" : "file"}`
     );
   const scope = source && view.kind !== "browse" ? `${SOURCE_LABEL[source]} only` : null;
 
@@ -376,6 +376,7 @@ export function AudioBrowser() {
             recentSearches={recent.entries}
             onPickRecent={rerun}
             onClearRecent={recent.clear}
+            hideRecent={dragging}
             onCommitQuery={commitQuery}
           />
         </header>

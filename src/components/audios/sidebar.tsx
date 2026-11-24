@@ -4,11 +4,14 @@ import { useQuery } from "@tanstack/react-query";
 import { AudioLinesIcon } from "lucide-react";
 
 import { DavidAiLogo } from "@/components/david-ai-logo";
-import { AUDIO_SOURCES, type AudioSource } from "@/lib/api/v1/types";
+import type { AudioSource } from "@/lib/api/v1/types";
 import { cn } from "@/lib/utils";
 
 import { SOURCE_LABEL, SOURCE_SWATCH_CLASS } from "./datasets";
 import { datasetsQuery } from "./queries";
+
+/** The speech datasets first, then the sound one. */
+const FILTER_ORDER: readonly AudioSource[] = ["librispeech", "commonvoice", "audiocaps"];
 
 /**
  * The left rail: the product, the dataset filter, and how to search by sound.
@@ -27,7 +30,7 @@ export function Sidebar({
 
   const items: { value: AudioSource | null; label: string; swatch: string; count?: number }[] = [
     { value: null, label: "All", swatch: "bg-foreground", count: total },
-    ...AUDIO_SOURCES.map((value) => ({
+    ...FILTER_ORDER.map((value) => ({
       value,
       label: SOURCE_LABEL[value],
       swatch: SOURCE_SWATCH_CLASS[value],
@@ -47,7 +50,7 @@ export function Sidebar({
 
       <div className="flex flex-col gap-2.5">
         <p id="datasets-label" className="text-xs font-medium text-muted-foreground">
-          Search by datasets
+          Search datasets
         </p>
         <div role="group" aria-labelledby="datasets-label" className="flex flex-col border-l border-input">
           {items.map((item) => {

@@ -97,7 +97,7 @@ Each clip has up to three things to match against, all in the `audios` table:
   words, so "barking" doesn't match "barks" and "the end" needs both words, which is what you want
   when looking for a specific word or line. The query needs no model call, so it works even when the
   AI Gateway doesn't.
-- **Search by example** ("Find similar sound" on any clip) returns the nearest neighbours of that clip's
+- **Search by example** ("Find similar" on any clip) returns the nearest neighbours of that clip's
   audio vector. It needs no model call: the vector is already stored.
 - **Search with your own audio file** ("Upload", or drop a file anywhere on the
   page): the browser decodes the file (WAV, MP3, M4A, OGG, FLAC…), converts it to 16 kHz mono
@@ -108,7 +108,7 @@ Each clip has up to three things to match against, all in the `audios` table:
   through the same conversion as a file. Echo cancellation and noise suppression are turned off,
   since they are tuned for voices and would filter out the sounds being searched for.
 - **All, Words, Meaning or Sound, for any clip.** A search with a clip (a file, a recording, or
-  "Find similar sound") has the same options as text search, in the same order, and compares its
+  "Find similar") has the same options as text search, in the same order, and compares its
   **Sound** by default: the audio vector, as above. **Words** and **Meaning** search by what's said
   in it instead: its transcript goes through the text search as the query, with `match=exact`
   (every word said, as said) or `match=text` (its meaning: text vector plus exact words), so it is

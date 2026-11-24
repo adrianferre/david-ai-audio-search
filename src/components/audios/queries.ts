@@ -145,7 +145,7 @@ export const fileQuery = (example: AudioExample | null, source: AudioSource | nu
     staleTime: Infinity,
   });
 
-/** The clip "Find similar sound" was used on, as the list and its header show it. */
+/** The clip "Find similar" was used on, as the list and its header show it. */
 export type ReferenceClip = {
   id: string;
   source: AudioSource;

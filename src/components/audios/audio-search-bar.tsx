@@ -132,6 +132,7 @@ export function AudioSearchBar({
   recentSearches,
   onPickRecent,
   onClearRecent,
+  hideRecent,
   onCommitQuery,
 }: {
   query: string;
@@ -162,6 +163,8 @@ export function AudioSearchBar({
   recentSearches: readonly RecentSearch[];
   onPickRecent: (entry: RecentSearch) => void;
   onClearRecent: () => void;
+  /** Keeps the recent searches closed even with the input focused, as while a file is dragged over the page. */
+  hideRecent: boolean;
   /** The typed query is done (Enter, or leaving the input): worth keeping as a recent search. */
   onCommitQuery: () => void;
 }) {
@@ -189,7 +192,7 @@ export function AudioSearchBar({
   const transcribing = byWords && transcript.status === "pending";
   const nobodySpeaks = byWords && transcript.status === "success" && transcript.text === "";
   const recentOpen =
-    inputFocused && !recentDismissed && query === "" && recentSearches.length > 0;
+    inputFocused && !recentDismissed && !hideRecent && query === "" && recentSearches.length > 0;
   const activeIndex = recentOpen && activeRecent < recentSearches.length ? activeRecent : -1;
 
   const pickRecent = (entry: RecentSearch) => {

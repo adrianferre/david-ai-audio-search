@@ -20,11 +20,12 @@ import { type ReactNode, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
+import { cn } from "@/lib/utils";
 import { downloadAudioFile, exportAudios, fetchAudio } from "@/lib/api/v1/client";
 import type { AudioDetailV1 } from "@/lib/api/v1/types";
 import { chooseSaveTarget, formatBytes, type SaveTarget, saveStream } from "@/lib/save-file";
 
-import { DatasetTag, displayText, displayTitle, SOURCE_KIND } from "./datasets";
+import { DatasetTag, displayText, displayTitle } from "./datasets";
 import type { ReferenceClip } from "./queries";
 import { type AudioPlayer, playbackOf } from "./use-audio-player";
 import { formatClock, SeekableWaveform } from "./waveform";
@@ -127,13 +128,7 @@ export function AudioDetailPanel({
       className="flex w-[min(28rem,42%)] shrink-0 flex-col border-l bg-card"
       aria-label="Clip details"
     >
-      <div className="flex h-14 shrink-0 items-center gap-2.5 border-b pr-3 pl-6">
-        {audio && (
-          <>
-            <DatasetTag source={audio.source} />
-            <span className="truncate text-[0.8rem] text-muted-foreground">{SOURCE_KIND[audio.source]}</span>
-          </>
-        )}
+      <div className="flex h-14 shrink-0 items-center border-b pr-3 pl-6">
         <IconButton
           variant="ghost"
           className="ml-auto"
@@ -169,7 +164,7 @@ export function AudioDetailPanel({
             <ClipHeading audio={audio} />
             <ClipPlayer audio={audio} player={player} />
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
               <Button
                 size="lg"
                 onClick={() =>
@@ -184,7 +179,7 @@ export function AudioDetailPanel({
                 }
               >
                 <AudioWaveformIcon />
-                Find similar sound
+                Find similar
               </Button>
               <DownloadMenu id={audio.id} download={download} />
             </div>
@@ -197,12 +192,14 @@ export function AudioDetailPanel({
             <ClipText audio={audio} />
             <ClipFacts audio={audio} />
 
-            <details className="group">
+            <details className="group/json relative">
               <summary className="-ml-2.5 inline-flex h-8 cursor-pointer list-none items-center gap-2 rounded-lg px-2.5 text-[0.8rem] text-muted-foreground outline-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
                 <CodeIcon aria-hidden="true" className="size-4" />
-                <span className="group-open:hidden">View raw record (JSON)</span>
-                <span className="hidden group-open:inline">Hide raw record</span>
+                <span className="group-open/json:hidden">View raw record (JSON)</span>
+                <span className="hidden group-open/json:inline">Hide raw record</span>
               </summary>
+              {/* Content of a closed <details> isn't shown, so this only appears when it's open. */}
+              <CopyButton text={JSON.stringify(data, null, 2)} label="Copy JSON" className="absolute top-1 right-0" />
               <pre className="mt-2 overflow-x-auto rounded-xl bg-background p-4 font-mono text-xs leading-5 break-words whitespace-pre-wrap">
                 {JSON.stringify(data, null, 2)}
               </pre>
@@ -214,26 +211,55 @@ export function AudioDetailPanel({
   );
 }
 
-function ClipHeading({ audio }: { audio: AudioDetailV1 }) {
+/** Copies text to the clipboard; `copied` stays true for a moment after. */
+function useCopy() {
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     if (!copied) return;
     const timeout = setTimeout(() => setCopied(false), 1500);
     return () => clearTimeout(timeout);
   }, [copied]);
+  return {
+    copied,
+    copy: (text: string) => void navigator.clipboard.writeText(text).then(() => setCopied(true)),
+  };
+}
+
+/** Hides a button until its `group/reveal` is hovered or it has keyboard focus; always shown on touch screens. */
+const REVEAL_ON_HOVER =
+  "opacity-0 group-hover/reveal:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100";
+
+function CopyButton({ text, label, className }: { text: string; label: string; className?: string }) {
+  const { copied, copy } = useCopy();
+  return (
+    <IconButton
+      variant="ghost"
+      size="icon-xs"
+      label={copied ? "Copied" : label}
+      className={cn("rounded-md text-muted-foreground", className)}
+      onClick={() => copy(text)}
+    >
+      {copied ? <CheckIcon /> : <CopyIcon />}
+    </IconButton>
+  );
+}
+
+function ClipHeading({ audio }: { audio: AudioDetailV1 }) {
+  const { copied, copy } = useCopy();
 
   return (
     <div className="flex flex-col gap-2.5">
       <h2 className="font-serif text-2xl leading-8 tracking-[-0.3px]">“{headline(displayText(audio))}”</h2>
-      <p className="text-[0.8rem] text-muted-foreground">{displayTitle(audio)}</p>
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+        <DatasetTag source={audio.source} />
+        <p className="text-[0.8rem] text-muted-foreground">{displayTitle(audio)}</p>
+      </div>
       <Button
         variant="ghost"
         size="xs"
         className="-ml-2 self-start rounded-lg font-mono text-xs font-normal text-muted-foreground"
         aria-label={copied ? "Clip ID copied" : `Copy the clip ID, ${audio.id}`}
-        onClick={() => {
-          void navigator.clipboard.writeText(audio.id).then(() => setCopied(true));
-        }}
+        onClick={() => copy(audio.id)}
       >
         {audio.id}
         {copied ? <CheckIcon /> : <CopyIcon />}
@@ -320,10 +346,22 @@ function DownloadMenu({ id, download }: { id: string; download: ReturnType<typeo
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({
+  title,
+  copy,
+  children,
+}: {
+  title: string;
+  /** The section's text, for a copy button beside the title. */
+  copy?: { text: string; label: string };
+  children: ReactNode;
+}) {
   return (
-    <section className="flex flex-col gap-2">
-      <h3 className="text-xs font-medium text-muted-foreground">{title}</h3>
+    <section className="group/reveal flex flex-col gap-2">
+      <div className="flex h-4 items-center justify-between">
+        <h3 className="text-xs font-medium text-muted-foreground">{title}</h3>
+        {copy && <CopyButton text={copy.text} label={copy.label} className={REVEAL_ON_HOVER} />}
+      </div>
       {children}
     </section>
   );
@@ -332,7 +370,10 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 function ClipText({ audio }: { audio: AudioDetailV1 }) {
   if (audio.source === "audiocaps") {
     return (
-      <Section title={`Captions (${audio.metadata.captions.length})`}>
+      <Section
+        title={`Captions (${audio.metadata.captions.length})`}
+        copy={{ text: audio.metadata.captions.join("\n"), label: "Copy captions" }}
+      >
         <ol className="flex flex-col text-[0.95rem] leading-6">
           {audio.metadata.captions.map((caption, i) => (
             <li key={i} className="flex gap-3 border-t border-hairline py-2 first:border-t-0 first:pt-0">
@@ -347,14 +388,15 @@ function ClipText({ audio }: { audio: AudioDetailV1 }) {
     );
   }
   return (
-    <Section title="Transcript">
+    <Section title="Transcript" copy={{ text: displayText(audio), label: "Copy transcript" }}>
       <p className="text-[0.95rem] leading-6">{displayText(audio)}</p>
     </Section>
   );
 }
 
 function ClipFacts({ audio }: { audio: AudioDetailV1 }) {
-  const facts: { label: string; value: ReactNode }[] = [];
+  // `copy` is the plain text a row copies; a row whose value is text copies that.
+  const facts: { label: string; value: ReactNode; copy?: string }[] = [];
   switch (audio.source) {
     case "librispeech": {
       const { speaker, chapter, utteranceId } = audio.metadata;
@@ -372,6 +414,7 @@ function ClipFacts({ audio }: { audio: AudioDetailV1 }) {
       facts.push(
         {
           label: "Source",
+          copy: youtubeUrl,
           value: (
             <a
               href={youtubeUrl}
@@ -412,12 +455,24 @@ function ClipFacts({ audio }: { audio: AudioDetailV1 }) {
   return (
     <Section title="Details">
       <dl className="grid grid-cols-[7rem_minmax(0,1fr)] text-[0.8rem] leading-[18px]">
-        {facts.map((fact) => (
-          <div key={fact.label} className="contents">
-            <dt className="border-t border-hairline py-2.5 text-muted-foreground">{fact.label}</dt>
-            <dd className="truncate border-t border-hairline py-2.5">{fact.value}</dd>
-          </div>
-        ))}
+        {facts.map((fact) => {
+          const copy = fact.copy ?? (typeof fact.value === "string" && fact.value !== "—" ? fact.value : null);
+          return (
+            <div key={fact.label} className="group/reveal contents">
+              <dt className="border-t border-hairline py-2.5 text-muted-foreground">{fact.label}</dt>
+              <dd className="flex min-w-0 items-center gap-2 border-t border-hairline py-2.5">
+                <span className="truncate">{fact.value}</span>
+                {copy && (
+                  <CopyButton
+                    text={copy}
+                    label={`Copy ${/[A-Z]/.test(fact.label.slice(1)) ? fact.label : fact.label.toLowerCase()}`}
+                    className={cn("-my-[3px] ml-auto", REVEAL_ON_HOVER)}
+                  />
+                )}
+              </dd>
+            </div>
+          );
+        })}
       </dl>
     </Section>
   );

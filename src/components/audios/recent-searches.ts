@@ -11,7 +11,7 @@ export const MAX_RECENT_SEARCHES = 5;
 
 /**
  * A search the user ran, with what it takes to run it again: the text, the
- * catalog clip "Find similar sound" was used on, or the user's own file or
+ * catalog clip "Find similar" was used on, or the user's own file or
  * recording (its WAV included). `source` is the dataset filter it ran with.
  */
 export type RecentSearch = { id: string; at: number; source: AudioSource | null } & (
