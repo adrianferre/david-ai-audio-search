@@ -134,6 +134,16 @@ Each clip has up to three things to match against, all in the `audios` table:
 - **No vector index.** With about 3,300 clips an exact scan takes a few milliseconds and returns
   the true nearest neighbours. An HNSW index is the next step at a much larger scale.
 
+### How good is it?
+
+[`eval/`](eval/README.md) measures it: 3,341 queries whose answers come from the datasets
+(AudioCaps captions, AudioSet labels, transcripts), production ranking vs 9 variants and
+baselines, with 95% bootstrap intervals and a parity check against the live API. Latest numbers
+in [`eval/report.md`](eval/report.md). In short: R@10 90% for a held-out AudioCaps caption
+(32% from the audio vector alone; LAION-CLAP reports 83%), 100% for transcript fragments, 99% for
+paraphrases. The cut-off never says "no results" for a query with no answer, though the top
+score alone tells those apart (AUC 0.98). `pnpm eval` reruns it, read-only.
+
 ### Embedding the catalog
 
 The vectors are filled by a script. It reads each FLAC from the Blob store, converts it to WAV
@@ -201,6 +211,8 @@ the AI Gateway tab of the Vercel team. To use an API key instead of OIDC, set `A
 | `pnpm embed-catalog` | Embed the clips that have no vector yet (see Search) |
 | `pnpm import-commonvoice` | Add the Common Voice sample to the database and Blob store (see Search) |
 | `pnpm compute-waveforms` | Compute the waveform overviews of the clips that have none yet (see Waveforms) |
+| `pnpm test`      | Unit tests (the evaluation's metrics) |
+| `pnpm eval`      | Retrieval evaluation, read-only (see [eval/](eval/README.md)) |
 
 ## Project layout
 
@@ -209,8 +221,9 @@ the AI Gateway tab of the Vercel team. To use an API key instead of OIDC, set `A
 - `src/components/` – app components (theme provider/toggle)
 - `src/lib/` – shared utilities
 - `src/server/db/` – Neon client, the catalog schema (`schema.sql`) and its migrations
-- `src/server/search/` – embedding settings and the query embedding call
+- `src/server/search/` – embedding and ranking settings, and the query embedding call
 - `scripts/` – one-off scripts (`embed-catalog.mts`, `import-commonvoice.mts`, `compute-waveforms.mts`)
+- `scripts/eval/`, `eval/` – the retrieval evaluation: code, query sets, results
 - `src/env.ts` – typed, validated environment variables (`import { env } from "@/env"`)
 
 ## API

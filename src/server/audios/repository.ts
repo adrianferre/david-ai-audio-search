@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 
 import { getSql } from "@/server/db";
+import { EXACT_WORDS_BONUS, MIN_Z_SCORE } from "@/server/search/ranking-config";
 
 import type { AudioRecord, AudioSearchHit, AudioSource, SearchMatch, SimilarAudioHit } from "./types";
 
@@ -137,20 +138,13 @@ function toVector(embedding: number[] | undefined): string | null {
   return embedding ? `[${embedding.join(",")}]` : null;
 }
 
-/**
+/*
  * Similarities are compared as z-scores: how many standard deviations a clip
  * stands above the catalog's mean for this query. That puts text-to-text and
  * text-to-audio similarity on one scale (their raw values differ, and both
  * shift from query to query), so the two signals can be ranked together.
- *
- * A vector list has no natural end, since every clip has some similarity to
- * every query. Below this z-score a clip is not a match. It trims the tail; it
- * cannot tell that a query has no good answer (the nearest clips to nonsense
- * still stand out a little).
+ * The cut-off and the exact-words bonus are in src/server/search/ranking-config.ts.
  */
-const MIN_Z_SCORE = 3;
-/** Added when the clip's text contains every word of the query: worth one clear match. */
-const EXACT_WORDS_BONUS = 3;
 
 /**
  * Text search over two signals:
