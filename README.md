@@ -249,7 +249,7 @@ audios-2026-11-24-2.zip
     └── audiocaps-rqfQRErjfk8_170.flac
 ```
 
-The ZIP is streamed (so it isn't bound by the 4.5 MB function response limit) and its entries are stored uncompressed (FLAC already is). Unknown ids return `404 not_found` with `details.missingIds` before anything is streamed. It is one request for the rate limit, whatever the number of ids. The UI uses it for the row checkboxes' **Download** button.
+The ZIP is streamed (so it isn't bound by the 4.5 MB function response limit) and its entries are stored uncompressed (FLAC already is). Unknown ids return `404 not_found` with `details.missingIds` before anything is streamed. It is one request for the rate limit, whatever the number of ids. The UI uses it for the row checkboxes' **Download** button and for the **ZIP** button of the details panel (one audio). The panel's **Audio** button saves only the FLAC, from `GET /api/v1/audios/{id}/audio`.
 
 ### `POST /api/v1/search/audio`
 

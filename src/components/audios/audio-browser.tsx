@@ -25,8 +25,12 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
   return debounced;
 }
 
-/** Bigger files are almost surely not a short recording, and decoding them takes a lot of memory. */
-const MAX_FILE_BYTES = 100 * 1024 * 1024;
+/**
+ * The whole file is decoded before it is cut to 30 s, and decoded audio is
+ * 10–40× its compressed size (float32 at 48 kHz). 20 MB of MP3 is already
+ * about 0.5 GB decoded, and far longer than any clip worth searching with.
+ */
+const MAX_FILE_BYTES = 20 * 1024 * 1024;
 
 /** "Recording (0:07)", the name a recording goes by in the search bar. */
 function recordingName(seconds: number) {
@@ -119,7 +123,7 @@ export function AudioBrowser() {
     recorder.cancel();
     if (file.size > MAX_FILE_BYTES) {
       attachToken.current++;
-      setExampleStatus({ kind: "error", message: "This file is too big. Use a recording under 100 MB." });
+      setExampleStatus({ kind: "error", message: "This file is too big. Use a recording under 20 MB." });
       return;
     }
     void searchWithAudio(file, file.name, "file");

@@ -108,6 +108,17 @@ export async function searchByAudioFile(params: {
   return res.json() as Promise<SimilarAudiosResponseV1>;
 }
 
+/** The audio's FLAC as a stream, to save to disk. */
+export async function downloadAudioFile(
+  id: string,
+  signal?: AbortSignal,
+): Promise<ReadableStream<Uint8Array>> {
+  const res = await fetch(audioFileUrl(id), { signal, headers: { accept: "audio/flac" } });
+  await ensureOk(res);
+  if (!res.body) throw new ApiError(res.status, "empty_response", "The audio came back empty");
+  return res.body;
+}
+
 /** URL of the audio's FLAC, streamed by the API. Use it as an <audio> src. */
 export function audioFileUrl(id: string): string {
   return `${BASE}/audios/${encodeURIComponent(id)}/audio`;

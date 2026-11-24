@@ -10,6 +10,9 @@ const SAMPLE_RATE = 16_000;
 /** Longer files are searched by their beginning. Catalog clips are 10–35 s. */
 export const MAX_EXAMPLE_SECONDS = 30;
 
+/** Cutting less than this off isn't worth telling the user about. */
+const TRIM_TOLERANCE_SECONDS = 0.5;
+
 export type ExampleClip = {
   wav: Blob;
   durationSeconds: number;
@@ -50,7 +53,9 @@ export async function toExampleClip(file: Blob): Promise<ExampleClip> {
   return {
     wav: encodeWav(rendered.getChannelData(0), SAMPLE_RATE),
     durationSeconds,
-    trimmed: decoded.duration > MAX_EXAMPLE_SECONDS,
+    // Encoder framing and padding (Opus frames, AAC priming) make a recording
+    // stopped at exactly MAX_EXAMPLE_SECONDS decode a few ms longer.
+    trimmed: decoded.duration > MAX_EXAMPLE_SECONDS + TRIM_TOLERANCE_SECONDS,
   };
 }
 
