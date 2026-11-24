@@ -17,6 +17,7 @@ const fileColumns = {
   duration_seconds: z.number(),
   sample_rate: z.number(),
   channels: z.number(),
+  waveform_peaks: z.array(z.number()).nullable(),
 };
 
 const rowSchema = z.discriminatedUnion("source", [
@@ -70,6 +71,7 @@ function toRecord(row: unknown): AudioRecord {
     durationSeconds: r.duration_seconds,
     sampleRate: r.sample_rate,
     channels: r.channels,
+    waveformPeaks: r.waveform_peaks,
   };
   switch (r.source) {
     case "librispeech":
@@ -102,7 +104,7 @@ export async function listAudios({
   const [rows, [{ total }]] = await sql.transaction(
     [
       sql`
-        SELECT id, source, file_name, blob_pathname, duration_seconds, sample_rate, channels, metadata
+        SELECT id, source, file_name, blob_pathname, duration_seconds, sample_rate, channels, waveform_peaks, metadata
         FROM audios
         WHERE ${source}::text IS NULL OR source = ${source}
         ORDER BY (CASE source WHEN 'librispeech' THEN 0 ELSE 1 END), id
@@ -123,7 +125,7 @@ export async function countAudiosBySource(): Promise<{ source: AudioSource; coun
 
 export async function getAudio(id: string): Promise<AudioRecord | null> {
   const rows = await getSql()`
-    SELECT id, source, file_name, blob_pathname, duration_seconds, sample_rate, channels, metadata
+    SELECT id, source, file_name, blob_pathname, duration_seconds, sample_rate, channels, waveform_peaks, metadata
     FROM audios
     WHERE id = ${id}
   `;
@@ -207,7 +209,7 @@ export async function searchAudios({
              CASE WHEN sound_z >= ${MIN_Z_SCORE}::float8 THEN sound_z ELSE 0 END AS sound
       FROM scored
     )
-    SELECT a.id, a.source, a.file_name, a.blob_pathname, a.duration_seconds, a.sample_rate, a.channels,
+    SELECT a.id, a.source, a.file_name, a.blob_pathname, a.duration_seconds, a.sample_rate, a.channels, a.waveform_peaks,
            a.metadata, greatest(g.text, g.sound)::float8 AS score, g.text > 0 AS text, g.sound > 0 AS sound,
            (
              SELECT caption
@@ -246,7 +248,7 @@ export async function findSimilarAudios(
     [
       sql`SELECT 1 FROM audios WHERE id = ${id}`,
       sql`
-        SELECT a.id, a.source, a.file_name, a.blob_pathname, a.duration_seconds, a.sample_rate, a.channels,
+        SELECT a.id, a.source, a.file_name, a.blob_pathname, a.duration_seconds, a.sample_rate, a.channels, a.waveform_peaks,
                a.metadata, (1 - (a.audio_embedding <=> example.audio_embedding))::float8 AS similarity
         FROM audios a
         JOIN audios example ON example.id = ${id}
@@ -268,7 +270,7 @@ export async function findSimilarAudios(
 export async function getAudios(ids: string[]): Promise<AudioRecord[]> {
   if (ids.length === 0) return [];
   const rows = await getSql()`
-    SELECT id, source, file_name, blob_pathname, duration_seconds, sample_rate, channels, metadata
+    SELECT id, source, file_name, blob_pathname, duration_seconds, sample_rate, channels, waveform_peaks, metadata
     FROM audios
     WHERE id = ANY(${ids})
   `;
@@ -290,7 +292,7 @@ export async function findAudiosNearVector(
 ): Promise<SimilarAudioHit[]> {
   const rows = await getSql()`
     WITH q AS (SELECT ${toVector(vector)}::vector AS v)
-    SELECT a.id, a.source, a.file_name, a.blob_pathname, a.duration_seconds, a.sample_rate, a.channels,
+    SELECT a.id, a.source, a.file_name, a.blob_pathname, a.duration_seconds, a.sample_rate, a.channels, a.waveform_peaks,
            a.metadata, (1 - (a.audio_embedding <=> q.v))::float8 AS similarity
     FROM audios a
     CROSS JOIN q

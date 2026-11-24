@@ -16,7 +16,7 @@ import { type AudioExample, type AudioListView, type ReferenceClip, useListView 
 import { SelectionBar, useSelection } from "./selection";
 import { Sidebar } from "./sidebar";
 import { type AudioPlayer, playbackOf, useAudioPlayer } from "./use-audio-player";
-import { formatClock, useWaveform, Waveform } from "./waveform";
+import { formatClock, Waveform } from "./waveform";
 
 /** Wait for a pause in typing: every search embeds the query on the server. */
 const SEARCH_DEBOUNCE_MS = 300;
@@ -209,7 +209,8 @@ export function AudioBrowser() {
       <main className="flex min-w-0 flex-1 flex-col">
         <header className="flex shrink-0 flex-col gap-4 px-6 pt-7 pb-4">
           <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-            <h1 className="min-w-0 truncate font-serif text-[32px] leading-10 tracking-[-0.64px]">{title}</h1>
+            {/* truncate clips overflow; the padding keeps Besley's descenders (g, y, p) inside it. */}
+            <h1 className="-mb-2 min-w-0 truncate pb-2 font-serif text-[32px] leading-10 tracking-[-0.64px]">{title}</h1>
             <p aria-live="polite" className="text-[0.8rem] text-muted-foreground tabular-nums">
               {[scope, summary].filter(Boolean).join(" · ")}
             </p>
@@ -290,7 +291,6 @@ export function AudioBrowser() {
 
 /** The clip a "similar" search started from, playable to compare with the results. */
 function ReferenceCard({ clip, player }: { clip: ReferenceClip; player: AudioPlayer }) {
-  const waveform = useWaveform(clip.id);
   const playback = playbackOf(player, clip.id);
   const playing = playback?.status === "playing" || playback?.status === "loading";
 
@@ -315,8 +315,7 @@ function ReferenceCard({ clip, player }: { clip: ReferenceClip; player: AudioPla
         <p className="truncate text-sm font-medium">{displayText(clip)}</p>
       </div>
       <Waveform
-        peaks={waveform.data}
-        loading={waveform.isFetching}
+        peaks={clip.waveformPeaks}
         bars={40}
         height={26}
         played={playback && clip.durationSeconds > 0 ? playback.currentTime / clip.durationSeconds : 0}

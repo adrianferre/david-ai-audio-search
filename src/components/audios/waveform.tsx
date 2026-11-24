@@ -1,25 +1,9 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import type { KeyboardEvent, PointerEvent } from "react";
 
-import { loadPeaks, type Peaks, resamplePeaks } from "@/lib/audio/waveform";
+import { type Peaks, resamplePeaks } from "@/lib/audio/peaks";
 import { cn } from "@/lib/utils";
-
-/**
- * The clip's waveform peaks. Off until `enabled`, so the list only loads the
- * rows that are on screen once scrolling stops.
- */
-export function useWaveform(id: string, enabled = true) {
-  return useQuery({
-    queryKey: ["waveform", id],
-    queryFn: ({ signal }) => loadPeaks(id, signal),
-    enabled,
-    staleTime: Infinity,
-    gcTime: 30 * 60 * 1000,
-    retry: false,
-  });
-}
 
 /** The colour bars of withdavid.ai, for the played part of the player's waveform. */
 const SPECTRUM = ["#E8833A", "#E9C46A", "#B9A27E", "#6C63B5", "#3B3FD1", "#9B3FA0"];
@@ -37,7 +21,8 @@ function spectrumAt(t: number) {
 }
 
 type WaveformProps = {
-  peaks: Peaks | undefined;
+  /** From the API (`waveformPeaks`). Null when not computed yet: flat bars. */
+  peaks: Peaks | null;
   bars: number;
   /** Share of the clip played, 0 to 1. */
   played?: number;
@@ -46,8 +31,6 @@ type WaveformProps = {
   height: number;
   barWidth?: number;
   gap?: number;
-  /** The peaks are being loaded: the flat placeholder pulses. */
-  loading?: boolean;
   className?: string;
 };
 
@@ -60,7 +43,6 @@ export function Waveform({
   height,
   barWidth = 2,
   gap = 2,
-  loading = false,
   className,
 }: WaveformProps) {
   const levels = peaks ? resamplePeaks(peaks, bars) : null;
@@ -73,7 +55,7 @@ export function Waveform({
       width={width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}
-      className={cn("shrink-0", loading && "animate-pulse", className)}
+      className={cn("shrink-0", className)}
     >
       {Array.from({ length: bars }, (_, i) => {
         const level = levels ? levels[i] : 0;
@@ -108,7 +90,6 @@ export function Waveform({
  */
 export function SeekableWaveform({
   peaks,
-  loading,
   bars,
   height,
   currentTime,
@@ -116,8 +97,7 @@ export function SeekableWaveform({
   onSeek,
   label,
 }: {
-  peaks: Peaks | undefined;
-  loading: boolean;
+  peaks: Peaks | null;
   bars: number;
   height: number;
   currentTime: number;
@@ -163,7 +143,6 @@ export function SeekableWaveform({
     >
       <Waveform
         peaks={peaks}
-        loading={loading}
         bars={bars}
         height={height}
         barWidth={3}

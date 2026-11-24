@@ -15,6 +15,8 @@ type AudioFileInfo = {
   durationSeconds: number;
   sampleRate: number;
   channels: number;
+  /** Waveform overview: `PEAK_COUNT` levels from 0 to 1 (src/lib/audio/peaks.ts). Null until computed. */
+  waveformPeaks: number[] | null;
 };
 
 export type LibriSpeechMetadata = {

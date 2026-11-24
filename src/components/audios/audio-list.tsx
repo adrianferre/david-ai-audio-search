@@ -30,7 +30,7 @@ import {
 } from "./queries";
 import { clearOnEscape, SelectAllCheckbox, type Selection, withRows } from "./selection";
 import { type AudioPlayer, type PlayerStatus, playbackOf } from "./use-audio-player";
-import { formatClock, useWaveform, Waveform } from "./waveform";
+import { formatClock, Waveform } from "./waveform";
 
 const ROW_HEIGHT = 68;
 /** Room under the last row for the floating selection bar. */
@@ -426,9 +426,6 @@ function AudioTable({
   });
   const virtualItems = virtualizer.getVirtualItems();
   const lastIndex = virtualItems.at(-1)?.index ?? -1;
-  // Waveforms load for the rows on screen, once scrolling stops.
-  const visible = virtualizer.range;
-  const settled = !virtualizer.isScrolling;
 
   useEffect(() => {
     if (lastIndex >= rows.length - 1) onEndReached?.();
@@ -457,8 +454,6 @@ function AudioTable({
         <ul className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
           {virtualItems.map((item) => {
             const row = rows[item.index];
-            const onScreen =
-              visible !== null && item.index >= visible.startIndex && item.index <= visible.endIndex;
             return (
               <li
                 key={row?.id ?? "tail"}
@@ -470,7 +465,6 @@ function AudioTable({
                     audio={row}
                     columns={columns}
                     kind={kind}
-                    loadWaveform={onScreen && settled}
                     checked={selection.checked.has(row.id)}
                     checkDisabled={selection.locked}
                     onCheckedChange={(value, shift) => toggleRow(item.index, value, shift)}
@@ -496,7 +490,6 @@ function AudioRow({
   audio,
   columns,
   kind,
-  loadWaveform,
   checked,
   checkDisabled,
   onCheckedChange,
@@ -509,8 +502,6 @@ function AudioRow({
   audio: Row;
   columns: ReturnType<typeof useColumns>;
   kind: TableKind;
-  /** The row is on screen and scrolling has stopped. */
-  loadWaveform: boolean;
   /** Picked for download. */
   checked: boolean;
   /** A download is running: the selection is locked. */
@@ -524,9 +515,6 @@ function AudioRow({
   playback: { status: PlayerStatus; currentTime: number } | null;
   onTogglePlay: (id: string) => void;
 }) {
-  const playing = playback !== null && playback.status !== "error";
-  // Once a row asked for its waveform, keep it even after scrolling away.
-  const waveform = useWaveform(audio.id, columns.waveform && (loadWaveform || playing));
   const text = displayText(audio);
 
   return (
@@ -582,8 +570,7 @@ function AudioRow({
       )}
       {columns.waveform && (
         <Waveform
-          peaks={waveform.data}
-          loading={waveform.isFetching}
+          peaks={audio.waveformPeaks}
           bars={32}
           height={26}
           played={playback && audio.durationSeconds > 0 ? playback.currentTime / audio.durationSeconds : 0}
@@ -614,6 +601,7 @@ function AudioRow({
             title: audio.title,
             text: audio.text,
             durationSeconds: audio.durationSeconds,
+            waveformPeaks: audio.waveformPeaks,
           })
         }
       >

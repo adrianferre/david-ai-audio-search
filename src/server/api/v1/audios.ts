@@ -38,6 +38,7 @@ export function toAudioListItemV1(record: AudioRecord): AudioListItemV1 {
     title: titleOf(record),
     text: record.source === "audiocaps" ? (record.captions[0] ?? "") : record.transcript,
     durationSeconds: record.durationSeconds,
+    waveformPeaks: record.waveformPeaks,
   };
 }
 

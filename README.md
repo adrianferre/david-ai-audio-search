@@ -141,6 +141,22 @@ change it needs is [`003_commonvoice.sql`](src/server/db/migrations/003_commonvo
 pnpm import-commonvoice --dry-run   # print the sample, write nothing
 pnpm import-commonvoice             # add `--count N` for a different sample size
 pnpm embed-catalog                  # embed the new clips (about $0.30 for 200)
+pnpm compute-waveforms              # their waveform overviews
+```
+
+### Waveforms
+
+Each clip's waveform overview is stored with it, in `waveform_peaks`
+([`004_waveform_peaks.sql`](src/server/db/migrations/004_waveform_peaks.sql)), and sent by the
+API, so the UI only draws it. A script fills it: it reads each FLAC from the Blob store, decodes
+it to 8 kHz mono with ffmpeg and keeps the loudest sample of each of 64 equal slices, scaled so
+the loudest slice is 1 (with a gentle curve, so quiet passages still show). Like `embed-catalog`,
+it **writes to production**; it only touches clips without peaks and costs nothing but Blob
+reads. The algorithm is in [`src/lib/audio/peaks.ts`](src/lib/audio/peaks.ts); after changing
+it, recompute every clip with `--all`.
+
+```bash
+pnpm compute-waveforms   # add `--limit 20` for a trial run, `--all` to recompute every clip
 ```
 
 ### AI Gateway
@@ -161,6 +177,7 @@ the AI Gateway tab of the Vercel team. To use an API key instead of OIDC, set `A
 | `pnpm typecheck` | Generate route types and run `tsc`   |
 | `pnpm embed-catalog` | Embed the clips that have no vector yet (see Search) |
 | `pnpm import-commonvoice` | Add the Common Voice sample to the database and Blob store (see Search) |
+| `pnpm compute-waveforms` | Compute the waveform overviews of the clips that have none yet (see Waveforms) |
 
 ## Project layout
 
@@ -170,7 +187,7 @@ the AI Gateway tab of the Vercel team. To use an API key instead of OIDC, set `A
 - `src/lib/` – shared utilities
 - `src/server/db/` – Neon client, the catalog schema (`schema.sql`) and its migrations
 - `src/server/search/` – embedding settings and the query embedding call
-- `scripts/` – one-off scripts (`embed-catalog.mts`, `import-commonvoice.mts`)
+- `scripts/` – one-off scripts (`embed-catalog.mts`, `import-commonvoice.mts`, `compute-waveforms.mts`)
 - `src/env.ts` – typed, validated environment variables (`import { env } from "@/env"`)
 
 ## API
@@ -179,7 +196,7 @@ JSON endpoints served by the app. They are versioned under `/api/vN`; once a ver
 
 ### `GET /api/v1/audios`
 
-Paginated list of every audio in the catalog: LibriSpeech first, then AudioCaps, then Common Voice, each sorted by id. Every item has the same shape whatever its dataset.
+Paginated list of every audio in the catalog: LibriSpeech first, then AudioCaps, then Common Voice, each sorted by id. Every item has the same shape whatever its dataset. Every item, in this list and in every other response, carries `waveformPeaks`: the clip's waveform overview, 64 levels from 0 (silence) to 1 (its loudest moment), evenly spaced over the clip, or `null` if not computed yet. The UI draws its waveforms from it.
 
 | Query param | Default | Rules |
 | --- | --- | --- |
@@ -191,7 +208,8 @@ Paginated list of every audio in the catalog: LibriSpeech first, then AudioCaps,
 {
   "data": [
     { "id": "librispeech-1272-128104-0000", "source": "librispeech", "title": "Reviews · read by John Rose",
-      "text": "MISTER QUILTER IS THE APOSTLE OF ...", "durationSeconds": 5.855 }
+      "text": "MISTER QUILTER IS THE APOSTLE OF ...", "durationSeconds": 5.855,
+      "waveformPeaks": [0.412, 0.733, 0.951, "… 64 in all"] }
   ],
   "pagination": { "page": 1, "pageSize": 50, "total": 3329, "totalPages": 67,
                   "hasNextPage": true, "hasPreviousPage": false, "nextPage": 2, "previousPage": null }
@@ -213,7 +231,7 @@ One audio: the list fields plus a dataset-specific `metadata` object (speaker/ch
 
 ### `GET /api/v1/audios/{id}/audio`
 
-The audio's FLAC (`audio/flac`), streamed from the private Blob store. Supports `Range` requests (`206`, or `416` for an unsatisfiable range) and `If-None-Match` (`304`). The UI uses it as the `<audio>` source of the player, and to draw each clip's waveform in the browser (decoded once, then kept in `localStorage`; the browser caches the FLAC for an hour, so playing it after costs no request). The Blob store stays private: deployments are behind Vercel Authentication, which is what keeps the AudioCaps audio from being public.
+The audio's FLAC (`audio/flac`), streamed from the private Blob store. Supports `Range` requests (`206`, or `416` for an unsatisfiable range) and `If-None-Match` (`304`). The UI uses it as the `<audio>` source of the player (the waveforms come with the list items, see `waveformPeaks`). The Blob store stays private: deployments are behind Vercel Authentication, which is what keeps the AudioCaps audio from being public.
 
 ### `GET /api/v1/search`
 
@@ -288,10 +306,8 @@ The API is public and needs no key. The deployed app limits `/api/*` to **120 re
 minute per IP** with a Vercel Firewall rule ("Rate limit API", in the project's Firewall
 settings, not in this repo). Over the limit, requests get `429` with the firewall's own body
 (not the JSON error shape above) until the minute is over; the UI shows "Too many requests" and
-doesn't retry. Browsing costs one request per 50 items scrolled or per audio opened, plus one
-per clip whose waveform is drawn the first time (only rows on screen once scrolling stops, at most
-3 at a time; then cached in the browser). Scrolling steadily through new clips can come near the
-limit; computing the waveforms on the server would remove those requests. Local dev servers without credentials proxy to the deployed API, so they share
+doesn't retry. Browsing costs one request per 50 items scrolled or per audio opened (the
+waveforms come with the items), plus the audio a clip plays. Local dev servers without credentials proxy to the deployed API, so they share
 the limit of your IP; with `.env.local` the local API isn't limited.
 
 ### Where the code lives

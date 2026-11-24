@@ -44,6 +44,11 @@ export type AudioListItemV1 = {
   title: string;
   text: string;
   durationSeconds: number;
+  /**
+   * Waveform overview to draw: 64 peak levels from 0 (silence) to 1 (the clip's
+   * loudest moment), evenly spaced over the clip. Null when not computed yet.
+   */
+  waveformPeaks: number[] | null;
 };
 
 type AudioFileInfoV1 = {

@@ -114,6 +114,7 @@ export type ReferenceClip = {
   title: string;
   text: string;
   durationSeconds: number;
+  waveformPeaks: number[] | null;
 };
 
 /**

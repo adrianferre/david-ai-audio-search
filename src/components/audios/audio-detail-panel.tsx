@@ -27,7 +27,7 @@ import { chooseSaveTarget, formatBytes, type SaveTarget, saveStream } from "@/li
 import { DatasetTag, displayText, displayTitle, SOURCE_KIND } from "./datasets";
 import type { ReferenceClip } from "./queries";
 import { type AudioPlayer, playbackOf } from "./use-audio-player";
-import { formatClock, SeekableWaveform, useWaveform } from "./waveform";
+import { formatClock, SeekableWaveform } from "./waveform";
 
 type DownloadKind = "zip" | "audio";
 
@@ -179,6 +179,7 @@ export function AudioDetailPanel({
                     title: audio.title,
                     text: audio.text,
                     durationSeconds: audio.durationSeconds,
+                    waveformPeaks: audio.waveformPeaks,
                   })
                 }
               >
@@ -242,7 +243,6 @@ function ClipHeading({ audio }: { audio: AudioDetailV1 }) {
 }
 
 function ClipPlayer({ audio, player }: { audio: AudioDetailV1; player: AudioPlayer }) {
-  const waveform = useWaveform(audio.id);
   const playback = playbackOf(player, audio.id);
   const playing = playback?.status === "playing" || playback?.status === "loading";
   const { sampleRate, channels } = audio.metadata;
@@ -250,8 +250,7 @@ function ClipPlayer({ audio, player }: { audio: AudioDetailV1; player: AudioPlay
   return (
     <div className="flex flex-col gap-3.5 rounded-2xl border border-hairline bg-background p-[18px]">
       <SeekableWaveform
-        peaks={waveform.data}
-        loading={waveform.isFetching}
+        peaks={audio.waveformPeaks}
         bars={64}
         height={64}
         currentTime={playback?.currentTime ?? 0}
