@@ -25,6 +25,7 @@ import type {
   SearchMatchFilterV1,
   SimilarAudiosResponseV1,
 } from "@/lib/api/v1/types";
+import type { Peaks } from "@/lib/audio/peaks";
 
 export const PAGE_SIZE = 50;
 /** Search and "similar" show at most this many audios. */
@@ -93,6 +94,9 @@ export type AudioExample = {
   name: string;
   source: "file" | "recording";
   wav: Blob;
+  /** Of the part that is searched. */
+  durationSeconds: number;
+  peaks: Peaks;
   /** The file was longer than the part that is searched. */
   trimmed: boolean;
 };

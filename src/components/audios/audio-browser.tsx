@@ -1,9 +1,8 @@
 "use client";
 
-import { AudioLinesIcon, LoaderCircleIcon, PauseIcon, PlayIcon } from "lucide-react";
+import { AudioLinesIcon } from "lucide-react";
 import { type DragEvent, useEffect, useRef, useState } from "react";
 
-import { IconButton } from "@/components/ui/icon-button";
 import type { AudioSource, SearchMatchFilterV1 } from "@/lib/api/v1/types";
 import { MAX_EXAMPLE_SECONDS, toExampleClip, UnreadableAudioError } from "@/lib/audio/to-wav";
 import { useMicrophoneRecorder } from "@/lib/audio/use-microphone-recorder";
@@ -11,12 +10,11 @@ import { useMicrophoneRecorder } from "@/lib/audio/use-microphone-recorder";
 import { AudioDetailPanel } from "./audio-detail-panel";
 import { AudioList } from "./audio-list";
 import { AudioSearchBar, type ExampleStatus } from "./audio-search-bar";
-import { displayText, SOURCE_LABEL } from "./datasets";
+import { SOURCE_LABEL } from "./datasets";
 import { type AudioExample, type AudioListView, type ReferenceClip, useListView } from "./queries";
 import { SelectionBar, useSelection } from "./selection";
 import { Sidebar } from "./sidebar";
-import { type AudioPlayer, playbackOf, useAudioPlayer } from "./use-audio-player";
-import { formatClock, Waveform } from "./waveform";
+import { playbackOf, useAudioPlayer } from "./use-audio-player";
 
 /** Wait for a pause in typing: every search embeds the query on the server. */
 const SEARCH_DEBOUNCE_MS = 300;
@@ -37,11 +35,8 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
  */
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 
-/** "Recording (0:07)", the name a recording goes by in the search bar. */
-function recordingName(seconds: number) {
-  const s = Math.round(seconds);
-  return `Recording (${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")})`;
-}
+/** The name a recording goes by ("Sounds like your recording"); the search bar shows its length next to it. */
+const RECORDING_NAME = "your recording";
 
 function hasFiles(event: DragEvent) {
   return event.dataTransfer.types.includes("Files");
@@ -107,6 +102,7 @@ export function AudioBrowser() {
     player.toggle(`example:${example.id}`, exampleUrl.current.url);
   };
   const examplePlayback = example ? playbackOf(player, `example:${example.id}`) : null;
+  const similarPlayback = similarTo ? playbackOf(player, similarTo.id) : null;
 
   /** Converts a file or a recording to WAV and searches with it. */
   const searchWithAudio = async (audio: Blob, name: string, kind: AudioExample["source"]) => {
@@ -117,7 +113,15 @@ export function AudioBrowser() {
       if (token !== attachToken.current) return;
       setQuery("");
       setSimilarTo(null);
-      setExample({ id: crypto.randomUUID(), name, source: kind, wav: clip.wav, trimmed: clip.trimmed });
+      setExample({
+        id: crypto.randomUUID(),
+        name,
+        source: kind,
+        wav: clip.wav,
+        durationSeconds: clip.durationSeconds,
+        peaks: clip.peaks,
+        trimmed: clip.trimmed,
+      });
       setExampleStatus(null);
     } catch (error) {
       if (token !== attachToken.current) return;
@@ -134,7 +138,7 @@ export function AudioBrowser() {
 
   const recorder = useMicrophoneRecorder({
     maxSeconds: MAX_EXAMPLE_SECONDS,
-    onRecorded: (recording, seconds) => void searchWithAudio(recording, recordingName(seconds), "recording"),
+    onRecorded: (recording) => void searchWithAudio(recording, RECORDING_NAME, "recording"),
     onError: (error) => setExampleStatus({ kind: "error", message: error.message }),
   });
 
@@ -228,27 +232,43 @@ export function AudioBrowser() {
             match={match}
             onMatchChange={setMatch}
             similarTo={similarTo}
+            similarPlayback={{
+              status:
+                similarPlayback?.status === "playing" || similarPlayback?.status === "loading"
+                  ? similarPlayback.status
+                  : null,
+              played:
+                similarPlayback && similarTo && similarTo.durationSeconds > 0
+                  ? similarPlayback.currentTime / similarTo.durationSeconds
+                  : 0,
+            }}
+            onToggleSimilar={() => similarTo && player.toggle(similarTo.id)}
             onClearSimilar={() => setSimilarTo(null)}
             example={example}
             exampleStatus={exampleStatus}
-            examplePlayback={
-              examplePlayback?.status === "playing" || examplePlayback?.status === "loading"
-                ? examplePlayback.status
-                : null
-            }
+            examplePlayback={{
+              status:
+                examplePlayback?.status === "playing" || examplePlayback?.status === "loading"
+                  ? examplePlayback.status
+                  : null,
+              played:
+                examplePlayback && example && example.durationSeconds > 0
+                  ? examplePlayback.currentTime / example.durationSeconds
+                  : 0,
+            }}
             onToggleExample={toggleExample}
             onAttachFile={attachFile}
             onClearExample={clearExample}
             recorder={{
               status: recorder.status,
               elapsedSeconds: recorder.elapsedSeconds,
+              meter: recorder.meter,
               maxSeconds: MAX_EXAMPLE_SECONDS,
               onStart: startRecording,
               onStop: recorder.stop,
               onCancel: recorder.cancel,
             }}
           />
-          {view.kind === "similar" && <ReferenceCard clip={view.reference} player={player} />}
         </header>
         <div className="relative flex min-h-0 flex-1 flex-col">
           <AudioList
@@ -285,45 +305,6 @@ export function AudioBrowser() {
           <p className="text-[0.8rem] text-muted-foreground">Any audio or video file, up to 20 MB</p>
         </div>
       )}
-    </div>
-  );
-}
-
-/** The clip a "similar" search started from, playable to compare with the results. */
-function ReferenceCard({ clip, player }: { clip: ReferenceClip; player: AudioPlayer }) {
-  const playback = playbackOf(player, clip.id);
-  const playing = playback?.status === "playing" || playback?.status === "loading";
-
-  return (
-    <div className="flex items-center gap-3.5 rounded-[14px] border bg-muted px-4 py-3.5">
-      <IconButton
-        size="icon-lg"
-        className="shrink-0"
-        label={playing ? "Pause the reference clip" : "Play the reference clip"}
-        onClick={() => player.toggle(clip.id)}
-      >
-        {playback?.status === "loading" ? (
-          <LoaderCircleIcon className="animate-spin" />
-        ) : playing ? (
-          <PauseIcon className="fill-current" />
-        ) : (
-          <PlayIcon className="ml-0.5 size-3.5 fill-current" />
-        )}
-      </IconButton>
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <p className="text-xs font-medium text-muted-foreground">Reference clip</p>
-        <p className="truncate text-sm font-medium">{displayText(clip)}</p>
-      </div>
-      <Waveform
-        peaks={clip.waveformPeaks}
-        bars={40}
-        height={26}
-        played={playback && clip.durationSeconds > 0 ? playback.currentTime / clip.durationSeconds : 0}
-        className="max-md:hidden"
-      />
-      <span className="text-[0.8rem] text-muted-foreground tabular-nums">
-        {formatClock(clip.durationSeconds)}
-      </span>
     </div>
   );
 }

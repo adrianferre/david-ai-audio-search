@@ -10,6 +10,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 export type RecorderStatus = "idle" | "starting" | "recording";
 
+/**
+ * Taps the microphone while it records, to draw its loudness. Read it with
+ * `getFloatTimeDomainData` in an animation frame: it doesn't trigger renders.
+ */
+export type LevelMeter = { analyser: AnalyserNode; startedAt: number };
+
 /** Shorter recordings are almost surely a mis-click. */
 const MIN_SECONDS = 1;
 
@@ -48,6 +54,7 @@ export function useMicrophoneRecorder({
 }) {
   const [status, setStatus] = useState<RecorderStatus>("idle");
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [meter, setMeter] = useState<LevelMeter | null>(null);
 
   // Bumped by every start and cancel: late results of an old attempt are dropped.
   const attempt = useRef(0);
@@ -72,6 +79,7 @@ export function useMicrophoneRecorder({
     recorderRef.current = null;
     setStatus("idle");
     setElapsedSeconds(0);
+    setMeter(null);
   }, [stop]);
 
   const start = useCallback(async () => {
@@ -97,10 +105,29 @@ export function useMicrophoneRecorder({
       callbacks.current.onError(startError(error));
       return;
     }
-    const releaseMicrophone = () => stream.getTracks().forEach((track) => track.stop());
+    let audioContext: AudioContext | null = null;
+    const releaseMicrophone = () => {
+      stream.getTracks().forEach((track) => track.stop());
+      void audioContext?.close().catch(() => {});
+    };
     if (current !== attempt.current) {
       releaseMicrophone();
       return;
+    }
+
+    // Only for drawing the levels: recording works without it.
+    let analyser: AnalyserNode | null = null;
+    try {
+      audioContext = new AudioContext();
+      analyser = audioContext.createAnalyser();
+      analyser.fftSize = 2048;
+      audioContext.createMediaStreamSource(stream).connect(analyser);
+      // Safari may create it suspended, since the click was before the permission prompt.
+      void audioContext.resume().catch(() => {});
+    } catch {
+      void audioContext?.close().catch(() => {});
+      audioContext = null;
+      analyser = null;
     }
 
     let recorder: MediaRecorder;
@@ -126,6 +153,7 @@ export function useMicrophoneRecorder({
       recorderRef.current = null;
       setStatus("idle");
       setElapsedSeconds(0);
+      setMeter(null);
       if (durationSeconds < MIN_SECONDS || chunks.length === 0) {
         callbacks.current.onError(new RecordingError("That was too short. Record at least a second."));
         return;
@@ -142,6 +170,7 @@ export function useMicrophoneRecorder({
       recorderRef.current = null;
       setStatus("idle");
       setElapsedSeconds(0);
+      setMeter(null);
       callbacks.current.onError(new RecordingError("The recording failed. Try again."));
     };
     // The microphone was unplugged or the permission revoked: keep what we have.
@@ -151,6 +180,7 @@ export function useMicrophoneRecorder({
     recorder.start();
     startedAt = performance.now();
     setStatus("recording");
+    setMeter(analyser ? { analyser, startedAt } : null);
 
     const tick = setInterval(() => setElapsedSeconds((performance.now() - startedAt) / 1000), 250);
     const limit = setTimeout(stop, maxSeconds * 1000);
@@ -163,5 +193,5 @@ export function useMicrophoneRecorder({
   // Leaving the page section turns the microphone off.
   useEffect(() => cancel, [cancel]);
 
-  return { status, elapsedSeconds, start, stop, cancel };
+  return { status, elapsedSeconds, meter, start, stop, cancel };
 }

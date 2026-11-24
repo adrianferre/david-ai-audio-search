@@ -131,7 +131,11 @@ export function AudioList({
       {view.kind === "file" && (
         <SimilarResults
           rowsQuery={fileQuery(view.example, view.source)}
-          pendingMessage={`Finding the clips that sound like “${view.example.name}”…`}
+          pendingMessage={
+            view.example.source === "recording"
+              ? "Finding the clips that sound like your recording…"
+              : `Finding the clips that sound like “${view.example.name}”…`
+          }
           source={view.source}
           actions={actions}
           recovery={recovery}

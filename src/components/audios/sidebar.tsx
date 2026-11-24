@@ -26,7 +26,7 @@ export function Sidebar({
   const total = data?.data.reduce((sum, dataset) => sum + dataset.count, 0);
 
   const items: { value: AudioSource | null; label: string; swatch: string; count?: number }[] = [
-    { value: null, label: "All clips", swatch: "bg-foreground", count: total },
+    { value: null, label: "All", swatch: "bg-foreground", count: total },
     ...AUDIO_SOURCES.map((value) => ({
       value,
       label: SOURCE_LABEL[value],
@@ -47,7 +47,7 @@ export function Sidebar({
 
       <div className="flex flex-col gap-2.5">
         <p id="datasets-label" className="text-xs font-medium text-muted-foreground">
-          Datasets
+          Search by datasets
         </p>
         <div role="group" aria-labelledby="datasets-label" className="flex flex-col border-l border-input">
           {items.map((item) => {
