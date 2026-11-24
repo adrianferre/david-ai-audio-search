@@ -16,6 +16,8 @@
   --color-row-hover: #f4f4ef;
   --color-waveform: #c9cac1;
   --color-waveform-muted: #d9dad2;
+  /* Bars where a search's words are said. */
+  --color-waveform-match: #e8833a;
   /* One colour per dataset: the tag's text and fill, and its swatch. */
   --color-librispeech: #4b4592;
   --color-librispeech-soft: #e9e7f2;

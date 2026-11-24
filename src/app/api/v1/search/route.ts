@@ -74,7 +74,10 @@ async function search(request: NextRequest, example: SoundExample | null) {
       return internalError(error);
     }
     // Every result has the words as typed: each is a clear match.
-    const body: AudioSearchResponseV1 = { data: hits.map(toAudioSearchResultV1), strongMatch: hits.length > 0 };
+    const body: AudioSearchResponseV1 = {
+      data: hits.map((hit) => toAudioSearchResultV1(hit, { query: q, exact: true })),
+      strongMatch: hits.length > 0,
+    };
     return Response.json(body);
   }
 
@@ -123,6 +126,9 @@ async function search(request: NextRequest, example: SoundExample | null) {
   } catch (error) {
     return internalError(error);
   }
-  const body: AudioSearchResponseV1 = { data: result.hits.map(toAudioSearchResultV1), strongMatch: result.strongMatch };
+  const body: AudioSearchResponseV1 = {
+    data: result.hits.map((hit) => toAudioSearchResultV1(hit, { query: q, exact: false })),
+    strongMatch: result.strongMatch,
+  };
   return Response.json(body);
 }

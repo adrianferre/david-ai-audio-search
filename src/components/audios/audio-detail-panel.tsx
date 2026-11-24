@@ -22,13 +22,32 @@ import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { cn } from "@/lib/utils";
 import { downloadAudioFile, exportAudios, fetchAudio } from "@/lib/api/v1/client";
-import type { AudioDetailV1 } from "@/lib/api/v1/types";
+import { type AudioDetailV1, MAX_SAID_AT_QUERY_WORDS, type TimeSpanV1, type WordTimingV1 } from "@/lib/api/v1/types";
+import { findQueryInWords, transcriptWords } from "@/lib/audio/word-timings";
 import { chooseSaveTarget, formatBytes, type SaveTarget, saveStream } from "@/lib/save-file";
 
 import { datasetWithSplit, DatasetTag, displayText, displayTitle } from "./datasets";
 import type { ReferenceClip } from "./queries";
 import { type AudioPlayer, playbackOf } from "./use-audio-player";
 import { formatClock, SeekableWaveform } from "./waveform";
+
+/** The search the panel was opened from, to point at where its words are said. */
+export type FindInClip = { q: string; exact: boolean };
+
+/** Playing from a word starts a moment before it, so it isn't clipped. */
+const LEAD_IN_SECONDS = 0.25;
+
+function wordTimingsOf(audio: AudioDetailV1): WordTimingV1[] | null {
+  // `?? null`: an API older than word timings doesn't send them.
+  return audio.source === "audiocaps" ? null : (audio.metadata.wordTimings ?? null);
+}
+
+/** Where `find`'s words are said in the clip, as the list's `saidAt` points at them. */
+function saidAtOf(audio: AudioDetailV1, find: FindInClip | null): TimeSpanV1[] {
+  const timings = wordTimingsOf(audio);
+  if (!timings || !find || transcriptWords(find.q).length > MAX_SAID_AT_QUERY_WORDS) return [];
+  return findQueryInWords(timings, find.q, { exact: find.exact });
+}
 
 type DownloadKind = "zip" | "audio";
 
@@ -106,11 +125,13 @@ function headline(text: string, max = 110) {
 export function AudioDetailPanel({
   id,
   player,
+  find,
   onClose,
   onFindSimilar,
 }: {
   id: string;
   player: AudioPlayer;
+  find: FindInClip | null;
   onClose: () => void;
   onFindSimilar: (clip: ReferenceClip) => void;
 }) {
@@ -122,6 +143,7 @@ export function AudioDetailPanel({
   // An error from a download of another audio stays with that audio.
   const downloadError = download.error?.id === id ? download.error.message : null;
   const audio = data?.data;
+  const saidAt = audio ? saidAtOf(audio, find) : [];
   const panelRef = useRef<HTMLElement>(null);
 
   // Focus inside the panel would fall to the page when it closes: hand it to the clip's row.
@@ -188,7 +210,7 @@ export function AudioDetailPanel({
         {audio && (
           <>
             <ClipHeading audio={audio} />
-            <ClipPlayer audio={audio} player={player} />
+            <ClipPlayer audio={audio} player={player} saidAt={saidAt} />
 
             <div className="flex flex-wrap justify-end gap-2">
               <Button
@@ -215,7 +237,7 @@ export function AudioDetailPanel({
               </p>
             )}
 
-            <ClipText audio={audio} />
+            <ClipText audio={audio} player={player} saidAt={saidAt} />
             <ClipFacts audio={audio} />
 
             <details className="group/json relative">
@@ -294,7 +316,7 @@ function ClipHeading({ audio }: { audio: AudioDetailV1 }) {
   );
 }
 
-function ClipPlayer({ audio, player }: { audio: AudioDetailV1; player: AudioPlayer }) {
+function ClipPlayer({ audio, player, saidAt }: { audio: AudioDetailV1; player: AudioPlayer; saidAt: TimeSpanV1[] }) {
   const playback = playbackOf(player, audio.id);
   const playing = playback?.status === "playing" || playback?.status === "loading";
   const { sampleRate, channels, originalFormat, lossyOrigin } = audio.metadata;
@@ -310,6 +332,7 @@ function ClipPlayer({ audio, player }: { audio: AudioDetailV1; player: AudioPlay
         duration={audio.durationSeconds}
         onSeek={(seconds) => player.seek(audio.id, seconds)}
         label="Playback position"
+        marks={saidAt}
       />
       <div className="flex items-center gap-3">
         <IconButton
@@ -334,6 +357,24 @@ function ClipPlayer({ audio, player }: { audio: AudioDetailV1; player: AudioPlay
           {sampleRate / 1000} kHz · {channels === 1 ? "mono" : `${channels} channels`} · FLAC{origin}
         </span>
       </div>
+      {saidAt.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 border-t border-hairline pt-3">
+          <span className="mr-1 text-xs text-muted-foreground">Said at</span>
+          {saidAt.map((span, i) => (
+            <Button
+              key={i}
+              variant="outline"
+              size="xs"
+              className="tabular-nums"
+              aria-label={`Play from ${formatClock(span.start)}`}
+              onClick={() => player.playFrom(audio.id, Math.max(0, span.start - LEAD_IN_SECONDS))}
+            >
+              <span aria-hidden="true" className="size-1.5 rounded-full bg-waveform-match" />
+              {formatClock(span.start)}
+            </Button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -398,7 +439,7 @@ function Section({
   );
 }
 
-function ClipText({ audio }: { audio: AudioDetailV1 }) {
+function ClipText({ audio, player, saidAt }: { audio: AudioDetailV1; player: AudioPlayer; saidAt: TimeSpanV1[] }) {
   if (audio.source === "audiocaps") {
     return (
       <Section
@@ -420,14 +461,21 @@ function ClipText({ audio }: { audio: AudioDetailV1 }) {
   }
   // The dataset's text, unchanged: it is the label a model would be trained or scored on.
   const { transcript } = audio.metadata;
+  const timings = wordTimingsOf(audio);
+  const text = timings ? (
+    <TimedTranscript timings={timings} saidAt={saidAt} audioId={audio.id} player={player} />
+  ) : (
+    transcript
+  );
+  const clickHint = timings ? " Click a word to play from it." : "";
   if (audio.source === "commonvoice") {
     return (
       <Section
         title="Prompted sentence"
         copy={{ text: transcript, label: "Copy sentence" }}
-        note="The sentence the speaker was asked to read, as written. Other volunteers’ votes (Details) check that the recording matches it."
+        note={`The sentence the speaker was asked to read, as written. Other volunteers’ votes (Details) check that the recording matches it.${clickHint}`}
       >
-        <p className="text-[0.95rem] leading-6">{transcript}</p>
+        <p className="text-[0.95rem] leading-6">{text}</p>
       </Section>
     );
   }
@@ -435,11 +483,51 @@ function ClipText({ audio }: { audio: AudioDetailV1 }) {
     <Section
       title="Transcript"
       copy={{ text: transcript, label: "Copy transcript" }}
-      note="As in LibriSpeech: upper case, no punctuation."
+      note={`As in LibriSpeech: upper case, no punctuation.${clickHint}`}
     >
-      <p className="text-[0.95rem] leading-6 break-words">{transcript}</p>
+      <p className="text-[0.95rem] leading-6 break-words">{text}</p>
     </Section>
   );
+}
+
+/**
+ * The transcript word by word: the words the search found are marked, the word
+ * being played is underlined, and clicking a word plays from it. The words
+ * aren't tab stops (a transcript can have 90); the player's slider and its
+ * "Said at" buttons do the same from the keyboard.
+ */
+function TimedTranscript({
+  timings,
+  saidAt,
+  audioId,
+  player,
+}: {
+  timings: WordTimingV1[];
+  saidAt: TimeSpanV1[];
+  audioId: string;
+  player: AudioPlayer;
+}) {
+  const playback = playbackOf(player, audioId);
+  const now = playback && playback.status !== "error" ? playback.currentTime : null;
+  return timings.map((timing, i) => {
+    const found = saidAt.some((span) => timing.start >= span.start && timing.end <= span.end);
+    const current = now !== null && now >= timing.start && now < timing.end;
+    return (
+      <span key={i}>
+        {i > 0 && " "}
+        <span
+          className={cn(
+            "cursor-pointer rounded-[3px] decoration-2 underline-offset-4 hover:bg-row-hover",
+            found && "bg-waveform-match/20 shadow-[0_0_0_2px_color-mix(in_srgb,var(--color-waveform-match)_20%,transparent)] hover:bg-waveform-match/30",
+            current && "underline decoration-foreground",
+          )}
+          onClick={() => player.playFrom(audioId, Math.max(0, timing.start - LEAD_IN_SECONDS))}
+        >
+          {timing.word}
+        </span>
+      </span>
+    );
+  });
 }
 
 function ClipFacts({ audio }: { audio: AudioDetailV1 }) {

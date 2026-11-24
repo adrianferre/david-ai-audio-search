@@ -40,6 +40,13 @@ CREATE TABLE IF NOT EXISTS audios (
   -- (src/lib/audio/peaks.ts), drawn by the UI. scripts/compute-waveforms.mts fills it;
   -- NULL means "not computed yet".
   waveform_peaks   real[] CHECK (waveform_peaks IS NULL OR (array_ndims(waveform_peaks) = 1 AND cardinality(waveform_peaks) = 64)),
+  -- When each word of the transcript is said (migrations/006_word_timings.sql): one
+  -- {"word", "start", "end"} per word, in seconds (src/lib/audio/word-timings.ts).
+  -- LibriSpeech and Common Voice only. scripts/compute-word-timings.mts fills it;
+  -- NULL means "not computed yet".
+  word_timings     jsonb CHECK (word_timings IS NULL OR jsonb_typeof(word_timings) = 'array'),
+  -- The speech-to-text model that timed the words.
+  word_timings_model text,
 
   -- Search (migrations/001_search.sql). The vectors come from one multimodal model
   -- (src/server/search/embedding-config.ts), so text and audio share a vector space.

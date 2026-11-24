@@ -447,6 +447,7 @@ export function AudioBrowser() {
         <AudioDetailPanel
           id={selectedId}
           player={player}
+          find={view.kind === "search" && view.match !== "sound" ? { q: view.q, exact: view.match === "exact" } : null}
           onClose={() => setSelectedId(null)}
           onFindSimilar={showSimilar}
         />

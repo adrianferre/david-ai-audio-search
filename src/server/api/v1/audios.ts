@@ -1,11 +1,13 @@
 import "server-only";
 
-import type {
-  AudioDetailV1,
-  AudioListItemV1,
-  AudioSearchResultV1,
-  SimilarAudioV1,
+import {
+  type AudioDetailV1,
+  type AudioListItemV1,
+  type AudioSearchResultV1,
+  MAX_SAID_AT_QUERY_WORDS,
+  type SimilarAudioV1,
 } from "@/lib/api/v1/types";
+import { findQueryInWords, transcriptWords } from "@/lib/audio/word-timings";
 import type { AudioRecord, AudioSearchHit, DatasetRecord, SimilarAudioHit } from "@/server/audios/types";
 
 /** Common Voice stores gender as e.g. `female_feminine`; show the first word. */
@@ -66,6 +68,7 @@ export function toAudioDetailV1(record: AudioRecord, dataset: DatasetRecord): Au
           speaker: record.speaker,
           chapter: record.chapter,
           transcript: record.transcript,
+          wordTimings: record.wordTimings,
           ...file,
         },
       };
@@ -99,16 +102,30 @@ export function toAudioDetailV1(record: AudioRecord, dataset: DatasetRecord): Au
           upVotes: record.upVotes,
           downVotes: record.downVotes,
           locale: record.locale,
+          wordTimings: record.wordTimings,
           ...file,
         },
       };
   }
 }
 
-export function toAudioSearchResultV1(hit: AudioSearchHit): AudioSearchResultV1 {
+/**
+ * `query` and `exact` are the search's: where its words are said (`saidAt`) is
+ * found like the Words search finds them (`exact`, as typed) or loosely
+ * ("barks" also finds "barking").
+ */
+export function toAudioSearchResultV1(
+  hit: AudioSearchHit,
+  { query, exact }: { query: string; exact: boolean },
+): AudioSearchResultV1 {
   const item = toAudioListItemV1(hit.record);
+  const { wordTimings } = hit.record;
+  const saidAt =
+    wordTimings && hit.matches.includes("text") && transcriptWords(query).length <= MAX_SAID_AT_QUERY_WORDS
+      ? findQueryInWords(wordTimings, query, { exact })
+      : [];
   // Show the caption that explains the match, not always the first one.
-  return { ...item, text: hit.caption ?? item.text, score: hit.score, matches: hit.matches };
+  return { ...item, text: hit.caption ?? item.text, score: hit.score, matches: hit.matches, saidAt };
 }
 
 export function toSimilarAudioV1(hit: SimilarAudioHit): SimilarAudioV1 {

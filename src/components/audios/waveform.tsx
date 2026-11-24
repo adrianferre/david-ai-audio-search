@@ -20,6 +20,10 @@ function spectrumAt(t: number) {
   return mix(SPECTRUM[i], SPECTRUM[i + 1], scaled - i);
 }
 
+/** The player's mark line under the bars, and the room it takes. */
+const MARK_LINE_HEIGHT = 3;
+const MARK_LINE_SPACE = 9;
+
 type WaveformProps = {
   /** From the API (`waveformPeaks`). Null when not computed yet: flat bars. */
   peaks: Peaks | null;
@@ -28,6 +32,11 @@ type WaveformProps = {
   played?: number;
   /** "row": ink and grey. "player": the played part in the colour bars. */
   variant?: "row" | "player";
+  /**
+   * Parts of the clip to point at (where a search's words are said), as shares of it from 0 to 1.
+   * "row": their bars are orange. "player": an orange line under them (the played bars are in colour already).
+   */
+  marks?: readonly { start: number; end: number }[];
   height: number;
   barWidth?: number;
   gap?: number;
@@ -40,6 +49,7 @@ export function Waveform({
   bars,
   played = 0,
   variant = "row",
+  marks = [],
   height,
   barWidth = 2,
   gap = 2,
@@ -48,20 +58,42 @@ export function Waveform({
   const levels = peaks ? resamplePeaks(peaks, bars) : null;
   const width = bars * barWidth + (bars - 1) * gap;
   const minHeight = Math.max(2, barWidth);
+  const underline = variant === "player" && marks.length > 0;
+  const svgHeight = underline ? height + MARK_LINE_SPACE : height;
 
   return (
     <svg
       aria-hidden="true"
       width={width}
-      height={height}
-      viewBox={`0 0 ${width} ${height}`}
+      height={svgHeight}
+      viewBox={`0 0 ${width} ${svgHeight}`}
       className={cn("shrink-0", className)}
     >
+      {underline &&
+        marks.map((mark, i) => {
+          // From the first bar the mark touches to the last, at least one bar wide.
+          const first = Math.min(bars - 1, Math.floor(mark.start * bars));
+          const last = Math.max(first, Math.min(bars - 1, Math.ceil(mark.end * bars) - 1));
+          return (
+            <rect
+              key={`mark-${i}`}
+              x={first * (barWidth + gap)}
+              y={svgHeight - MARK_LINE_HEIGHT}
+              width={(last - first) * (barWidth + gap) + barWidth}
+              height={MARK_LINE_HEIGHT}
+              rx={MARK_LINE_HEIGHT / 2}
+              fill="var(--color-waveform-match)"
+            />
+          );
+        })}
       {Array.from({ length: bars }, (_, i) => {
         const level = levels ? levels[i] : 0;
         const h = Math.max(minHeight, Math.round(level * height));
         const isPlayed = played > 0 && (i + 0.5) / bars <= played;
-        const fill = isPlayed
+        const isMarked = !underline && marks.some((mark) => mark.start < (i + 1) / bars && mark.end > i / bars);
+        const fill = isMarked
+          ? "var(--color-waveform-match)"
+          : isPlayed
           ? variant === "player"
             ? spectrumAt(i / Math.max(1, bars - 1))
             : "var(--color-foreground)"
@@ -96,6 +128,7 @@ export function SeekableWaveform({
   duration,
   onSeek,
   label,
+  marks,
 }: {
   peaks: Peaks | null;
   bars: number;
@@ -104,6 +137,8 @@ export function SeekableWaveform({
   duration: number;
   onSeek: (seconds: number) => void;
   label: string;
+  /** Spans of the clip to point at, in seconds. */
+  marks?: readonly { start: number; end: number }[];
 }) {
   const played = duration > 0 ? Math.min(1, currentTime / duration) : 0;
 
@@ -149,6 +184,7 @@ export function SeekableWaveform({
         gap={2.6}
         played={played}
         variant="player"
+        marks={duration > 0 ? marks?.map((m) => ({ start: m.start / duration, end: m.end / duration })) : undefined}
         className="w-full"
       />
     </div>
@@ -159,4 +195,9 @@ export function SeekableWaveform({
 export function formatClock(seconds: number) {
   const s = Math.max(0, Math.round(seconds));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+/** "0:03, 0:12": where each span starts. */
+export function formatSaidAt(spans: readonly { start: number }[]) {
+  return spans.map((span) => formatClock(span.start)).join(", ");
 }

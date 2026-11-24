@@ -111,7 +111,13 @@ export function useAudioPlayer() {
     );
   }, []);
 
-  return { state, toggle, seek };
+  /** Play `id` from `seconds`, whether or not it was playing. */
+  const playFrom = useCallback((id: string, seconds: number) => {
+    seek(id, seconds);
+    if (audioRef.current?.paused) toggle(id);
+  }, [seek, toggle]);
+
+  return { state, toggle, seek, playFrom };
 }
 
 export type AudioPlayer = ReturnType<typeof useAudioPlayer>;

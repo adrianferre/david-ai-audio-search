@@ -218,6 +218,36 @@ it, recompute every clip with `--all`.
 pnpm compute-waveforms   # add `--limit 20` for a trial run, `--all` to recompute every clip
 ```
 
+### Word timings
+
+Each LibriSpeech and Common Voice clip also stores when every word of its transcript is said, in
+`word_timings` ([`006_word_timings.sql`](src/server/db/migrations/006_word_timings.sql)). The
+datasets don't come with them, so a script computes them: it transcribes each clip with
+`spacexai/grok-stt` through the AI Gateway, which times every word it hears, and lines those words
+up with the dataset's transcript by edit distance over words
+([`src/lib/audio/word-timings.ts`](src/lib/audio/word-timings.ts)). The times belong to the
+transcript's own words: "MISTER" takes the time of the "Mr." the model heard, a number the model
+wrote as "1990" shares its time between "NINETEEN" and "NINETY", and a word it missed gets the gap
+between its neighbours. When Grok hears nothing in a clip, Scribe v2 (`elevenlabs/scribe-v2`) is
+used instead. The app's own transcription model, Voxtral, doesn't time words.
+
+Checked against `elevenlabs/scribe-v2` on the 20 longest clips (1,268 words) with
+`--compare 20`: word starts differ by 30 ms at the median, 55 ms at p90 and 80 ms at p99, and
+both models heard 97–98% of the transcripts' words exactly. Like the other scripts it **writes to
+production**, only touches clips without timings (or all of them with `--all`) and costs about
+$0.60 of AI Gateway credit for the whole catalog. AudioCaps clips have none: they match on captions, which
+say nothing about when a sound happens.
+
+The search uses them to show where the query's words are said: orange bars in each result's
+waveform (`saidAt`, below), and in the clip's panel an orange line under the player, "Said at" buttons
+that play from there, and the words marked in the transcript. Clicking any word of the transcript
+plays from it, and the word being played is underlined.
+
+```bash
+pnpm compute-word-timings --compare 20   # time 20 clips with both models, write nothing
+pnpm compute-word-timings                # add `--limit 20` for a trial run, `--all` to redo every clip
+```
+
 ### AI Gateway
 
 Nothing to configure: the app authenticates to the gateway with the project's OIDC token, the
@@ -238,7 +268,8 @@ the AI Gateway tab of the Vercel team. To use an API key instead of OIDC, set `A
 | `pnpm import-commonvoice` | Add the Common Voice sample to the database and Blob store (see Search) |
 | `pnpm import-audioset-labels` | Store the AudioCaps clips' AudioSet labels in the database (see AudioSet labels) |
 | `pnpm compute-waveforms` | Compute the waveform overviews of the clips that have none yet (see Waveforms) |
-| `pnpm test`      | Unit tests (the evaluation's metrics) |
+| `pnpm compute-word-timings` | Time the transcript words of the clips that have no timings yet (see Word timings) |
+| `pnpm test`      | Unit tests (the evaluation's metrics, word alignment) |
 | `pnpm eval`      | Retrieval evaluation, read-only (see [eval/](eval/README.md)) |
 
 ## Project layout
@@ -249,7 +280,7 @@ the AI Gateway tab of the Vercel team. To use an API key instead of OIDC, set `A
 - `src/lib/` – shared utilities
 - `src/server/db/` – Neon client, the catalog schema (`schema.sql`) and its migrations
 - `src/server/search/` – embedding and ranking settings, and the query embedding call
-- `scripts/` – one-off scripts (`embed-catalog.mts`, `import-commonvoice.mts`, `import-audioset-labels.mts`, `compute-waveforms.mts`)
+- `scripts/` – one-off scripts (`embed-catalog.mts`, `import-commonvoice.mts`, `import-audioset-labels.mts`, `compute-waveforms.mts`, `compute-word-timings.mts`)
 - `scripts/eval/`, `eval/` – the retrieval evaluation: code, query sets, results
 - `src/env.ts` – typed, validated environment variables (`import { env } from "@/env"`)
 
@@ -303,6 +334,10 @@ Every `metadata` also says where the clip comes from, from its dataset's row in 
 
 Every clip is served as 16 kHz mono FLAC; `lossyOrigin` means compression artefacts may remain. An AudioCaps clip also has `audioSetLabels`, the AudioSet labels of its YouTube segment (`["Sneeze", "Speech"]`, empty when it has none), and its list `title` starts with them: `"Sneeze, Speech · YouTube uRlbY6_aoBU @ 0s"`. They are stored in the row's `metadata` by `pnpm import-audioset-labels` (below).
 
+LibriSpeech and Common Voice `metadata` also has `wordTimings`: when each word of `transcript` is said,
+one `{ "word": "MISTER", "start": 0.541, "end": 0.802 }` per word (the transcript split on whitespace,
+punctuation kept), in seconds from the start of the clip, or `null` while not computed (see Word timings).
+
 ### `GET /api/v1/audios/{id}/audio`
 
 The audio's FLAC (`audio/flac`), streamed from the private Blob store. Supports `Range` requests (`206`, or `416` for an unsatisfiable range) and `If-None-Match` (`304`). The UI uses it as the `<audio>` source of the player (the waveforms come with the list items, see `waveformPeaks`). The Blob store is private, so its files can't be fetched directly, but this route streams any clip, AudioCaps included, to anyone who can reach the app. The project uses Vercel Authentication with Standard Protection: preview and generated deployment URLs require a Vercel login, the production domain `david-ai-audio-search.vercel.app` does not. Known gap: AudioCaps audio is publicly reachable through the production API. The fix is to protect this route or the production domain; that is not done yet.
@@ -326,7 +361,9 @@ relevant first. There is no pagination: it is a ranked top list.
   "data": [
     { "id": "audiocaps-...", "source": "audiocaps", "title": "Dog, Speech · YouTube ... @ 30s",
       "text": "A dog barks and a man speaks", "durationSeconds": 10,
-      "score": 8.27, "matches": ["text", "sound"] }
+      "score": 8.27, "matches": ["text", "sound"], "saidAt": [] },
+    { "id": "librispeech-1272-128104-0000", "source": "librispeech", "...": "…",
+      "matches": ["text"], "saidAt": [{ "start": 0.842, "end": 1.223 }] }
   ],
   "strongMatch": true
 }
@@ -342,6 +379,13 @@ best text match's cosine to the query is at least 0.735: nothing clearly matches
 results are only the closest clips (an empty list is never a strong match). It is only judged for
 typed queries: with an example's sound (`soundOf`, a WAV body) it is `true` whenever there are results.
 Returns `503 search_unavailable` when the embedding model can't be reached.
+
+`saidAt` says where the query's words are said in a clip that matched on its text, from its word
+timings: the whole query, words in a row, when the transcript has it; otherwise each of its words
+but common ones like "the". With `match=exact` the words are compared as typed (and also found
+inside "QUILTER'S" or "WELL-KNOWN", as the full-text search finds them); otherwise loosely, so
+"barking" also finds "barks". It is empty for AudioCaps clips, matches on meaning or sound alone,
+and queries of more than 12 words (a search with a clip's whole transcript).
 
 With `match=exact` there is no model call and no cut-off: every clip whose text contains all the
 query's words as written is returned (up to `limit`), with `matches: ["text"]` and `strongMatch: true` when there is any. `score` is then

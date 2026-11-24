@@ -16,7 +16,13 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { IconButton } from "@/components/ui/icon-button";
 import { ApiError } from "@/lib/api/v1/client";
-import type { AudioListItemV1, AudioSource, SearchMatchFilterV1, SearchMatchV1 } from "@/lib/api/v1/types";
+import type {
+  AudioListItemV1,
+  AudioSource,
+  SearchMatchFilterV1,
+  SearchMatchV1,
+  TimeSpanV1,
+} from "@/lib/api/v1/types";
 import { cn } from "@/lib/utils";
 
 import { DatasetTag, displayText, displayTitle, SOURCE_LABEL } from "./datasets";
@@ -35,7 +41,7 @@ import {
 } from "./queries";
 import { clearOnEscape, SelectAllCheckbox, type Selection, withRows } from "./selection";
 import { type AudioPlayer, type PlayerStatus, playbackOf } from "./use-audio-player";
-import { formatClock, Waveform } from "./waveform";
+import { formatClock, formatSaidAt, Waveform } from "./waveform";
 
 const ROW_HEIGHT = 68;
 /** Room under the last row for the floating selection bar. */
@@ -78,6 +84,8 @@ const WEAK_MATCH_RELEVANCE = 2;
 /** A list item, plus why it is in the results when it comes from a search. */
 type Row = AudioListItemV1 & {
   matches?: SearchMatchV1[];
+  /** Where the search's words are said in the clip. */
+  saidAt?: TimeSpanV1[];
   /** 1 to 5, relative to the best result of the same search. */
   relevance?: number;
   /** The search's own score (see `RelevanceMeter`). */
@@ -745,12 +753,7 @@ function AudioRow({
         </span>
       )}
       {columns.waveform && (
-        <Waveform
-          peaks={audio.waveformPeaks}
-          bars={32}
-          height={26}
-          played={playback && audio.durationSeconds > 0 ? playback.currentTime / audio.durationSeconds : 0}
-        />
+        <RowWaveform audio={audio} played={playback && audio.durationSeconds > 0 ? playback.currentTime / audio.durationSeconds : 0} />
       )}
       <DatasetTag source={audio.source} className="justify-self-start" />
       {columns.score &&
@@ -784,6 +787,28 @@ function AudioRow({
         <AudioWaveformIcon />
       </IconButton>
     </div>
+  );
+}
+
+/** A row's waveform, with the bars where the search's words are said in orange. */
+function RowWaveform({ audio, played }: { audio: Row; played: number }) {
+  const duration = audio.durationSeconds;
+  const saidAt = duration > 0 ? (audio.saidAt ?? []) : [];
+  const waveform = (
+    <Waveform
+      peaks={audio.waveformPeaks}
+      bars={32}
+      height={26}
+      played={played}
+      marks={saidAt.map((span) => ({ start: span.start / duration, end: span.end / duration }))}
+    />
+  );
+  if (saidAt.length === 0) return waveform;
+  const label = `Said at ${formatSaidAt(saidAt)}`;
+  return (
+    <span role="img" aria-label={label} title={label} className="relative z-10 flex">
+      {waveform}
+    </span>
   );
 }
 

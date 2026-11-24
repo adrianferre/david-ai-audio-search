@@ -1,5 +1,7 @@
 import "server-only";
 
+import type { WordTiming } from "@/lib/audio/word-timings";
+
 /**
  * Internal, version-agnostic representation of an audio file.
  * API versions map this to their own public shapes (see src/server/api/vN).
@@ -17,6 +19,11 @@ type AudioFileInfo = {
   channels: number;
   /** Waveform overview: `PEAK_COUNT` levels from 0 to 1 (src/lib/audio/peaks.ts). Null until computed. */
   waveformPeaks: number[] | null;
+  /**
+   * When each word of the transcript is said (src/lib/audio/word-timings.ts). LibriSpeech and
+   * Common Voice only; null until computed, and when the query didn't select it.
+   */
+  wordTimings: WordTiming[] | null;
 };
 
 export type LibriSpeechMetadata = {

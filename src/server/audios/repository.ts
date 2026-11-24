@@ -33,6 +33,8 @@ const fileColumns = {
   sample_rate: z.number(),
   channels: z.number(),
   waveform_peaks: z.array(z.number()).nullable(),
+  // Only selected where the API sends it (one clip, or search results): absent means not selected.
+  word_timings: z.array(z.object({ word: z.string(), start: z.number(), end: z.number() })).nullable().default(null),
 };
 
 const rowSchema = z.discriminatedUnion("source", [
@@ -88,6 +90,7 @@ function toRecord(row: unknown): AudioRecord {
     sampleRate: r.sample_rate,
     channels: r.channels,
     waveformPeaks: r.waveform_peaks,
+    wordTimings: r.word_timings,
   };
   switch (r.source) {
     case "librispeech":
@@ -168,7 +171,7 @@ export async function getDatasets(): Promise<Map<AudioSource, DatasetRecord>> {
 
 export async function getAudio(id: string): Promise<AudioRecord | null> {
   const rows = await getSql()`
-    SELECT id, source, file_name, blob_pathname, duration_seconds, sample_rate, channels, waveform_peaks, metadata
+    SELECT id, source, file_name, blob_pathname, duration_seconds, sample_rate, channels, waveform_peaks, word_timings, metadata
     FROM audios
     WHERE id = ${id}
   `;
@@ -304,7 +307,7 @@ export async function searchAudios({
         AND (${exclude}::text IS NULL OR a.id <> ${exclude})
     )
     SELECT a.id, a.source, a.file_name, a.blob_pathname, a.duration_seconds, a.sample_rate, a.channels, a.waveform_peaks,
-           a.metadata, m.score, m.text, m.sound, m.best, m.best_text_cosine,
+           a.word_timings, a.metadata, m.score, m.text, m.sound, m.best, m.best_text_cosine,
            (
              SELECT caption
              FROM jsonb_array_elements_text(a.metadata->'captions') WITH ORDINALITY AS c(caption, position)
@@ -359,7 +362,7 @@ export async function searchAudiosByExactWords({
              replace(plainto_tsquery('simple', ${query})::text, '&', '|')::tsquery AS any_word
     )
     SELECT a.id, a.source, a.file_name, a.blob_pathname, a.duration_seconds, a.sample_rate, a.channels, a.waveform_peaks,
-           a.metadata, ts_rank_cd(t.doc, q.words)::float8 AS score,
+           a.word_timings, a.metadata, ts_rank_cd(t.doc, q.words)::float8 AS score,
            (
              SELECT caption
              FROM jsonb_array_elements_text(a.metadata->'captions') WITH ORDINALITY AS c(caption, position)
@@ -429,7 +432,7 @@ export async function findSimilarAudios(
 export async function getAudios(ids: string[]): Promise<AudioRecord[]> {
   if (ids.length === 0) return [];
   const rows = await getSql()`
-    SELECT id, source, file_name, blob_pathname, duration_seconds, sample_rate, channels, waveform_peaks, metadata
+    SELECT id, source, file_name, blob_pathname, duration_seconds, sample_rate, channels, waveform_peaks, word_timings, metadata
     FROM audios
     WHERE id = ANY(${ids})
   `;

@@ -67,7 +67,21 @@ type DatasetFactsV1 = {
   lossyOrigin: boolean;
 };
 
-export type LibriSpeechMetadataV1 = AudioFileInfoV1 & {
+/** A span of a clip, in seconds from its start. */
+export type TimeSpanV1 = { start: number; end: number };
+
+/** One word of the transcript, as written there, and when it is said. */
+export type WordTimingV1 = TimeSpanV1 & { word: string };
+
+/**
+ * When each word of `transcript` is said: one entry per word (the transcript
+ * split on whitespace, punctuation kept), in order. Timed by a speech-to-text
+ * model and lined up with the transcript, so accurate to a few hundredths of a
+ * second. Null while not computed yet.
+ */
+type WordTimingsV1 = { wordTimings: WordTimingV1[] | null };
+
+export type LibriSpeechMetadataV1 = AudioFileInfoV1 & WordTimingsV1 & {
   utteranceId: string;
   speaker: { id: string; sex: string | null; name: string | null };
   chapter: { id: string; title: string | null; bookTitle: string | null };
@@ -88,7 +102,7 @@ export type AudioCapsMetadataV1 = AudioFileInfoV1 & {
 };
 
 /** Crowd-sourced speech: an anonymous volunteer reading a prompted sentence. */
-export type CommonVoiceMetadataV1 = AudioFileInfoV1 & {
+export type CommonVoiceMetadataV1 = AudioFileInfoV1 & WordTimingsV1 & {
   clipId: string;
   sentenceId: string;
   /** Self-reported and optional. `clientId` is Common Voice's hashed contributor id. */
@@ -138,7 +152,18 @@ export type AudioSearchResultV1 = AudioListItemV1 & {
   /** How far the audio stands out for this query, higher is better. Only comparable within one response. */
   score: number;
   matches: SearchMatchV1[];
+  /**
+   * Where the query's words are said in the clip, in order: the whole query when the
+   * transcript has it word for word, otherwise each of its words (but common ones like
+   * "the"). Empty when the clip has no word timings (AudioCaps, or not computed yet), when
+   * its words aren't in the transcript (a match on meaning or sound), and for queries of
+   * more than MAX_SAID_AT_QUERY_WORDS words.
+   */
+  saidAt: TimeSpanV1[];
 };
+
+/** Longest query, in words, whose words `saidAt` points at: a search with a clip's whole transcript points at none. */
+export const MAX_SAID_AT_QUERY_WORDS = 12;
 
 export type SimilarAudioV1 = AudioListItemV1 & {
   /** Cosine similarity to the example audio, at most 1. */
