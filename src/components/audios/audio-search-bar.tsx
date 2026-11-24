@@ -1,7 +1,7 @@
 "use client";
 
 import { AudioWaveformIcon, SearchIcon, XIcon } from "lucide-react";
-import { useRef } from "react";
+import { type ReactNode, useRef } from "react";
 
 import { IconButton } from "@/components/ui/icon-button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -22,6 +22,8 @@ export function AudioSearchBar({
   similarTo,
   onClearSimilar,
   summary,
+  leading,
+  trailing,
 }: {
   query: string;
   onQueryChange: (query: string) => void;
@@ -32,11 +34,16 @@ export function AudioSearchBar({
   onClearSimilar: () => void;
   /** The count of the list below, shown at the end of the input. */
   summary: string;
+  /** Before the input, e.g. the select-all checkbox. */
+  leading?: ReactNode;
+  /** At the end of the bar, e.g. the download controls. */
+  trailing?: ReactNode;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-2 border-b px-4 py-2">
+      {leading}
       {/* Styled as one input: the icon, the text, the count and the clear button. */}
       <div
         className="flex h-9 min-w-64 flex-1 items-center rounded-lg border bg-background focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 dark:bg-input/30"
@@ -126,6 +133,7 @@ export function AudioSearchBar({
           ))}
         </div>
       )}
+      {trailing}
     </div>
   );
 }

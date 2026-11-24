@@ -1,15 +1,23 @@
 "use client";
 
 import {
+  type InfiniteData,
   infiniteQueryOptions,
   keepPreviousData,
   queryOptions,
+  type UseInfiniteQueryResult,
+  type UseQueryResult,
   useInfiniteQuery,
   useQuery,
 } from "@tanstack/react-query";
 
 import { fetchAudios, fetchSimilarAudios, searchAudios } from "@/lib/api/v1/client";
-import type { SearchMatchFilterV1 } from "@/lib/api/v1/types";
+import type {
+  AudioListResponseV1,
+  AudioSearchResponseV1,
+  SearchMatchFilterV1,
+  SimilarAudiosResponseV1,
+} from "@/lib/api/v1/types";
 
 export const PAGE_SIZE = 50;
 /**
@@ -19,7 +27,8 @@ export const PAGE_SIZE = 50;
 export const RESULTS_LIMIT = 50;
 
 /**
- * The queries behind the audio list. Shared with the summary in the search bar,
+ * The queries behind the audio list. Shared with the search bar (its count and
+ * select-all checkbox),
  * so both read the same cache entries instead of fetching twice.
  */
 export const catalogQuery = () =>
@@ -52,12 +61,13 @@ export type AudioListView =
   | { kind: "similar"; id: string };
 
 /**
- * A short count for the current view, e.g. "50 of 3,129 audios" or
- * "12 results of 3,129": what's shown, out of the whole catalog searched.
- * A list cut off at `RESULTS_LIMIT` says so ("50+ results", "50 most similar"),
- * since its length is the cap, not the number of matches.
+ * The current view as the search bar needs it: the rows the list shows, for
+ * the select-all checkbox, and a short count of them.
  */
-export function useListSummary(view: AudioListView): string {
+export function useListView(view: AudioListView): {
+  rows: readonly { id: string }[];
+  summary: string;
+} {
   const catalog = useInfiniteQuery(catalogQuery());
   const search = useQuery({
     ...searchQuery(view.kind === "search" ? view.q : "", view.kind === "search" ? view.match : "all"),
@@ -68,6 +78,34 @@ export function useListSummary(view: AudioListView): string {
     enabled: view.kind === "similar",
   });
 
+  const rows =
+    view.kind === "browse"
+      ? (catalog.data?.pages.flatMap((page) => page.data) ?? [])
+      : view.kind === "search"
+        ? (search.data?.data ?? [])
+        : (similar.data?.data ?? []);
+
+  return { rows, summary: summarize(view, { catalog, search, similar }) };
+}
+
+/**
+ * A short count for the view, e.g. "50 of 3,129 audios" or "12 results of
+ * 3,129": what's shown, out of the whole catalog searched. A list cut off at
+ * `RESULTS_LIMIT` says so ("50+ results", "50 most similar"), since its length
+ * is the cap, not the number of matches.
+ */
+function summarize(
+  view: AudioListView,
+  {
+    catalog,
+    search,
+    similar,
+  }: {
+    catalog: UseInfiniteQueryResult<InfiniteData<AudioListResponseV1>>;
+    search: UseQueryResult<AudioSearchResponseV1>;
+    similar: UseQueryResult<SimilarAudiosResponseV1>;
+  },
+): string {
   const total = catalog.data?.pages[0]?.pagination.total;
   const ofTotal = total === undefined ? "" : ` of ${total.toLocaleString()}`;
 
