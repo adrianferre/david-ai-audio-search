@@ -2,7 +2,7 @@ import { downloadZip } from "client-zip";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
-import { type AudioExportManifestV1, MAX_EXPORT_IDS } from "@/lib/api/v1/types";
+import { type AudioExportManifestV1, exportFileName, MAX_EXPORT_IDS } from "@/lib/api/v1/types";
 import { apiError, internalError } from "@/server/api/errors";
 import { toAudioDetailV1 } from "@/server/api/v1/audios";
 import { getAudios } from "@/server/audios/repository";
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
   };
   const zip = downloadZip(zipEntries(records, manifest, now, request.signal));
 
-  const fileName = `audios-${now.toISOString().slice(0, 10)}-${records.length}.zip`;
+  const fileName = exportFileName(records.length, now);
   return new Response(zip.body, {
     headers: {
       "content-type": "application/zip",

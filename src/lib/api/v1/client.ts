@@ -86,13 +86,14 @@ export function audioFileUrl(id: string): string {
 }
 
 /**
- * Downloads a ZIP with the FLAC and metadata of each audio (one request,
- * whatever the number of ids). Resolves once the whole file has arrived.
+ * Starts downloading a ZIP with the FLAC and metadata of each audio (one
+ * request, whatever the number of ids). Resolves as soon as the response
+ * starts, with the ZIP still streaming in `body`.
  */
 export async function exportAudios(
   ids: string[],
   signal?: AbortSignal,
-): Promise<{ blob: Blob; fileName: string }> {
+): Promise<{ body: ReadableStream<Uint8Array>; fileName: string }> {
   const body: AudioExportRequestV1 = { ids };
   const res = await fetch(`${BASE}/audios/export`, {
     method: "POST",
@@ -101,7 +102,8 @@ export async function exportAudios(
     body: JSON.stringify(body),
   });
   await ensureOk(res);
+  if (!res.body) throw new ApiError(res.status, "empty_response", "The export came back empty");
   const fileName =
     /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "audios.zip";
-  return { blob: await res.blob(), fileName };
+  return { body: res.body, fileName };
 }

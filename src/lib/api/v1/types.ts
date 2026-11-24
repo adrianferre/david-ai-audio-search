@@ -97,6 +97,11 @@ export type SimilarAudiosResponseV1 = DataResponse<SimilarAudioV1[]>;
 /** Most audios one export can hold (`POST /api/v1/audios/export`). */
 export const MAX_EXPORT_IDS = 200;
 
+/** Name of an export ZIP, e.g. `audios-2026-11-24-2.zip` (UTC date). */
+export function exportFileName(count: number, date = new Date()): string {
+  return `audios-${date.toISOString().slice(0, 10)}-${count}.zip`;
+}
+
 /** Body of `POST /api/v1/audios/export`. The response is a ZIP, not JSON. */
 export type AudioExportRequestV1 = {
   ids: string[];

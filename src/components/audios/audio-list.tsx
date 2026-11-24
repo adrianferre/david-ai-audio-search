@@ -29,10 +29,12 @@ import {
 import {
   type AudioListItemV1,
   type AudioSource,
+  exportFileName,
   MAX_EXPORT_IDS,
   type SearchMatchFilterV1,
   type SearchMatchV1,
 } from "@/lib/api/v1/types";
+import { chooseSaveTarget, formatBytes, type SaveTarget, saveStream } from "@/lib/save-file";
 import { cn } from "@/lib/utils";
 
 import { type PlayerStatus, useAudioPlayer } from "./use-audio-player";
@@ -70,9 +72,14 @@ type Row = AudioListItemV1 & { matches?: SearchMatchV1[]; similarity?: number };
 /** Rows checked for download, by id: they stay checked across pages and views. */
 type Selection = {
   checked: ReadonlySet<string>;
+  /** While a download runs the selection can't change, so it matches the ZIP. */
+  locked: boolean;
   setChecked: (next: ReadonlySet<string>) => void;
   download: {
+    /** From choosing where to save until the whole ZIP is written. */
     isPending: boolean;
+    /** Bytes of the ZIP received so far, null until it starts arriving. */
+    receivedBytes: number | null;
     error: Error | null;
     start: () => void;
   };
@@ -89,19 +96,6 @@ type RowActions = {
 function formatDuration(seconds: number) {
   const total = Math.round(seconds);
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
-}
-
-/** Saves a downloaded file through a temporary link. */
-function saveFile(blob: Blob, fileName: string) {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = fileName;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  // Give the browser time to start the download before freeing the blob.
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 /** True when the click that changed a checkbox had Shift held. */
@@ -125,20 +119,49 @@ export function AudioList({
 
   // Also above the views, so checked rows survive searching and browsing.
   const [checked, setCheckedState] = useState<ReadonlySet<string>>(() => new Set());
+  // The save dialog is open: no download yet, but the selection is already in use.
+  const [choosingTarget, setChoosingTarget] = useState(false);
+  const [receivedBytes, setReceivedBytes] = useState<number | null>(null);
   const download = useMutation({
-    mutationFn: (ids: string[]) => exportAudios(ids),
-    onSuccess: ({ blob, fileName }) => saveFile(blob, fileName),
+    // Pending until the ZIP is fully written, not just until the response starts.
+    mutationFn: async ({ ids, target }: { ids: string[]; target: SaveTarget }) => {
+      const { body } = await exportAudios(ids);
+      await saveStream(body, target, setReceivedBytes);
+    },
   });
+  const busy = choosingTarget || download.isPending;
+
+  const startDownload = async () => {
+    const ids = [...checked];
+    setChoosingTarget(true);
+    let target;
+    try {
+      target = await chooseSaveTarget(exportFileName(ids.length), {
+        description: "ZIP archive",
+        mime: "application/zip",
+        extension: ".zip",
+      });
+    } finally {
+      setChoosingTarget(false);
+    }
+    if (!target) return; // Save dialog cancelled.
+    setReceivedBytes(null);
+    download.mutate({ ids, target });
+  };
+
   const selection: Selection = {
     checked,
+    locked: busy,
     setChecked: (next) => {
+      if (busy) return;
       setCheckedState(next);
       download.reset();
     },
     download: {
-      isPending: download.isPending,
+      isPending: busy,
+      receivedBytes: download.isPending ? receivedBytes : null,
       error: download.error,
-      start: () => download.mutate([...checked]),
+      start: () => void startDownload(),
     },
   };
 
@@ -336,7 +359,7 @@ function ListSummary({
         aria-label="Select all audios in the list"
         checked={allChecked}
         indeterminate={checkedHere > 0 && !allChecked}
-        disabled={rows.length === 0}
+        disabled={rows.length === 0 || selection.locked}
         onCheckedChange={checkAll}
       />
       <span aria-live="polite" className="min-w-0 truncate">
@@ -354,7 +377,12 @@ function ListSummary({
           <span className="shrink-0 text-foreground">
             {checked.size.toLocaleString()} selected
           </span>
-          <Button variant="ghost" size="sm" onClick={() => setChecked(new Set())}>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={selection.locked}
+            onClick={() => setChecked(new Set())}
+          >
             Clear
           </Button>
           <Button
@@ -365,7 +393,9 @@ function ListSummary({
             {download.isPending ? (
               <>
                 <LoaderCircleIcon className="animate-spin" />
-                Preparing ZIP…
+                {download.receivedBytes === null
+                  ? "Preparing ZIP…"
+                  : `Downloading… ${formatBytes(download.receivedBytes)}`}
               </>
             ) : (
               <>
@@ -460,6 +490,7 @@ function AudioRows({
                 <AudioRow
                   audio={row}
                   checked={selection.checked.has(row.id)}
+                  checkDisabled={selection.locked}
                   onCheckedChange={(value, shift) => toggleRow(item.index, value, shift)}
                   selected={row.id === selectedId}
                   onSelect={onSelect}
@@ -485,6 +516,7 @@ function AudioRows({
 function AudioRow({
   audio,
   checked,
+  checkDisabled,
   onCheckedChange,
   selected,
   onSelect,
@@ -495,6 +527,8 @@ function AudioRow({
   audio: Row;
   /** Picked for download. */
   checked: boolean;
+  /** A download is running: the selection is locked. */
+  checkDisabled: boolean;
   onCheckedChange: (checked: boolean, shift: boolean) => void;
   /** Open in the detail panel. */
   selected: boolean;
@@ -516,6 +550,7 @@ function AudioRow({
         className="ml-4"
         aria-label={`Select ${audio.title}`}
         checked={checked}
+        disabled={checkDisabled}
         // Shift+click selects a range of rows, not the text between them.
         onMouseDown={(event) => event.shiftKey && event.preventDefault()}
         onCheckedChange={(value, details) => onCheckedChange(value, withShift(details.event))}
