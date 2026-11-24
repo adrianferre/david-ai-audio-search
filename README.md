@@ -184,7 +184,7 @@ pnpm compute-waveforms   # add `--limit 20` for a trial run, `--all` to recomput
 
 ### Embedding Map
 
-The **Map** view (`List | Map` above the results, or `/?view=map`) draws every clip at its
+The **Map** view (the default; `Map | List` above the results, `/?view=list` for the list) draws every clip at its
 place on a 2D UMAP map of its audio vector, or of its text vector, coloured by dataset, sound
 family, book, speaker, sex or gender, age or accent. It is the same catalog as the list: the
 sidebar's filter, the search bar, the details panel and the selection (lasso or box select, then

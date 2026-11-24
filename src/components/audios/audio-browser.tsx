@@ -493,11 +493,11 @@ export function AudioBrowser() {
   );
 }
 const LAYOUTS: { value: ViewLayout; label: string; icon: typeof ListIcon }[] = [
-  { value: "list", label: "List", icon: ListIcon },
   { value: "map", label: "Map", icon: ChartScatterIcon },
+  { value: "list", label: "List", icon: ListIcon },
 ];
 
-/** List | Map: two views of the same catalog, search and selection. */
+/** Map | List: two views of the same catalog, search and selection. */
 function LayoutSwitch({ layout, onChange }: { layout: ViewLayout; onChange: (layout: ViewLayout) => void }) {
   return (
     <div role="group" aria-label="View" className="flex shrink-0 gap-0.5 rounded-full bg-muted p-[3px]">
