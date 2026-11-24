@@ -19,6 +19,8 @@ const querySchema = z.object({
   match: z.enum(["all", "text", "sound", "exact"]).default("all"),
   limit: z.coerce.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
   soundOf: z.string().min(1).optional(),
+  // An audio to leave out: the clip searched with, which would come first.
+  exclude: z.string().min(1).optional(),
 }).extend(sourceQuerySchema.shape);
 
 /** The sound the `sound` signal compares with, instead of the query's text. */
@@ -29,6 +31,8 @@ type SoundExample = { kind: "audio"; id: string } | { kind: "wav"; wav: Uint8Arr
  *
  * With `soundOf={id}`, the sound signal compares with that audio's sound
  * instead of the text of `q`: search with an example, by its sound and its words.
+ * With `exclude={id}`, that audio is left out of the results (and of the best
+ * score the others are cut against): the clip searched with.
  */
 export async function GET(request: NextRequest) {
   const soundOf = request.nextUrl.searchParams.get("soundOf");
@@ -53,7 +57,7 @@ async function search(request: NextRequest, example: SoundExample | null) {
   if (!parsed.success) {
     return apiError(400, "invalid_request", "Invalid query parameters", z.flattenError(parsed.error).fieldErrors);
   }
-  const { match, limit, source } = parsed.data;
+  const { match, limit, source, exclude = null } = parsed.data;
   const q = parsed.data.q ?? "";
   if (q === "" && !(example && (match === "all" || match === "sound"))) {
     return apiError(400, "invalid_request", "Invalid query parameters", {
@@ -65,11 +69,12 @@ async function search(request: NextRequest, example: SoundExample | null) {
   if (match === "exact") {
     let hits;
     try {
-      hits = await searchAudiosByExactWords({ query: q, limit, source });
+      hits = await searchAudiosByExactWords({ query: q, limit, source, exclude });
     } catch (error) {
       return internalError(error);
     }
-    const body: AudioSearchResponseV1 = { data: hits.map(toAudioSearchResultV1) };
+    // Every result has the words as typed: each is a clear match.
+    const body: AudioSearchResponseV1 = { data: hits.map(toAudioSearchResultV1), strongMatch: hits.length > 0 };
     return Response.json(body);
   }
 
@@ -103,18 +108,20 @@ async function search(request: NextRequest, example: SoundExample | null) {
     return apiError(503, "search_unavailable", "Search is temporarily unavailable. Try again.");
   }
 
-  let hits;
+  let result;
   try {
-    hits = await searchAudios({
+    result = await searchAudios({
       query: q,
       vectors,
       soundOf: example?.kind === "audio" && signals.includes("sound") ? example.id : null,
+      soundIsExample: example !== null,
       limit,
       source,
+      exclude,
     });
   } catch (error) {
     return internalError(error);
   }
-  const body: AudioSearchResponseV1 = { data: hits.map(toAudioSearchResultV1) };
+  const body: AudioSearchResponseV1 = { data: result.hits.map(toAudioSearchResultV1), strongMatch: result.strongMatch };
   return Response.json(body);
 }

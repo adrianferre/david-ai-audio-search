@@ -233,6 +233,7 @@ function SearchResults({
   actions,
   recovery,
   empty,
+  subject = `“${q}”`,
 }: {
   q: string;
   match: SearchMatchFilterV1;
@@ -245,6 +246,8 @@ function SearchResults({
   recovery: ListRecovery;
   /** Shown instead of the usual "nothing matches" message. */
   empty?: ReactNode;
+  /** What was searched with, as the "nothing clearly matches" notice names it. */
+  subject?: string;
 }) {
   const rowsQuery = searchQuery(q, match, source, excludeId, sound);
   const { data, status, error, refetch, isPlaceholderData } = useQuery(rowsQuery);
@@ -282,15 +285,26 @@ function SearchResults({
       </EmptyResults>
     );
   }
+  // `strongMatch` is missing from an API that predates it: treat its results as matches.
+  const weak = data.strongMatch === false && !searching;
   // Keyed by the search so the scroll position resets with it.
   return (
-    <AudioTable
-      key={JSON.stringify(rowsQuery.queryKey)}
-      kind="search"
-      rows={rows}
-      actions={actions}
-      dimmed={searching}
-    />
+    <>
+      {weak && (
+        <p className="flex items-center gap-2 border-t px-6 py-3 text-sm text-muted-foreground">
+          <CircleAlertIcon aria-hidden="true" className="size-4 shrink-0" />
+          Nothing clearly matches {subject}
+          {source ? ` in ${SOURCE_LABEL[source]}` : ""}. These are the closest clips.
+        </p>
+      )}
+      <AudioTable
+        key={JSON.stringify(rowsQuery.queryKey)}
+        kind="search"
+        rows={rows}
+        actions={actions}
+        dimmed={searching}
+      />
+    </>
   );
 }
 
@@ -347,6 +361,7 @@ function TranscriptResults({
       source={view.source}
       excludeId={excludeId}
       sound={sound}
+      subject={what}
       actions={actions}
       recovery={recovery}
       empty={

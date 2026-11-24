@@ -130,7 +130,13 @@ export type SimilarAudioV1 = AudioListItemV1 & {
   similarity: number;
 };
 
-export type AudioSearchResponseV1 = DataResponse<AudioSearchResultV1[]>;
+export type AudioSearchResponseV1 = DataResponse<AudioSearchResultV1[]> & {
+  /**
+   * Something clearly matches the query. When false, the results (if any) are
+   * only the closest clips: nothing in the catalog stands out for it.
+   */
+  strongMatch: boolean;
+};
 export type SimilarAudiosResponseV1 = DataResponse<SimilarAudioV1[]>;
 
 /**

@@ -15,6 +15,8 @@ const diff = (i: Interval) => {
 const table = (head: string[], rows: string[][]) =>
   [`| ${head.join(" | ")} |`, `| ${head.map(() => "---").join(" | ")} |`, ...rows.map((r) => `| ${r.join(" | ")} |`)].join("\n");
 
+const POSITIVE_SETS = ["caption", "fragment", "paraphrase", "concept"];
+
 const SET_LABEL: Record<string, string> = {
   caption: "Caption → sound clip (AudioCaps, held-out caption)",
   fragment: "Transcript fragment → speech clip",
@@ -33,7 +35,7 @@ export function renderReport(r: Results): string {
     ``,
     `Generated ${r.generatedAt} by \`pnpm eval\` (scripts/eval/run.mts). Do not edit by hand.`,
     ``,
-    `Catalog: ${Object.entries(r.catalog).map(([k, v]) => `${v} ${k}`).join(", ")}. Model \`${r.model}\`. Ranking: cut-off z ≥ ${r.ranking.minZ}, exact-words bonus ${r.ranking.exactWordsBonus}, limit ${r.ranking.limit}.`,
+    `Catalog: ${Object.entries(r.catalog).map(([k, v]) => `${v} ${k}`).join(", ")}. Model \`${r.model}\`. Ranking: cut-off z ≥ ${r.ranking.minZ} (typed sound next to text: ${r.ranking.typedSoundMinZ}), exact-words bonus ${r.ranking.exactWordsBonus} (+${r.ranking.exactPhraseBonus} for the phrase as typed), results under ${r.ranking.minShareOfBest} × the best dropped, strong match from ${r.ranking.strongMatchScore}, limit ${r.ranking.limit}.`,
     `Queries: ${counts}. Method and caveats: [eval/README.md](README.md).`,
     ``,
     `Numbers are percentages, mean over queries, with a 95% bootstrap interval in brackets. R@K = a relevant clip in the top K.`,
@@ -58,6 +60,28 @@ export function renderReport(r: Results): string {
       return [group, `${m.n}`, ci(m["R@1"]), ci(m["R@5"]), ci(m["R@10"]), ci(m.MRR), ci(m["nDCG@10"]), num(m.returnedMean, 1), pct(m.emptyShare)];
     });
   out.push(table(["Set", "n", "R@1", "R@5", "R@10", "MRR", "nDCG@10", "Results returned", "% empty"], prodRows), ``);
+
+  out.push(
+    `Result lists: how many results each ranking returns, and the share of them that are relevant (precision of the whole list, over queries that return any). Recall can't see filler; this can. Caption queries have one relevant clip, so their precision is at most 1 / results.`,
+    ``,
+  );
+  const listSets = ["caption", "fragment", "paraphrase", "concept", "negative"].filter((s) => r.bySet[s]);
+  const listSystems = ["production", "previous production", "no relative cut-off", "typed sound z ≥ 3", "no phrase bonus", "production · sound", "previous · sound"].filter((name) =>
+    (r.systems as { name: string }[]).some((s) => s.name === name),
+  );
+  out.push(
+    table(
+      ["Ranking", ...listSets.map((s) => (s === "negative" ? "negative: results" : `${s}: results / precision`))],
+      listSystems.map((name) => [
+        name,
+        ...listSets.map((s) => {
+          const m = r.bySet[s][name];
+          return s === "negative" ? num(m.returnedMean, 1) : `${num(m.returnedMean, 1)} / ${pct(m.precisionMean)}`;
+        }),
+      ]),
+    ),
+    ``,
+  );
 
   out.push(`## 2. Ranking variants vs production (paired difference, nDCG@10 and R@10)`, ``);
   out.push(`▲/▼: the 95% interval of the difference excludes zero.`, ``);
@@ -93,7 +117,8 @@ export function renderReport(r: Results): string {
     ``,
   );
 
-  out.push(`## 3. The cut-off: threshold sweep`, ``);
+  out.push(`## 3. The cut-offs: threshold sweeps`, ``);
+  out.push(`One z cut-off for both signals, on the previous ranking (no relative cut-off, no phrase bonus):`, ``);
   const sweepSets = ["caption", "fragment", "paraphrase", "concept", "negative"].filter((s) => r.sweep[s]);
   out.push(
     table(
@@ -107,7 +132,32 @@ export function renderReport(r: Results): string {
       ]),
     ),
     ``,
+    `The share-of-best cut-off on production (results under share × the best result dropped):`,
+    ``,
+    table(
+      ["share", ...sweepSets.map((s) => (s === "negative" ? "negative: results / % empty" : `${s} R@10 / results`))],
+      (r.shareSweep[sweepSets[0]] as any[]).map((_, i) => [
+        num(r.shareSweep[sweepSets[0]][i].minZ, 1),
+        ...sweepSets.map((s) => {
+          const row = r.shareSweep[s][i];
+          return s === "negative" ? `${num(row.returned, 1)} / ${pct(row.empty)}` : `${pct(row.recall10)} / ${num(row.returned, 1)}`;
+        }),
+      ]),
+    ),
+    ``,
     `Answerability: AUC of the top result's score for queries with vs without an answer = **${num(r.answerability.auc, 3)}** (1 = the top score alone tells them apart). Top score p10/p50/p90: with an answer ${num(r.answerability.positive.p10)}/${num(r.answerability.positive.p50)}/${num(r.answerability.positive.p90)}, without ${num(r.answerability.negative.p10)}/${num(r.answerability.negative.p50)}/${num(r.answerability.negative.p90)}.`,
+    ``,
+    `"Nothing clearly matches" (the API's \`strongMatch: false\`, top score under the threshold), share of queries flagged:`,
+    ``,
+    table(
+      ["Top score under", "Negative queries", "Queries with an answer", ...POSITIVE_SETS],
+      (r.answerability.strongMatch as any[]).map((t) => [
+        `${num(t.threshold, 1)}${t.threshold === r.ranking.strongMatchScore ? " (production)" : ""}`,
+        pct(t.negativeFlagged),
+        pct(t.positiveFlagged),
+        ...POSITIVE_SETS.map((s) => pct(t.positiveFlaggedBySet[s])),
+      ]),
+    ),
     ``,
     table(
       ["Negative query", "Results", "Top score", "Top results"],
@@ -155,11 +205,11 @@ export function renderReport(r: Results): string {
   out.push(`## 7. Failures of production search (relevant clip not in the top 10)`, ``);
   out.push(
     table(
-      ["Set", "Failures", "Cut off by z < 3", "Ranked below 10", "Not near the query"],
-      Object.entries(r.failures.counts as Record<string, any>).map(([set, c]) => [set, `${c.total}`, `${c["cut off by z < 3"] ?? 0}`, `${c["ranked below 10"] ?? 0}`, `${c["not near the query"] ?? 0}`]),
+      ["Set", "Failures", "Cut off", "Ranked below 10", "Not near the query"],
+      Object.entries(r.failures.counts as Record<string, any>).map(([set, c]) => [set, `${c.total}`, `${c["cut off"] ?? 0}`, `${c["ranked below 10"] ?? 0}`, `${c["not near the query"] ?? 0}`]),
     ),
     ``,
-    `"Cut off": the clip is in the top 10 without the cut-off, but below z = 3. "Not near": not in the top 10 even without it. All cases are in results.json (\`failures.cases\`).`,
+    `"Cut off": the clip is in the top 10 without the cut-offs (z, typed sound, share of best), but one of them drops it. "Not near": not in the top 10 even without them. All cases are in results.json (\`failures.cases\`).`,
     ``,
     `Caption failures: ${pct(r.failures.captionTopSharesSoundLabel)}% have a top result with the same AudioSet sound label as the target (a plausible answer that known-item scoring counts as wrong); in ${pct(r.failures.captionSoundBeatsText)}% the target stands out more on sound than on text. ${r.failures.captionHardClips.clipsWithAFailure} clips fail at least one of their captions; ${r.failures.captionHardClips.clipsFailingAtLeast3Of5} fail 3 or more of 5.`,
     ``,

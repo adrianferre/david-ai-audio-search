@@ -35,7 +35,14 @@ import {
   toTextDocument,
   toTextQuery,
 } from "../../src/server/search/embedding-config.ts";
-import { EXACT_WORDS_BONUS, MIN_Z_SCORE } from "../../src/server/search/ranking-config.ts";
+import {
+  EXACT_PHRASE_BONUS,
+  EXACT_WORDS_BONUS,
+  MIN_SHARE_OF_BEST,
+  MIN_TYPED_SOUND_Z_SCORE,
+  MIN_Z_SCORE,
+  STRONG_MATCH_SCORE,
+} from "../../src/server/search/ranking-config.ts";
 import {
   bootstrapDifference,
   bootstrapMean,
@@ -162,6 +169,8 @@ type FullText = {
   /** ts_rank of the clips that contain any word, for the keyword baselines. */
   rankAny: Map<string, number>;
   rankAll: Map<string, number>;
+  /** Clips whose text contains the query as typed, words in a row: production's `has_phrase`. */
+  phrase: Set<string>;
 };
 
 async function fullText(query: Extract<EvalQuery, { kind: "text" }>): Promise<FullText> {
@@ -193,7 +202,7 @@ async function fullText(query: Extract<EvalQuery, { kind: "text" }>): Promise<Fu
     `);
   }
   const [rows, held] = (await sql.transaction(statements, { readOnly: true })) as Record<string, unknown>[][];
-  const result: FullText = { allWords: new Set(), rankAny: new Map(), rankAll: new Map() };
+  const result: FullText = { allWords: new Set(), rankAny: new Map(), rankAll: new Map(), phrase: new Set() };
   for (const r of rows) {
     const id = r.id as string;
     if (query.heldOut && id === query.heldOut.id) continue;
@@ -212,6 +221,31 @@ async function fullText(query: Extract<EvalQuery, { kind: "text" }>): Promise<Fu
     if (h.any_words) result.rankAny.set(query.heldOut.id, h.rank_any as number);
   }
   return result;
+}
+
+/**
+ * The clips whose text contains the query as typed (production's `has_phrase`):
+ * the `simple` parser, no stemming or stop words, words in a row, on the same
+ * per-clip document as the Words filter. A caption query's own caption is left out.
+ */
+async function phraseMatches(query: Extract<EvalQuery, { kind: "text" }>): Promise<string[]> {
+  const statements = [
+    sql`
+      WITH q AS (SELECT phraseto_tsquery('simple', ${query.text}) AS phrase)
+      SELECT id FROM audios CROSS JOIN q
+      WHERE numnode(q.phrase) > 0
+        AND coalesce(to_tsvector('simple', metadata->>'transcript'), to_tsvector('simple', metadata->'captions')) @@ q.phrase
+    `,
+  ];
+  if (query.heldOut) {
+    statements.push(sql`
+      SELECT to_tsvector('simple', ${JSON.stringify(query.heldOut.captions)}::jsonb) @@ phraseto_tsquery('simple', ${query.text}) AS phrase
+    `);
+  }
+  const [rows, held] = (await sql.transaction(statements, { readOnly: true })) as Record<string, unknown>[][];
+  const ids = rows.map((r) => r.id as string).filter((id) => id !== query.heldOut?.id);
+  if (query.heldOut && held?.[0]?.phrase) ids.push(query.heldOut.id);
+  return ids;
 }
 
 async function mapLimit<T, R>(items: readonly T[], concurrency: number, fn: (item: T, i: number) => Promise<R>): Promise<R[]> {
@@ -256,25 +290,57 @@ function byScore(clips: Clip[]) {
   return (a: Hit, b: Hit) => b.score - a.score || (clips[a.index].id < clips[b.index].id ? -1 : 1);
 }
 
+type RankOptions = {
+  minZ?: number;
+  /** The sound cut-off next to the text signal: production uses MIN_TYPED_SOUND_Z_SCORE for typed queries. */
+  soundMinZ?: number;
+  bonus?: number;
+  phraseBonus?: number;
+  /** Results below this share of the best score are dropped (0: off). */
+  shareOfBest?: number;
+  limit?: number;
+};
+
+/** The ranking before the relative cut-off, stricter typed-sound cut-off and phrase bonus. */
+const PREVIOUS: RankOptions = { soundMinZ: MIN_Z_SCORE, phraseBonus: 0, shareOfBest: 0 };
+/** Production scores with nothing cut. */
+const NO_CUT_OFF: RankOptions = { minZ: -Infinity, soundMinZ: -Infinity, shareOfBest: 0 };
+
 /**
  * Production ranking (repository.ts `searchAudios`): z-score per signal, a
- * clip's score is its best signal, signals below `minZ` count as no match, and
- * clips whose text has every query word get `bonus` + max(text z, 0).
+ * clip's score is its best signal, signals below their cut-off count as no
+ * match, clips whose text has every query word get `bonus` + max(text z, 0)
+ * (+ `phraseBonus` when it has the query as typed), and results below
+ * `shareOfBest` of the top score are dropped.
  */
-function rankProduction(clips: Clip[], s: Signals, { minZ = MIN_Z_SCORE, bonus = EXACT_WORDS_BONUS, limit = LIMIT } = {}): Hit[] {
+function rankProduction(
+  clips: Clip[],
+  s: Signals,
+  {
+    minZ = MIN_Z_SCORE,
+    soundMinZ = MIN_TYPED_SOUND_Z_SCORE,
+    bonus = EXACT_WORDS_BONUS,
+    phraseBonus = EXACT_PHRASE_BONUS,
+    shareOfBest = MIN_SHARE_OF_BEST,
+    limit = LIMIT,
+  }: RankOptions = {},
+): Hit[] {
   const tz = s.text ? zScores(s.text) : null;
   const sz = s.sound ? zScores(s.sound) : null;
   const hits: Hit[] = [];
   for (let i = 0; i < clips.length; i++) {
     let text = 0;
     if (tz) {
-      const hasWords = bonus > 0 && s.fullText.allWords.has(clips[i].id);
-      text = hasWords ? bonus + Math.max(tz[i], 0) : tz[i] >= minZ ? tz[i] : 0;
+      const hasPhrase = bonus > 0 && s.fullText.phrase.has(clips[i].id);
+      const hasWords = bonus > 0 && (hasPhrase || s.fullText.allWords.has(clips[i].id));
+      text = hasWords ? bonus + (hasPhrase ? phraseBonus : 0) + Math.max(tz[i], 0) : tz[i] >= minZ ? tz[i] : 0;
     }
-    const sound = sz && sz[i] >= minZ ? sz[i] : 0;
+    // The stricter typed-sound cut-off applies next to the text signal (All), not to sound alone.
+    const sound = sz && sz[i] >= (tz ? Math.max(minZ, soundMinZ) : minZ) ? sz[i] : 0;
     if (text > 0 || sound > 0) hits.push({ index: i, score: Math.max(text, sound), text: text > 0, sound: sound > 0 });
   }
-  return hits.sort(byScore(clips)).slice(0, limit);
+  const best = hits.reduce((m, h) => Math.max(m, h.score), 0);
+  return hits.filter((h) => h.score >= shareOfBest * best).sort(byScore(clips)).slice(0, limit);
 }
 
 /** A pure ranking with no cut-off: score every clip and keep the top `limit`. */
@@ -298,11 +364,25 @@ type SystemName = string;
 type TextSystem = { name: SystemName; description: string; run: (clips: Clip[], s: Signals) => Hit[]; signals: "both" | "text" | "sound" };
 
 const TEXT_SYSTEMS: TextSystem[] = [
-  { name: "production", signals: "both", description: "Production (`match=all`): best of text and sound z-scores, cut at 3, exact-words bonus", run: (c, s) => rankProduction(c, s) },
+  {
+    name: "production",
+    signals: "both",
+    description: `Production (\`match=all\`): best of text and sound z-scores, cut at ${MIN_Z_SCORE} (typed sound at ${MIN_TYPED_SOUND_Z_SCORE}), exact-words bonus ${EXACT_WORDS_BONUS} (+${EXACT_PHRASE_BONUS} for the phrase), results under ${MIN_SHARE_OF_BEST} × the best dropped`,
+    run: (c, s) => rankProduction(c, s),
+  },
   { name: "production · text", signals: "text", description: "Production `match=text`", run: (c, s) => rankProduction(c, s) },
   { name: "production · sound", signals: "sound", description: "Production `match=sound` (audio vector only)", run: (c, s) => rankProduction(c, s) },
-  { name: "no cut-off", signals: "both", description: "Production scores without the z ≥ 3 cut-off", run: (c, s) => rankProduction(c, s, { minZ: -Infinity }) },
-  { name: "no exact-words bonus", signals: "both", description: "Production without the full-text bonus", run: (c, s) => rankProduction(c, s, { bonus: 0 }) },
+  { name: "previous production", signals: "both", description: "The ranking before this change: one cut-off z ≥ 3 for both signals, no phrase bonus, no relative cut-off", run: (c, s) => rankProduction(c, s, PREVIOUS) },
+  { name: "previous · sound", signals: "sound", description: "Previous `match=sound`: audio vector, z ≥ 3, no relative cut-off", run: (c, s) => rankProduction(c, s, PREVIOUS) },
+  { name: "no relative cut-off", signals: "both", description: "Production without the share-of-best cut-off", run: (c, s) => rankProduction(c, s, { shareOfBest: 0 }) },
+  { name: "share of best 0.4", signals: "both", description: "Production, results under 0.4 × the best dropped", run: (c, s) => rankProduction(c, s, { shareOfBest: 0.4 }) },
+  { name: "share of best 0.6", signals: "both", description: "Production, results under 0.6 × the best dropped", run: (c, s) => rankProduction(c, s, { shareOfBest: 0.6 }) },
+  { name: "share of best 0.7", signals: "both", description: "Production, results under 0.7 × the best dropped", run: (c, s) => rankProduction(c, s, { shareOfBest: 0.7 }) },
+  { name: "typed sound z ≥ 3", signals: "both", description: "Production with the typed-sound cut-off at 3, like text", run: (c, s) => rankProduction(c, s, { soundMinZ: 3 }) },
+  { name: "typed sound z ≥ 3.5", signals: "both", description: "Production with the typed-sound cut-off at 3.5", run: (c, s) => rankProduction(c, s, { soundMinZ: 3.5 }) },
+  { name: "no phrase bonus", signals: "both", description: "Production without the exact-phrase bonus", run: (c, s) => rankProduction(c, s, { phraseBonus: 0 }) },
+  { name: "no cut-off", signals: "both", description: "Production scores with no cut-off at all (z or share of best)", run: (c, s) => rankProduction(c, s, NO_CUT_OFF) },
+  { name: "no exact-words bonus", signals: "both", description: "Production without the full-text bonuses", run: (c, s) => rankProduction(c, s, { bonus: 0 }) },
   {
     name: "z-sum",
     signals: "both",
@@ -342,6 +422,7 @@ const TEXT_SYSTEMS: TextSystem[] = [
 ];
 
 const THRESHOLDS = [0, 1, 1.5, 2, 2.5, 3, 3.5, 4, 5];
+const SHARES = [0, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8];
 
 // ---------------------------------------------------------------------------
 // Live checks: parity with the deployed API, latency.
@@ -414,12 +495,22 @@ log("full-text matching in Postgres (read-only)");
 const fullTexts = await mapLimit(textQueries, 8, async (q) => {
   const key = cacheKey(`${q.text}|${q.heldOut ? JSON.stringify(q.heldOut) : ""}`);
   const cached = fullTextCache[key];
-  if (cached) return { allWords: new Set(cached.allWords), rankAny: new Map(cached.rankAny), rankAll: new Map(cached.rankAll) };
+  if (cached) return { allWords: new Set(cached.allWords), rankAny: new Map(cached.rankAny), rankAll: new Map(cached.rankAll), phrase: new Set<string>() };
   const ft = await fullText(q);
   fullTextCache[key] = { allWords: [...ft.allWords], rankAny: [...ft.rankAny], rankAll: [...ft.rankAll] };
   return ft;
 });
 await writeFile(fullTextCacheFile, JSON.stringify(fullTextCache));
+
+const phraseCacheFile = new URL("phrase.json", CACHE_DIR);
+const phraseCache: Record<string, string[]> = existsSync(phraseCacheFile) ? JSON.parse(await readFile(phraseCacheFile, "utf8")) : {};
+log("phrase matching in Postgres (read-only)");
+await mapLimit(textQueries, 8, async (q, i) => {
+  const key = cacheKey(`phrase|${q.text}|${q.heldOut ? JSON.stringify(q.heldOut) : ""}`);
+  phraseCache[key] ??= await phraseMatches(q);
+  fullTexts[i].phrase = new Set(phraseCache[key]);
+});
+await writeFile(phraseCacheFile, JSON.stringify(phraseCache));
 
 function signalsFor(q: Extract<EvalQuery, { kind: "text" }>, ft: FullText, which: "both" | "text" | "sound", heldOut = true): Signals {
   const tq = vectorOf(toTextQuery(q.text));
@@ -445,6 +536,8 @@ type PerQuery = {
   metrics: Record<SystemName, QueryMetrics>;
   rank: Record<SystemName, number | null>;
   returned: Record<SystemName, number>;
+  /** Share of the returned clips that are relevant (null: nothing returned). */
+  precision: Record<SystemName, number | null>;
   topScore?: number;
 };
 
@@ -456,7 +549,9 @@ const groupOf = (q: EvalQuery) => {
 log("ranking text queries");
 const perQuery: PerQuery[] = [];
 const failures: unknown[] = [];
-const sweep: Record<string, { set: string; minZ: number; returned: number; recall10: number }[]> = {};
+type SweepRow = { set: string; minZ: number; returned: number; recall10: number };
+const sweep: Record<string, SweepRow[]> = {};
+const shareSweep: Record<string, SweepRow[]> = {};
 const diagnostics = { soundSpeechShare: [] as number[], textSimStats: [] as number[], soundSimStats: [] as number[], topScorePositive: [] as number[], topScoreNegative: [] as number[] };
 const negativeDetail: { query: string; returned: number; topScore: number; top: { id: string; snippet: string; score: number; matches: string }[] }[] = [];
 const conceptDetail: { query: string; relevant: number; production: Record<string, number>; sound: Record<string, number> }[] = [];
@@ -471,21 +566,26 @@ textQueries.forEach((q, qi) => {
     text: { ...both, sound: null },
     sound: { ...both, text: null },
   };
-  const record: PerQuery = { id: q.id, set: q.set, group: groupOf(q), metrics: {}, rank: {}, returned: {} };
+  const record: PerQuery = { id: q.id, set: q.set, group: groupOf(q), metrics: {}, rank: {}, returned: {}, precision: {} };
   const ids = (hits: Hit[]) => hits.map((h) => clips[h.index].id);
   for (const system of TEXT_SYSTEMS) {
     const hits = system.run(clips, bySignals[system.signals]);
     record.metrics[system.name] = scoreQuery(ids(hits), q.relevant);
     record.rank[system.name] = firstRelevantRank(ids(hits), q.relevant);
     record.returned[system.name] = hits.length;
+    record.precision[system.name] = hits.length === 0 ? null : ids(hits).filter((id) => (q.relevant[id] ?? 0) > 0).length / hits.length;
   }
-  const uncut = rankProduction(clips, both, { minZ: -Infinity, limit: 1 });
+  const uncut = rankProduction(clips, both, { ...NO_CUT_OFF, limit: 1 });
   record.topScore = uncut[0]?.score;
 
-  // Threshold sweep of the production ranking.
+  // Threshold sweeps: one z cut-off for both signals on the previous ranking, and the share of the best on production.
   for (const minZ of THRESHOLDS) {
-    const hits = rankProduction(clips, both, { minZ });
+    const hits = rankProduction(clips, both, { ...PREVIOUS, minZ, soundMinZ: minZ });
     (sweep[q.set] ??= []).push({ set: q.set, minZ, returned: hits.length, recall10: scoreQuery(ids(hits), q.relevant)["R@10"] });
+  }
+  for (const share of SHARES) {
+    const hits = rankProduction(clips, both, { shareOfBest: share });
+    (shareSweep[q.set] ??= []).push({ set: q.set, minZ: share, returned: hits.length, recall10: scoreQuery(ids(hits), q.relevant)["R@10"] });
   }
 
   if (q.set === "negative") {
@@ -503,7 +603,7 @@ textQueries.forEach((q, qi) => {
 
   // "Speech also matches sounds like": share of speech clips in sound-only results for sound concepts.
   if (q.set === "concept") {
-    const top = rankProduction(clips, bySignals.sound, { minZ: -Infinity, limit: 10 });
+    const top = rankProduction(clips, bySignals.sound, { ...NO_CUT_OFF, limit: 10 });
     diagnostics.soundSpeechShare.push(top.filter((h) => clips[h.index].source !== "audiocaps").length / 10);
   }
   if (qi % 50 === 0) {
@@ -541,7 +641,7 @@ textQueries.forEach((q, qi) => {
       topSharesSoundLabel: prodHits[0] ? shareSoundLabel(clips[best].id, clips[prodHits[0].index].id) : false,
       soundBeatsText: sz[best] > tz[best],
       cause:
-        record.rank.production !== null ? "ranked below 10" : uncutRank !== null && uncutRank <= 10 ? "cut off by z < 3" : "not near the query",
+        record.rank.production !== null ? "ranked below 10" : uncutRank !== null && uncutRank <= 10 ? "cut off" : "not near the query",
       top: prodHits.slice(0, 3).map((h) => ({ id: clips[h.index].id, snippet: clips[h.index].snippet.slice(0, 90), score: +h.score.toFixed(2), matches: [h.text && "text", h.sound && "sound"].filter(Boolean).join("+") })),
       notes: q.notes,
     });
@@ -571,6 +671,7 @@ for (const q of exampleQueries) {
     metrics: { [EXAMPLE_SYSTEMS[0]]: scoreQuery(ids, q.relevant) },
     rank: { [EXAMPLE_SYSTEMS[0]]: firstRelevantRank(ids, q.relevant) },
     returned: { [EXAMPLE_SYSTEMS[0]]: hits.length },
+    precision: { [EXAMPLE_SYSTEMS[0]]: ids.filter((id) => (q.relevant[id] ?? 0) > 0).length / Math.max(1, ids.length) },
   });
 }
 
@@ -582,7 +683,7 @@ const chance = (set: string) =>
 // Aggregate.
 // ---------------------------------------------------------------------------
 
-type Summary = Record<string, Record<SystemName, Record<string, Interval> & { returnedMean: number; emptyShare: number; n: number }>>;
+type Summary = Record<string, Record<SystemName, Record<string, Interval> & { returnedMean: number; precisionMean: number; emptyShare: number; n: number }>>;
 
 function summarize(groupKey: "set" | "group"): Summary {
   const out: Summary = {};
@@ -594,6 +695,7 @@ function summarize(groupKey: "set" | "group"): Summary {
       const entry = Object.fromEntries(METRIC_NAMES.map((m) => [m, bootstrapMean(rows.map((r) => r.metrics[system][m]))])) as Record<string, Interval>;
       out[g][system] = Object.assign(entry, {
         returnedMean: mean(rows.map((r) => r.returned[system])),
+        precisionMean: mean(rows.flatMap((r) => (r.precision[system] == null ? [] : [r.precision[system]]))),
         emptyShare: mean(rows.map((r) => (r.returned[system] === 0 ? 1 : 0))),
         n: rows.length,
       });
@@ -618,15 +720,18 @@ for (const set of POSITIVE_TEXT_SETS) {
   }
 }
 
-const sweepSummary = Object.fromEntries(
-  Object.entries(sweep).map(([set, rows]) => [
-    set,
-    THRESHOLDS.map((minZ) => {
-      const at = rows.filter((r) => r.minZ === minZ);
-      return { minZ, recall10: mean(at.map((r) => r.recall10)), returned: mean(at.map((r) => r.returned)), empty: mean(at.map((r) => (r.returned === 0 ? 1 : 0))) };
-    }),
-  ]),
-);
+const summarizeSweep = (rowsBySet: Record<string, SweepRow[]>, values: number[]) =>
+  Object.fromEntries(
+    Object.entries(rowsBySet).map(([set, rows]) => [
+      set,
+      values.map((minZ) => {
+        const at = rows.filter((r) => r.minZ === minZ);
+        return { minZ, recall10: mean(at.map((r) => r.recall10)), returned: mean(at.map((r) => r.returned)), empty: mean(at.map((r) => (r.returned === 0 ? 1 : 0))) };
+      }),
+    ]),
+  );
+const sweepSummary = summarizeSweep(sweep, THRESHOLDS);
+const shareSweepSummary = summarizeSweep(shareSweep, SHARES);
 
 const clapSummary = Object.fromEntries(
   Object.entries(captionClap).map(([name, rows]) => [name, Object.fromEntries(METRIC_NAMES.map((m) => [m, bootstrapMean(rows.map((r) => r[m]))]))]),
@@ -636,6 +741,18 @@ const answerability = {
   auc: rocAuc(diagnostics.topScorePositive, diagnostics.topScoreNegative),
   positive: { p10: percentile(diagnostics.topScorePositive, 10), p50: percentile(diagnostics.topScorePositive, 50), p90: percentile(diagnostics.topScorePositive, 90) },
   negative: { p10: percentile(diagnostics.topScoreNegative, 10), p50: percentile(diagnostics.topScoreNegative, 50), p90: percentile(diagnostics.topScoreNegative, 90) },
+  /** At each candidate STRONG_MATCH_SCORE: share of queries told "nothing clearly matches". */
+  strongMatch: [4, 4.5, 5, 5.5, 6].map((threshold) => ({
+    threshold,
+    negativeFlagged: mean(diagnostics.topScoreNegative.map((t) => (t < threshold ? 1 : 0))),
+    positiveFlagged: mean(diagnostics.topScorePositive.map((t) => (t < threshold ? 1 : 0))),
+    positiveFlaggedBySet: Object.fromEntries(
+      POSITIVE_TEXT_SETS.map((set) => {
+        const tops = perQuery.filter((r) => r.set === set && r.topScore !== undefined).map((r) => r.topScore!);
+        return [set, mean(tops.map((t) => (t < threshold ? 1 : 0)))];
+      }),
+    ),
+  })),
 };
 
 const paraphraseNoOverlap = perQuery.filter((r) => r.set === "paraphrase" && (textQueries.find((q) => q.id === r.id)?.notes?.sharedWords as string[]).length === 0);
@@ -733,17 +850,22 @@ for (const q of textQueries.filter((x) => x.set === "concept").slice(0, 7)) {
   const s = `[${[...vectorOf(toSoundQuery(q.text))].join(",")}]`;
   const [plan] = (await sql.transaction(
     [
-      // The production query of repository.ts `searchAudios`, verbatim.
+      // The production query of repository.ts `searchAudios`, verbatim (typed query, no source or exclude).
       sql`EXPLAIN (ANALYZE, FORMAT JSON)
         WITH q AS (
           SELECT ${t}::vector AS text_vector,
                  ${s}::vector AS sound_vector,
                  websearch_to_tsquery('english', ${q.text}) AS words,
+                 phraseto_tsquery('simple', ${q.text}) AS phrase,
                  replace(plainto_tsquery('english', ${q.text})::text, '&', '|')::tsquery AS any_word
         ),
         scored AS (
           SELECT a.id,
                  (q.text_vector IS NOT NULL AND a.search_text @@ q.words) AS has_words,
+                 (q.text_vector IS NOT NULL AND numnode(q.phrase) > 0 AND coalesce(
+                   to_tsvector('simple', a.metadata->>'transcript'),
+                   to_tsvector('simple', a.metadata->'captions')
+                 ) @@ q.phrase) AS has_phrase,
                  (s.text - avg(s.text) OVER ()) / nullif(stddev_samp(s.text) OVER (), 0) AS text_z,
                  (s.sound - avg(s.sound) OVER ()) / nullif(stddev_samp(s.sound) OVER (), 0) AS sound_z
           FROM audios a
@@ -756,25 +878,35 @@ for (const q of textQueries.filter((x) => x.set === "concept").slice(0, 7)) {
         signals AS (
           SELECT id,
                  CASE
-                   WHEN has_words THEN ${EXACT_WORDS_BONUS}::float8 + greatest(text_z, 0)
+                   WHEN has_words OR has_phrase
+                     THEN ${EXACT_WORDS_BONUS}::float8
+                          + CASE WHEN has_phrase THEN ${EXACT_PHRASE_BONUS}::float8 ELSE 0 END
+                          + greatest(text_z, 0)
                    WHEN text_z >= ${MIN_Z_SCORE}::float8 THEN text_z
                    ELSE 0
                  END AS text,
-                 CASE WHEN sound_z >= ${MIN_Z_SCORE}::float8 THEN sound_z ELSE 0 END AS sound
+                 CASE WHEN sound_z >= ${MIN_TYPED_SOUND_Z_SCORE}::float8 THEN sound_z ELSE 0 END AS sound
           FROM scored
+        ),
+        matched AS (
+          SELECT g.id, greatest(g.text, g.sound)::float8 AS score, g.text > 0 AS text, g.sound > 0 AS sound,
+                 max(greatest(g.text, g.sound)) OVER ()::float8 AS best
+          FROM signals g
+          JOIN audios a USING (id)
+          WHERE (g.text > 0 OR g.sound > 0)
         )
-        SELECT a.id, a.metadata, greatest(g.text, g.sound)::float8 AS score,
+        SELECT a.id, a.metadata, m.score, m.best,
                (
                  SELECT caption
                  FROM jsonb_array_elements_text(a.metadata->'captions') WITH ORDINALITY AS c(caption, position)
                  ORDER BY ts_rank(to_tsvector('english', caption), q.any_word) DESC, position
                  LIMIT 1
                ) AS caption
-        FROM signals g
+        FROM matched m
         JOIN audios a USING (id)
         CROSS JOIN q
-        WHERE g.text > 0 OR g.sound > 0
-        ORDER BY score DESC, a.id
+        WHERE m.score >= ${MIN_SHARE_OF_BEST}::float8 * m.best
+        ORDER BY m.score DESC, a.id
         LIMIT 50`,
     ],
     { readOnly: true },
@@ -815,7 +947,15 @@ const cost = {
 const results = {
   generatedAt: new Date().toISOString(),
   model: EMBEDDING_MODEL,
-  ranking: { minZ: MIN_Z_SCORE, exactWordsBonus: EXACT_WORDS_BONUS, limit: LIMIT },
+  ranking: {
+    minZ: MIN_Z_SCORE,
+    typedSoundMinZ: MIN_TYPED_SOUND_Z_SCORE,
+    exactWordsBonus: EXACT_WORDS_BONUS,
+    exactPhraseBonus: EXACT_PHRASE_BONUS,
+    minShareOfBest: MIN_SHARE_OF_BEST,
+    strongMatchScore: STRONG_MATCH_SCORE,
+    limit: LIMIT,
+  },
   catalog: Object.fromEntries([...new Set(clips.map((c) => c.source))].map((s) => [s, clips.filter((c) => c.source === s).length])),
   queryCounts: queryFile.counts,
   systems: TEXT_SYSTEMS.map(({ name, description }) => ({ name, description })),
@@ -823,6 +963,7 @@ const results = {
   byGroup,
   comparisons,
   sweep: sweepSummary,
+  shareSweep: shareSweepSummary,
   clap: clapSummary,
   example: { chanceP10: { example: chance("example"), speaker: chance("speaker") } },
   answerability,

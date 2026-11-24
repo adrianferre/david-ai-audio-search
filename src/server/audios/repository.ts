@@ -3,7 +3,14 @@ import "server-only";
 import { z } from "zod";
 
 import { getSql } from "@/server/db";
-import { EXACT_WORDS_BONUS, MIN_Z_SCORE } from "@/server/search/ranking-config";
+import {
+  EXACT_PHRASE_BONUS,
+  EXACT_WORDS_BONUS,
+  MIN_SHARE_OF_BEST,
+  MIN_TYPED_SOUND_Z_SCORE,
+  MIN_Z_SCORE,
+  STRONG_MATCH_SCORE,
+} from "@/server/search/ranking-config";
 
 import type { AudioRecord, AudioSearchHit, AudioSource, SearchMatch, SimilarAudioHit } from "./types";
 
@@ -143,13 +150,26 @@ function toVector(embedding: number[] | undefined): string | null {
  * stands above the catalog's mean for this query. That puts text-to-text and
  * text-to-audio similarity on one scale (their raw values differ, and both
  * shift from query to query), so the two signals can be ranked together.
- * The cut-off and the exact-words bonus are in src/server/search/ranking-config.ts.
+ * The cut-offs and bonuses are in src/server/search/ranking-config.ts, shared
+ * with the evaluation (scripts/eval/run.mts re-implements this ranking).
  */
+
+export type AudioSearchResult = {
+  hits: AudioSearchHit[];
+  /**
+   * The best result scores at least STRONG_MATCH_SCORE: something clearly
+   * matches the query. Not judged (true) when the sound is an example's: the
+   * threshold is calibrated on typed queries, and a clip's nearest sounds
+   * stand out on another scale.
+   */
+  strongMatch: boolean;
+};
 
 /**
  * Text search over two signals:
  *  - its text (transcript or captions): `vectors.text` against the text vectors,
- *    plus full-text search for exact words,
+ *    plus full-text search for exact words (a bonus when the text has every
+ *    word of the query, and more when it has the query as typed),
  *  - what it sounds like: `vectors.sound` against the audio vectors.
  * A clip's score is its best signal, not the sum: the two overlap (the audio
  * vector carries the spoken words too, and captions describe the sound), so
@@ -157,8 +177,13 @@ function toVector(embedding: number[] | undefined): string | null {
  * A signal whose vector is missing is skipped.
  * With `soundOf` (an audio's id) and no `vectors.sound`, the sound signal is
  * that audio's own vector: search by an example's sound, plus its words.
- * With `source`, only that dataset's clips are returned. They are still scored
- * against the whole catalog, so a score means the same with or without it.
+ * `soundIsExample` says the sound vector is a clip's (`soundOf`, or an uploaded
+ * clip's), not the typed query's, so the stricter typed-sound cut-off doesn't apply.
+ * Results below MIN_SHARE_OF_BEST of the best one are dropped.
+ * With `source`, only that dataset's clips are returned, and `exclude` (an
+ * audio's id) is left out: the clip searched with, which would come first.
+ * Both are still scored against the whole catalog, so a score means the same
+ * with or without them; the best result is the best of those returned.
  *
  * It scores every clip: fine for a few thousand rows. At a much larger scale,
  * take the top candidates per signal from a vector index and estimate the
@@ -168,15 +193,20 @@ export async function searchAudios({
   query,
   vectors,
   soundOf = null,
+  soundIsExample = soundOf !== null,
   limit,
   source = null,
+  exclude = null,
 }: {
   query: string;
   vectors: Partial<Record<SearchMatch, number[]>>;
   soundOf?: string | null;
+  soundIsExample?: boolean;
   limit: number;
   source?: AudioSource | null;
-}): Promise<AudioSearchHit[]> {
+  exclude?: string | null;
+}): Promise<AudioSearchResult> {
+  const soundMinZ = vectors.text && !soundIsExample ? MIN_TYPED_SOUND_Z_SCORE : MIN_Z_SCORE;
   const rows = await getSql()`
     WITH q AS (
       SELECT ${toVector(vectors.text)}::vector AS text_vector,
@@ -185,12 +215,19 @@ export async function searchAudios({
                (SELECT audio_embedding FROM audios WHERE id = ${soundOf}::text)
              ) AS sound_vector,
              websearch_to_tsquery('english', ${query}) AS words,
+             -- The query as typed: no stemming or stop words, words in a row.
+             phraseto_tsquery('simple', ${query}) AS phrase,
              -- Any of the query's words, to pick the caption to show.
              replace(plainto_tsquery('english', ${query})::text, '&', '|')::tsquery AS any_word
     ),
     scored AS (
       SELECT a.id,
              (q.text_vector IS NOT NULL AND a.search_text @@ q.words) AS has_words,
+             -- The same per-clip text as the Words filter (searchAudiosByExactWords).
+             (q.text_vector IS NOT NULL AND numnode(q.phrase) > 0 AND coalesce(
+               to_tsvector('simple', a.metadata->>'transcript'),
+               to_tsvector('simple', a.metadata->'captions')
+             ) @@ q.phrase) AS has_phrase,
              (s.text - avg(s.text) OVER ()) / nullif(stddev_samp(s.text) OVER (), 0) AS text_z,
              (s.sound - avg(s.sound) OVER ()) / nullif(stddev_samp(s.sound) OVER (), 0) AS sound_z
       FROM audios a
@@ -203,35 +240,49 @@ export async function searchAudios({
     signals AS (
       SELECT id,
              CASE
-               WHEN has_words THEN ${EXACT_WORDS_BONUS}::float8 + greatest(text_z, 0)
+               WHEN has_words OR has_phrase
+                 THEN ${EXACT_WORDS_BONUS}::float8
+                      + CASE WHEN has_phrase THEN ${EXACT_PHRASE_BONUS}::float8 ELSE 0 END
+                      + greatest(text_z, 0)
                WHEN text_z >= ${MIN_Z_SCORE}::float8 THEN text_z
                ELSE 0
              END AS text,
-             CASE WHEN sound_z >= ${MIN_Z_SCORE}::float8 THEN sound_z ELSE 0 END AS sound
+             CASE WHEN sound_z >= ${soundMinZ}::float8 THEN sound_z ELSE 0 END AS sound
       FROM scored
+    ),
+    matched AS (
+      SELECT g.id, greatest(g.text, g.sound)::float8 AS score, g.text > 0 AS text, g.sound > 0 AS sound,
+             max(greatest(g.text, g.sound)) OVER ()::float8 AS best
+      FROM signals g
+      JOIN audios a USING (id)
+      WHERE (g.text > 0 OR g.sound > 0)
+        AND (${source}::text IS NULL OR a.source = ${source})
+        AND (${exclude}::text IS NULL OR a.id <> ${exclude})
     )
     SELECT a.id, a.source, a.file_name, a.blob_pathname, a.duration_seconds, a.sample_rate, a.channels, a.waveform_peaks,
-           a.metadata, greatest(g.text, g.sound)::float8 AS score, g.text > 0 AS text, g.sound > 0 AS sound,
+           a.metadata, m.score, m.text, m.sound, m.best,
            (
              SELECT caption
              FROM jsonb_array_elements_text(a.metadata->'captions') WITH ORDINALITY AS c(caption, position)
              ORDER BY ts_rank(to_tsvector('english', caption), q.any_word) DESC, position
              LIMIT 1
            ) AS caption
-    FROM signals g
+    FROM matched m
     JOIN audios a USING (id)
     CROSS JOIN q
-    WHERE (g.text > 0 OR g.sound > 0)
-      AND (${source}::text IS NULL OR a.source = ${source})
-    ORDER BY score DESC, a.id
+    WHERE m.score >= ${MIN_SHARE_OF_BEST}::float8 * m.best
+    ORDER BY m.score DESC, a.id
     LIMIT ${limit}
   `;
-  return rows.map((row) => ({
-    record: toRecord(row),
-    score: row.score as number,
-    matches: [...(row.text ? ["text" as const] : []), ...(row.sound ? ["sound" as const] : [])],
-    caption: (row.caption as string | null) ?? null,
-  }));
+  return {
+    hits: rows.map((row) => ({
+      record: toRecord(row),
+      score: row.score as number,
+      matches: [...(row.text ? ["text" as const] : []), ...(row.sound ? ["sound" as const] : [])],
+      caption: (row.caption as string | null) ?? null,
+    })),
+    strongMatch: rows.length > 0 && (soundIsExample || (rows[0].best as number) >= STRONG_MATCH_SCORE),
+  };
 }
 
 /**
@@ -247,10 +298,13 @@ export async function searchAudiosByExactWords({
   query,
   limit,
   source = null,
+  exclude = null,
 }: {
   query: string;
   limit: number;
   source?: AudioSource | null;
+  /** An audio's id to leave out: the clip searched with. */
+  exclude?: string | null;
 }): Promise<AudioSearchHit[]> {
   const rows = await getSql()`
     WITH q AS (
@@ -280,6 +334,7 @@ export async function searchAudiosByExactWords({
     ) t
     WHERE t.doc @@ q.words
       AND (${source}::text IS NULL OR a.source = ${source})
+      AND (${exclude}::text IS NULL OR a.id <> ${exclude})
     ORDER BY score DESC, a.id
     LIMIT ${limit}
   `;

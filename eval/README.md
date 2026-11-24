@@ -8,6 +8,7 @@ the raw output.
 ```bash
 pnpm test           # unit tests of the metrics
 pnpm eval           # the evaluation (2–4 min; add --skip-live to skip the deployed-API checks)
+EVAL_API_URL=http://localhost:3000 pnpm eval   # parity against a local `pnpm dev`, for a ranking change not deployed yet
 pnpm eval:queries   # rebuild queries.json (only to change the query sets)
 pnpm eval:labels    # rebuild data/audioset-labels.json from AudioSet's CSV
 ```
@@ -59,11 +60,11 @@ words it shares with its transcript). AudioSet labels come from Google's
 | One model for text and audio puts both in one space | **Holds, with a weak audio side.** Text → audio vector alone: R@10 32% on captions vs 83% for LAION-CLAP. | report §1, §4 |
 | Raw similarities sit on different scales, so use z-scores | **Holds.** Text-text cosine p50 0.59 vs text-audio 0.48. z-max beats RRF (−33 nDCG on captions) and z-sum (−10). Raw cosine max is slightly better on captions (+0.9) but loses 8.6 on fragments and 4.3 on concepts: it is nearly text-only, since text similarities are always larger. | §2, §6 |
 | A clip's score is its best signal, not the sum | **Holds.** z-sum is significantly worse on 3 of 4 sets | §2 |
-| Exact-words bonus | **Holds.** +9.9 nDCG on fragments, +5 on concepts; −0.8 on captions | §2 |
+| Exact-words bonus | **Holds.** +11.6 nDCG on fragments, +4.5 on concepts; −1.1 on captions. The phrase bonus on top: +1.9 nDCG on fragments (LibriSpeech R@1 92.7 → 98.7) | §2 |
 | "Sounds like" finds sounds in clips nobody described | **Partly.** Sound-only R@10 32% (captions), 77% (concepts); the brief's "dog barking" reaches P@10 50% from audio alone | §1, §2 |
 | Speech also matches "sounds like" | **Holds, mildly.** Speech is 24% of sound-only top-10s for sound concepts (87% of the catalog). Sound-only finds 87% of transcript fragments: the audio vector carries the words. | §2, §6 |
-| The cut-off trims, it doesn't judge | **Holds, and it's the biggest gap.** 0/11 negative queries return an empty list (22 results on average). But the top score separates answerable queries from negatives with AUC 0.98. | §3 |
-| The cut-off costs nothing | **Holds.** Removing it changes R@10 on one query of 2,611 | §2 |
+| The cut-off trims; the top score judges | **Holds.** 0/11 negative queries return an empty list (12.5 results on average, 21.8 before the stricter typed-sound cut-off). The top score separates answerable queries from negatives with AUC 0.98: `strongMatch` (top score ≥ 5) is false for 10/11 negatives and 3.5% of answerable queries. | §3 |
+| The cut-offs cost little | **Mostly.** Dropping results under half of the best halves the lists (fragments 11.1 → 1.9 results, captions 47 → 24) and multiplies the share of relevant results by 4–5, for −0.8 caption R@10 (significant) and −2 concept R@10 (2 of 101 queries, not significant). At 0.6 the caption loss is −3.2. The typed-sound cut-off at 4 halves the results of negatives and costs nothing measurable. | §1, §2, §3 |
 | No vector index; an exact scan takes a few milliseconds | **Mostly.** Measured 15 ms (`/similar`) and 69 ms (text search, window functions + caption pick) in the database. Latency is dominated by the query embedding: end-to-end `/search` p50 is 0.6–0.65 s across runs, of which the embedding call alone is 0.56–0.6 s. | §6, §8 |
 | Search by example works | **Holds.** P@10 33% for clips sharing a sound label (chance 1%). On speech, "similar" means *same speaker* (P@10 38%, chance 2%), not same topic | §5 |
 
