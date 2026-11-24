@@ -269,7 +269,13 @@ export async function searchAudiosByExactWords({
     FROM audios a
     CROSS JOIN q
     CROSS JOIN LATERAL (
-      SELECT to_tsvector('simple', coalesce(a.metadata->>'transcript', a.metadata->>'captions', '')) AS doc
+      -- The captions as jsonb, not as text: each caption is indexed on its own,
+      -- with a gap between them, so a quoted phrase can't span two captions.
+      SELECT coalesce(
+               to_tsvector('simple', a.metadata->>'transcript'),
+               to_tsvector('simple', a.metadata->'captions'),
+               ''::tsvector
+             ) AS doc
     ) t
     WHERE t.doc @@ q.words
       AND (${source}::text IS NULL OR a.source = ${source})
