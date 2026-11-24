@@ -192,7 +192,10 @@ function SearchResults({
           describe a sound.
         </ListMessage>
       )}
-      {rows && rows.length > 0 && <AudioRows rows={rows} actions={actions} dimmed={searching} />}
+      {/* Keyed by the search so the scroll position resets with it. */}
+      {rows && rows.length > 0 && (
+        <AudioRows key={`${match}:${q}`} rows={rows} actions={actions} dimmed={searching} />
+      )}
     </>
   );
 }
@@ -211,7 +214,9 @@ function SimilarResults({ id, actions }: { id: string; actions: RowActions }) {
           ? "Finding similar audios…"
           : status === "error"
             ? "Search failed"
-            : `The ${rows?.length.toLocaleString()} audios that sound most like it, most similar first`}
+            : rows?.length === 0
+              ? "No similar audios"
+              : `The ${rows?.length.toLocaleString()} audios that sound most like it, most similar first`}
       </ListSummary>
       {status === "pending" && <ListMessage>Loading…</ListMessage>}
       {status === "error" && <ListError message={error.message} onRetry={() => refetch()} />}
