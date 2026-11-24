@@ -1,6 +1,5 @@
 import { AudioBrowser } from "@/components/audios/audio-browser";
 import { DavidAiLogo } from "@/components/david-ai-logo";
-import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function Home() {
   return (
@@ -11,7 +10,6 @@ export default function Home() {
           <div aria-hidden="true" className="h-5 w-px bg-border" />
           <h1 className="text-lg font-semibold tracking-tight">Audio Search</h1>
         </div>
-        <ThemeToggle />
       </header>
       <AudioBrowser />
     </div>
