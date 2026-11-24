@@ -27,9 +27,9 @@ import type { RecentSearch } from "./recent-searches";
 import { recentOptionId, RecentSearchesPopover } from "./recent-searches-popover";
 import { formatClock, Waveform } from "./waveform";
 
-/** Reading an attached audio file, or why it couldn't be used. */
+/** Reading an attached audio file (downloading it first, for a link), or why it couldn't be used. */
 export type ExampleStatus =
-  | { kind: "reading"; name: string }
+  | { kind: "reading"; name: string; downloading?: boolean }
   | { kind: "error"; message: string }
   | null;
 
@@ -77,6 +77,21 @@ const CLIP_MATCH_OPTIONS: { value: ClipMatch; label: string; hint: string }[] = 
   },
   { value: "sound", label: "Sound", hint: "Finds the clips that sound like this one" },
 ];
+
+/**
+ * The text as a link to search with, if it is one: a single http(s) URL with a
+ * host. Anything else ("dog barking", "http") is a text search.
+ */
+export function parseLink(text: string): URL | null {
+  const trimmed = text.trim();
+  if (!/^https?:\/\/\S+$/i.test(trimmed)) return null;
+  try {
+    const url = new URL(trimmed);
+    return url.hostname ? url : null;
+  } catch {
+    return null;
+  }
+}
 
 /** What's said in the clip searched by its words, as its chip shows it. */
 export type TranscriptLine = { status: "pending" } | { status: "error" } | { status: "success"; text: string };
@@ -127,11 +142,13 @@ export function AudioSearchBar({
   examplePlayback,
   onToggleExample,
   onAttachFile,
+  onAttachLink,
   onClearExample,
   recorder,
   recentSearches,
   onPickRecent,
   onClearRecent,
+  hideRecent,
   onCommitQuery,
 }: {
   query: string;
@@ -156,12 +173,16 @@ export function AudioSearchBar({
   examplePlayback: { status: "playing" | "loading" | null; played: number };
   onToggleExample: () => void;
   onAttachFile: (file: File) => void;
+  /** Search with the audio or video file at this link. */
+  onAttachLink: (url: URL) => void;
   onClearExample: () => void;
   recorder: RecorderControls;
   /** The latest searches, newest first, offered while the empty input has focus. */
   recentSearches: readonly RecentSearch[];
   onPickRecent: (entry: RecentSearch) => void;
   onClearRecent: () => void;
+  /** Keeps the recent searches closed even with the input focused, as while a file is dragged over the page. */
+  hideRecent: boolean;
   /** The typed query is done (Enter, or leaving the input): worth keeping as a recent search. */
   onCommitQuery: () => void;
 }) {
@@ -180,6 +201,8 @@ export function AudioSearchBar({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const reading = exampleStatus?.kind === "reading";
   const recording = recorder.status !== "idle";
+  // A link typed into the box searches with its file on Enter; pasted, at once.
+  const typedLink = parseLink(query);
   const error = exampleStatus?.kind === "error" ? exampleStatus.message : null;
   // A file, a recording, or a "similar to" clip replaces the text input until its X clears it.
   const chip = reading || example !== null || similarTo !== null;
@@ -189,7 +212,7 @@ export function AudioSearchBar({
   const transcribing = byWords && transcript.status === "pending";
   const nobodySpeaks = byWords && transcript.status === "success" && transcript.text === "";
   const recentOpen =
-    inputFocused && !recentDismissed && query === "" && recentSearches.length > 0;
+    inputFocused && !recentDismissed && !hideRecent && query === "" && recentSearches.length > 0;
   const activeIndex = recentOpen && activeRecent < recentSearches.length ? activeRecent : -1;
 
   const pickRecent = (entry: RecentSearch) => {
@@ -236,7 +259,9 @@ export function AudioSearchBar({
               >
                 <LoaderCircleIcon aria-hidden="true" className="size-4 shrink-0 animate-spin" />
                 <span className="truncate">
-                  <span className="text-muted-foreground">Reading </span>
+                  <span className="text-muted-foreground">
+                    {exampleStatus.downloading ? "Downloading " : "Reading "}
+                  </span>
                   {exampleStatus.name}…
                 </span>
               </span>
@@ -288,11 +313,7 @@ export function AudioSearchBar({
                   variant="outline"
                   size="icon-sm"
                   className="size-[26px] shrink-0 border-transparent"
-                  label={
-                    example.source === "recording"
-                      ? "Stop searching with this recording"
-                      : "Stop searching with this file"
-                  }
+                  label={`Stop searching with this ${example.source}`}
                   onClick={() => {
                     focusInputWhenShown.current = true;
                     onClearExample();
@@ -365,6 +386,18 @@ export function AudioSearchBar({
                     setActiveRecent(-1);
                     onQueryChange(event.target.value);
                   }}
+                  onPaste={(event) => {
+                    // A link pasted as the whole query searches with the file it points to.
+                    const input = event.currentTarget;
+                    const pasted = event.clipboardData.getData("text");
+                    const start = input.selectionStart ?? query.length;
+                    const end = input.selectionEnd ?? query.length;
+                    const url = parseLink(query.slice(0, start) + pasted + query.slice(end));
+                    if (!url) return;
+                    event.preventDefault();
+                    onQueryChange("");
+                    onAttachLink(url);
+                  }}
                   onFocus={() => {
                     setInputFocused(true);
                     setRecentDismissed(false);
@@ -389,6 +422,11 @@ export function AudioSearchBar({
                       if (activeIndex >= 0) {
                         event.preventDefault();
                         pickRecent(recentSearches[activeIndex]);
+                      } else if (typedLink) {
+                        // The link stays in the box until its file is searched, so a link
+                        // that fails can be fixed and sent again.
+                        event.preventDefault();
+                        onAttachLink(typedLink);
                       } else if (query.trim()) {
                         onCommitQuery();
                       }
@@ -481,7 +519,7 @@ export function AudioSearchBar({
               </TooltipTrigger>
               <TooltipContent side="bottom">
                 Find the clips that sound like your own audio file. You can also drop it anywhere on
-                the page.
+                the page, or paste a link to one into the search box.
               </TooltipContent>
             </Tooltip>
           </>
@@ -515,7 +553,16 @@ export function AudioSearchBar({
       ) : (
         !recording &&
         query.trim() !== "" && (
-          <p className="pl-1 text-[0.8rem] text-muted-foreground">{MATCH_EXPLANATION[match]}</p>
+          <p className="pl-1 text-[0.8rem] text-muted-foreground">
+            {typedLink ? (
+              <>
+                Press <b className="font-medium text-foreground">Enter</b> to find the clips that sound like
+                the audio or video file at this link.
+              </>
+            ) : (
+              MATCH_EXPLANATION[match]
+            )}
+          </p>
         )
       )}
     </div>
@@ -567,7 +614,9 @@ function RecordingControls({ recorder }: { recorder: RecorderControls }) {
       aria-label="Recording"
       className="flex h-full min-w-0 flex-1 items-center gap-3"
       onKeyDown={(event) => {
-        if (event.key === "Escape") recorder.onCancel();
+        if (event.key !== "Escape") return;
+        event.preventDefault(); // Cancels the recording, not the details panel too.
+        recorder.onCancel();
       }}
     >
       {starting ? (

@@ -97,7 +97,7 @@ Each clip has up to three things to match against, all in the `audios` table:
   words, so "barking" doesn't match "barks" and "the end" needs both words, which is what you want
   when looking for a specific word or line. The query needs no model call, so it works even when the
   AI Gateway doesn't.
-- **Search by example** ("Find similar sound" on any clip) returns the nearest neighbours of that clip's
+- **Search by example** ("Find similar" on any clip) returns the nearest neighbours of that clip's
   audio vector. It needs no model call: the vector is already stored.
 - **Search with your own audio file** ("Upload", or drop a file anywhere on the
   page): the browser decodes the file (WAV, MP3, M4A, OGG, FLAC…), converts it to 16 kHz mono
@@ -108,7 +108,7 @@ Each clip has up to three things to match against, all in the `audios` table:
   through the same conversion as a file. Echo cancellation and noise suppression are turned off,
   since they are tuned for voices and would filter out the sounds being searched for.
 - **All, Words, Meaning or Sound, for any clip.** A search with a clip (a file, a recording, or
-  "Find similar sound") has the same options as text search, in the same order, and compares its
+  "Find similar") has the same options as text search, in the same order, and compares its
   **Sound** by default: the audio vector, as above. **Words** and **Meaning** search by what's said
   in it instead: its transcript goes through the text search as the query, with `match=exact`
   (every word said, as said) or `match=text` (its meaning: text vector plus exact words), so it is
@@ -348,6 +348,19 @@ What's said in the WAV clip in the request body, by a speech-to-text model:
 and body errors as `/search/audio`; `503 transcription_unavailable` when the model can't be reached.
 The clip is transcribed and discarded. The UI uses it when All, Words or Meaning is picked for a file or
 a recording, then searches with the text.
+
+### `GET /api/v1/remote-audio?url=…`
+
+The audio or video file at a public `http(s)` link, as the site serves it. The server fetches it
+because most sites don't let a browser read their files from another origin; the UI then decodes
+it like a file the user attaches (a link pasted into the search box, or typed and sent with Enter). Nothing is stored. It follows up to 5 redirects, gives up after 30 s and only reaches
+public addresses: loopback, private, link-local and other reserved ranges are refused, checked as
+each connection is made.
+
+`400 invalid_url` for a malformed, non-http(s) or non-public link, `415 not_audio` when the link
+opens a web page (YouTube, SoundCloud and the like serve pages, not files), `413 payload_too_large`
+over 20 MB, `502 remote_fetch_failed` when the site errors or can't be reached and
+`504 remote_timeout`.
 
 Errors always look like `{ "error": { "code", "message", "details"? } }`: `400 invalid_request`, `404 not_found`, `413 payload_too_large`, `415 unsupported_media_type`, `500 internal_error` (e.g. the database is unreachable), `503 search_unavailable` and `503 transcription_unavailable`.
 

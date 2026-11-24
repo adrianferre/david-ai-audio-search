@@ -9,13 +9,6 @@ export const SOURCE_LABEL: Record<AudioSource, string> = {
   commonvoice: "Common Voice",
 };
 
-/** What kind of audio each dataset holds, in a few words. */
-export const SOURCE_KIND: Record<AudioSource, string> = {
-  librispeech: "Read audiobook speech",
-  audiocaps: "Sound clip from YouTube",
-  commonvoice: "Crowd-sourced speech",
-};
-
 /** Each dataset keeps one colour: its swatch, and its tag's fill and text. */
 export const SOURCE_SWATCH_CLASS: Record<AudioSource, string> = {
   librispeech: "bg-librispeech",
