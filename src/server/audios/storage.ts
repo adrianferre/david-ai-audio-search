@@ -23,6 +23,9 @@ export async function getAudioFile(
   pathname: string,
   options: { range?: string | null; ifNoneMatch?: string | null; signal?: AbortSignal },
 ): Promise<AudioFileResponse | null> {
+  if (!env.BLOB_STORE_ID) {
+    throw new Error("BLOB_STORE_ID is not set. Run `vercel env pull .env.local` to read the Blob store.");
+  }
   let result;
   try {
     result = await get(pathname, {
