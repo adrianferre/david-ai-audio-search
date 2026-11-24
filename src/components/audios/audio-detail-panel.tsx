@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { XIcon } from "lucide-react";
+import { AudioWaveformIcon, XIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { fetchAudio } from "@/lib/api/v1/client";
@@ -9,9 +9,11 @@ import { fetchAudio } from "@/lib/api/v1/client";
 export function AudioDetailPanel({
   id,
   onClose,
+  onFindSimilar,
 }: {
   id: string;
   onClose: () => void;
+  onFindSimilar: (audio: { id: string; title: string }) => void;
 }) {
   const { data, status, error, refetch } = useQuery({
     queryKey: ["v1", "audio", id],
@@ -26,9 +28,19 @@ export function AudioDetailPanel({
       <div className="flex h-10 shrink-0 items-center gap-2 border-b pr-2 pl-4">
         <h2 className="truncate font-mono text-sm">{id}</h2>
         <Button
+          variant="outline"
+          size="sm"
+          className="ml-auto"
+          // The title labels the "Similar to" chip, so wait for it.
+          disabled={!data}
+          onClick={() => data && onFindSimilar({ id, title: data.data.title })}
+        >
+          <AudioWaveformIcon />
+          Find similar
+        </Button>
+        <Button
           variant="ghost"
           size="icon-sm"
-          className="ml-auto"
           aria-label="Close details"
           onClick={onClose}
         >
