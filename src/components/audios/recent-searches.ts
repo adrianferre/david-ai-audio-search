@@ -71,6 +71,17 @@ export const SUGGESTED_SEARCHES: readonly SuggestedSearch[] = [
       ],
     },
   },
+  {
+    // LibriSpeech lines that apologize, found by what they mean: the top results say "I'm not
+    // sorry now", "I offer you my humble apologies", "I was wrong", rarely the query's words.
+    id: "suggested-apology",
+    at: 0,
+    label: "Someone apologizing, in other words",
+    kind: "text",
+    q: "someone apologizing",
+    match: "text",
+    source: "librispeech",
+  },
 ];
 
 /**
