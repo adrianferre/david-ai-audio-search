@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { getSql } from "@/server/db";
 
-import type { AudioRecord, AudioSearchHit, SearchMatch, SimilarAudioHit } from "./types";
+import type { AudioRecord, AudioSearchHit, AudioSource, SearchMatch, SimilarAudioHit } from "./types";
 
 // Columns of the `audios` table (schema: src/server/db/schema.sql).
 const speakerSchema = z.object({ id: z.string(), sex: z.string().nullable(), name: z.string().nullable() });
@@ -83,8 +83,19 @@ function toRecord(row: unknown): AudioRecord {
 
 export type AudioPage = { items: AudioRecord[]; total: number };
 
-/** LibriSpeech first, then the rest (AudioCaps, then Common Voice) by id. */
-export async function listAudios({ offset, limit }: { offset: number; limit: number }): Promise<AudioPage> {
+/**
+ * LibriSpeech first, then the rest (AudioCaps, then Common Voice) by id.
+ * With `source`, only that dataset (and `total` counts only it).
+ */
+export async function listAudios({
+  offset,
+  limit,
+  source = null,
+}: {
+  offset: number;
+  limit: number;
+  source?: AudioSource | null;
+}): Promise<AudioPage> {
   const sql = getSql();
   // One round trip and one snapshot (REPEATABLE READ; the default READ COMMITTED
   // gives each statement its own), so `total` always matches the page.
@@ -93,14 +104,21 @@ export async function listAudios({ offset, limit }: { offset: number; limit: num
       sql`
         SELECT id, source, file_name, blob_pathname, duration_seconds, sample_rate, channels, metadata
         FROM audios
+        WHERE ${source}::text IS NULL OR source = ${source}
         ORDER BY (CASE source WHEN 'librispeech' THEN 0 ELSE 1 END), id
         LIMIT ${limit} OFFSET ${offset}
       `,
-      sql`SELECT count(*)::int AS total FROM audios`,
+      sql`SELECT count(*)::int AS total FROM audios WHERE ${source}::text IS NULL OR source = ${source}`,
     ],
     { readOnly: true, isolationLevel: "RepeatableRead" },
   );
   return { items: rows.map(toRecord), total: total as number };
+}
+
+/** How many audios each dataset has. A dataset with none is left out. */
+export async function countAudiosBySource(): Promise<{ source: AudioSource; count: number }[]> {
+  const rows = await getSql()`SELECT source, count(*)::int AS count FROM audios GROUP BY source`;
+  return rows.map((row) => ({ source: row.source as AudioSource, count: row.count as number }));
 }
 
 export async function getAudio(id: string): Promise<AudioRecord | null> {
@@ -141,6 +159,8 @@ const EXACT_WORDS_BONUS = 3;
  * vector carries the spoken words too, and captions describe the sound), so
  * adding them would count the same evidence twice.
  * A signal whose vector is missing is skipped.
+ * With `source`, only that dataset's clips are returned. They are still scored
+ * against the whole catalog, so a score means the same with or without it.
  *
  * It scores every clip: fine for a few thousand rows. At a much larger scale,
  * take the top candidates per signal from a vector index and estimate the
@@ -150,10 +170,12 @@ export async function searchAudios({
   query,
   vectors,
   limit,
+  source = null,
 }: {
   query: string;
   vectors: Partial<Record<SearchMatch, number[]>>;
   limit: number;
+  source?: AudioSource | null;
 }): Promise<AudioSearchHit[]> {
   const rows = await getSql()`
     WITH q AS (
@@ -196,7 +218,8 @@ export async function searchAudios({
     FROM signals g
     JOIN audios a USING (id)
     CROSS JOIN q
-    WHERE g.text > 0 OR g.sound > 0
+    WHERE (g.text > 0 OR g.sound > 0)
+      AND (${source}::text IS NULL OR a.source = ${source})
     ORDER BY score DESC, a.id
     LIMIT ${limit}
   `;
@@ -210,10 +233,14 @@ export async function searchAudios({
 
 /**
  * Search by example: the clips whose audio vector is nearest to the one of
- * `id`, most similar first. Returns null when `id` doesn't exist, and an empty
- * list when it has no vector yet.
+ * `id`, most similar first, from `source` only when it is set. Returns null when
+ * `id` doesn't exist, and an empty list when it has no vector yet.
  */
-export async function findSimilarAudios(id: string, limit: number): Promise<SimilarAudioHit[] | null> {
+export async function findSimilarAudios(
+  id: string,
+  limit: number,
+  source: AudioSource | null = null,
+): Promise<SimilarAudioHit[] | null> {
   const sql = getSql();
   const [found, rows] = await sql.transaction(
     [
@@ -226,6 +253,7 @@ export async function findSimilarAudios(id: string, limit: number): Promise<Simi
         WHERE a.id <> example.id
           AND a.audio_embedding IS NOT NULL
           AND example.audio_embedding IS NOT NULL
+          AND (${source}::text IS NULL OR a.source = ${source})
         ORDER BY a.audio_embedding <=> example.audio_embedding, a.id
         LIMIT ${limit}
       `,
@@ -253,9 +281,13 @@ export async function getAudios(ids: string[]): Promise<AudioRecord[]> {
 
 /**
  * Search by an outside example: the clips whose audio vector is nearest to
- * `vector` (an embedded audio file), most similar first.
+ * `vector` (an embedded audio file), most similar first, from `source` only when it is set.
  */
-export async function findAudiosNearVector(vector: number[], limit: number): Promise<SimilarAudioHit[]> {
+export async function findAudiosNearVector(
+  vector: number[],
+  limit: number,
+  source: AudioSource | null = null,
+): Promise<SimilarAudioHit[]> {
   const rows = await getSql()`
     WITH q AS (SELECT ${toVector(vector)}::vector AS v)
     SELECT a.id, a.source, a.file_name, a.blob_pathname, a.duration_seconds, a.sample_rate, a.channels,
@@ -263,6 +295,7 @@ export async function findAudiosNearVector(vector: number[], limit: number): Pro
     FROM audios a
     CROSS JOIN q
     WHERE a.audio_embedding IS NOT NULL
+      AND (${source}::text IS NULL OR a.source = ${source})
     ORDER BY a.audio_embedding <=> q.v, a.id
     LIMIT ${limit}
   `;

@@ -61,6 +61,9 @@ export type CommonVoiceRecord = AudioFileInfo &
 
 export type AudioRecord = LibriSpeechRecord | AudioCapsRecord | CommonVoiceRecord;
 
+/** The dataset an audio comes from. */
+export type AudioSource = AudioRecord["source"];
+
 /**
  * Why a search result matched: its text (the transcript of a LibriSpeech or
  * Common Voice clip, the captions of an AudioCaps clip) or what it sounds like

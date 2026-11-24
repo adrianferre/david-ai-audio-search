@@ -11,8 +11,9 @@ export type PlayerState =
   | { id: string; status: PlayerStatus; currentTime: number };
 
 /**
- * One shared <audio> element for the whole list, so only one audio plays at a
- * time and playback survives its row being virtualized away.
+ * One shared <audio> element for the whole page (list, details panel, the
+ * user's own clip), so only one audio plays at a time and playback survives
+ * its row being virtualized away.
  */
 export function useAudioPlayer() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -63,8 +64,12 @@ export function useAudioPlayer() {
     };
   }, []);
 
-  /** Play `id`, or pause/resume it if it's already the current audio. */
-  const toggle = useCallback((id: string) => {
+  /**
+   * Play `id`, or pause/resume it if it's already the current audio. `src`
+   * defaults to the catalog clip's FLAC; pass one for any other audio (the
+   * user's own file, as an object URL).
+   */
+  const toggle = useCallback((id: string, src: string = audioFileUrl(id)) => {
     const audio = audioRef.current;
     if (!audio) return;
 
@@ -78,7 +83,7 @@ export function useAudioPlayer() {
     if (!isCurrent) {
       idRef.current = id;
       startingRef.current = true;
-      audio.src = audioFileUrl(id);
+      audio.src = src;
       setState({ id, status: "loading", currentTime: 0 });
     }
     audio.play().catch((error: unknown) => {
@@ -90,5 +95,30 @@ export function useAudioPlayer() {
     });
   }, []);
 
-  return { state, toggle };
+  /** Move `id` to `seconds`, starting it (paused) when it isn't the current audio. */
+  const seek = useCallback((id: string, seconds: number) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (idRef.current !== id) {
+      idRef.current = id;
+      audio.src = audioFileUrl(id);
+    }
+    audio.currentTime = seconds;
+    setState((s) =>
+      s.id === id
+        ? { ...s, currentTime: seconds }
+        : { id, status: "paused", currentTime: seconds },
+    );
+  }, []);
+
+  return { state, toggle, seek };
+}
+
+export type AudioPlayer = ReturnType<typeof useAudioPlayer>;
+
+/** Where `id` is in the player: null when it isn't the current audio. */
+export function playbackOf(player: AudioPlayer, id: string) {
+  return player.state.id === id
+    ? { status: player.state.status, currentTime: player.state.currentTime }
+    : null;
 }
