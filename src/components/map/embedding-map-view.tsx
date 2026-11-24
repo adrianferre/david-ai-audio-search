@@ -9,7 +9,14 @@ import { cn } from "@/lib/utils";
 
 import { matchLabel, RelevanceMeter, relevanceLevel } from "../audios/audio-list";
 import { displayText } from "../audios/datasets";
-import { type AudioListView, fileQuery, searchQuery, similarQuery } from "../audios/queries";
+import {
+  type AudioListView,
+  fileQuery,
+  searchesTranscript,
+  searchQuery,
+  similarQuery,
+  useTranscriptSearch,
+} from "../audios/queries";
 import { type Selection, SelectionBar } from "../audios/selection";
 import { type ColourBy, COLOUR_BY_OPTIONS, colourOf, colouringOf } from "./colouring";
 import { AnchorLabel, GroupLabels, groupLabels, HoverCard, Legend, SelectionSummary } from "./map-overlays";
@@ -34,12 +41,12 @@ const embeddingMapQuery = () =>
     staleTime: Infinity,
   });
 
-/** A result of the current view (search, "similar" or file search) as a point of the map. */
+/** A result of the current view (a search, or a search with a clip) as a point of the map. */
 type Hit = { index: number; id: string; score?: number; similarity?: number; matches?: SearchMatchV1[] };
 
 /**
  * The results of the list's current view, from the same queries (and cache
- * entries) as the list, so switching between List and Map fetches nothing.
+ * entries) as `useListView`, so switching between List and Map fetches nothing.
  */
 function useViewHits(view: AudioListView, indexOf: ReadonlyMap<string, number>): Hit[] {
   const { source } = view;
@@ -49,18 +56,26 @@ function useViewHits(view: AudioListView, indexOf: ReadonlyMap<string, number>):
   });
   const similar = useQuery({
     ...similarQuery(view.kind === "similar" ? view.reference.id : "", source),
-    enabled: view.kind === "similar",
+    enabled: view.kind === "similar" && view.match === "sound",
   });
-  const file = useQuery(fileQuery(view.kind === "file" ? view.example : null, source));
+  const file = useQuery(fileQuery(view.kind === "file" && view.match === "sound" ? view.example : null, source));
+  const words = useTranscriptSearch(view);
 
+  const scored = (data: { id: string; score: number; matches: SearchMatchV1[] }[] | undefined) =>
+    data?.map((hit) => ({ id: hit.id, score: hit.score, matches: hit.matches })) ?? [];
   const raw: Omit<Hit, "index">[] =
-    view.kind === "search"
-      ? (search.data?.data.map((hit) => ({ id: hit.id, score: hit.score, matches: hit.matches })) ?? [])
-      : view.kind === "similar"
-        ? (similar.data?.data.map((hit) => ({ id: hit.id, similarity: hit.similarity })) ?? [])
-        : view.kind === "file"
-          ? (file.data?.data.map((hit) => ({ id: hit.id, similarity: hit.similarity })) ?? [])
-          : [];
+    view.kind === "browse"
+      ? []
+      : view.kind === "search"
+        ? scored(search.data?.data)
+        : searchesTranscript(view)
+          ? words.searchable && !words.search.isPlaceholderData
+            ? scored(words.search.data?.data)
+            : []
+          : ((view.kind === "similar" ? similar.data : file.data)?.data.map((hit) => ({
+              id: hit.id,
+              similarity: hit.similarity,
+            })) ?? []);
   return raw.flatMap((hit) => {
     const index = indexOf.get(hit.id);
     return index === undefined ? [] : [{ ...hit, index }];
@@ -193,7 +208,7 @@ function LoadedMap({
     .flatMap((hit) => indexOf.get(hit.id) ?? []);
 
   // Sound search compares audio vectors only: the text map would place it wrongly.
-  const audioOnly = (view.kind === "search" && view.match === "sound") || view.kind === "file";
+  const audioOnly = view.kind !== "browse" && view.match === "sound" && view.kind !== "similar";
   const shownMap: MapKind = audioOnly ? "audio" : mapKind;
 
   const referenceIndex = view.kind === "similar" ? (indexOf.get(view.reference.id) ?? null) : null;
@@ -299,9 +314,9 @@ function LoadedMap({
   const outsideCount = colouring.groupOf.reduce((sum, group) => sum + (group < 0 ? 1 : 0), 0);
   const mapLabel = shownMap === "audio" ? "Audio map" : "Text map";
   const focusNote =
-    view.kind === "search" && hits.length > 0
+    hits.length > 0 && hits[0].score !== undefined
       ? `${hits.length} results over the z ≥ 3 cut-off · the rest dimmed`
-      : view.kind !== "browse" && hits.length > 0
+      : hits.length > 0
         ? `${hits.length} closest clips · the rest dimmed`
         : checkedIndices.length > 0
           ? "Selection · the rest dimmed"
@@ -565,8 +580,12 @@ function MapResults({
     view.kind === "search"
       ? `Top ${hits.length} for “${view.q}”`
       : view.kind === "similar"
-        ? `${hits.length} most similar sounds`
-        : `${hits.length} closest to your ${view.kind === "file" && view.example.source === "recording" ? "recording" : "file"}`;
+        ? view.match === "sound"
+          ? `${hits.length} most similar sounds`
+          : `Top ${hits.length} for what the clip says`
+        : view.kind === "file" && view.match === "sound"
+          ? `${hits.length} closest to your ${view.example.source === "recording" ? "recording" : "file"}`
+          : `Top ${hits.length} for what your clip says`;
   return (
     <section aria-label="Results on the map" className="flex flex-col gap-2">
       <div className="flex items-baseline gap-2">

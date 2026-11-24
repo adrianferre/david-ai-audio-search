@@ -161,6 +161,8 @@ const EXACT_WORDS_BONUS = 3;
  * vector carries the spoken words too, and captions describe the sound), so
  * adding them would count the same evidence twice.
  * A signal whose vector is missing is skipped.
+ * With `soundOf` (an audio's id) and no `vectors.sound`, the sound signal is
+ * that audio's own vector: search by an example's sound, plus its words.
  * With `source`, only that dataset's clips are returned. They are still scored
  * against the whole catalog, so a score means the same with or without it.
  *
@@ -171,18 +173,23 @@ const EXACT_WORDS_BONUS = 3;
 export async function searchAudios({
   query,
   vectors,
+  soundOf = null,
   limit,
   source = null,
 }: {
   query: string;
   vectors: Partial<Record<SearchMatch, number[]>>;
+  soundOf?: string | null;
   limit: number;
   source?: AudioSource | null;
 }): Promise<AudioSearchHit[]> {
   const rows = await getSql()`
     WITH q AS (
       SELECT ${toVector(vectors.text)}::vector AS text_vector,
-             ${toVector(vectors.sound)}::vector AS sound_vector,
+             coalesce(
+               ${toVector(vectors.sound)}::vector,
+               (SELECT audio_embedding FROM audios WHERE id = ${soundOf}::text)
+             ) AS sound_vector,
              websearch_to_tsquery('english', ${query}) AS words,
              -- Any of the query's words, to pick the caption to show.
              replace(plainto_tsquery('english', ${query})::text, '&', '|')::tsquery AS any_word
@@ -229,6 +236,63 @@ export async function searchAudios({
     record: toRecord(row),
     score: row.score as number,
     matches: [...(row.text ? ["text" as const] : []), ...(row.sound ? ["sound" as const] : [])],
+    caption: (row.caption as string | null) ?? null,
+  }));
+}
+
+/**
+ * Exact-word search over the clip's text (transcript or captions), no vectors:
+ * a clip matches when its text contains every word of the query as written
+ * (case and punctuation aside). Unlike the `search_text` index it does not stem
+ * ("barking" doesn't match "barks") or drop stop words ("the", "a"), so it is
+ * computed per query, which is fine for a few thousand rows. Web-search syntax
+ * works: "a quoted phrase" for words in a row, `or`, and `-word` to exclude.
+ * Most relevant first (`ts_rank_cd`: more and closer occurrences), then by id.
+ */
+export async function searchAudiosByExactWords({
+  query,
+  limit,
+  source = null,
+}: {
+  query: string;
+  limit: number;
+  source?: AudioSource | null;
+}): Promise<AudioSearchHit[]> {
+  const rows = await getSql()`
+    WITH q AS (
+      SELECT websearch_to_tsquery('simple', ${query}) AS words,
+             -- Any of the query's words, to pick the caption to show.
+             replace(plainto_tsquery('simple', ${query})::text, '&', '|')::tsquery AS any_word
+    )
+    SELECT a.id, a.source, a.file_name, a.blob_pathname, a.duration_seconds, a.sample_rate, a.channels, a.waveform_peaks,
+           a.metadata, ts_rank_cd(t.doc, q.words)::float8 AS score,
+           (
+             SELECT caption
+             FROM jsonb_array_elements_text(a.metadata->'captions') WITH ORDINALITY AS c(caption, position)
+             ORDER BY (to_tsvector('simple', caption) @@ q.words) DESC,
+                      ts_rank(to_tsvector('simple', caption), q.any_word) DESC, position
+             LIMIT 1
+           ) AS caption
+    FROM audios a
+    CROSS JOIN q
+    CROSS JOIN LATERAL (
+      -- The captions as jsonb, not as text: each caption is indexed on its own,
+      -- with a gap between them, so a quoted phrase can't span two captions.
+      SELECT coalesce(
+               to_tsvector('simple', a.metadata->>'transcript'),
+               to_tsvector('simple', a.metadata->'captions'),
+               ''::tsvector
+             ) AS doc
+    ) t
+    WHERE t.doc @@ q.words
+      AND (${source}::text IS NULL OR a.source = ${source})
+    ORDER BY score DESC, a.id
+    LIMIT ${limit}
+  `;
+  return rows.map((row) => ({
+    record: toRecord(row),
+    score: row.score as number,
+    matches: ["text"],
     caption: (row.caption as string | null) ?? null,
   }));
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { AudioLinesIcon, ChartScatterIcon, ListIcon } from "lucide-react";
 import { type DragEvent, useEffect, useRef, useState } from "react";
 
@@ -13,9 +14,18 @@ import { useViewLayout, type ViewLayout } from "../map/use-view-layout";
 
 import { AudioDetailPanel } from "./audio-detail-panel";
 import { AudioList } from "./audio-list";
-import { AudioSearchBar, type ExampleStatus } from "./audio-search-bar";
-import { SOURCE_LABEL } from "./datasets";
-import { type AudioExample, type AudioListView, type ReferenceClip, useListView } from "./queries";
+import { AudioSearchBar, type ExampleStatus, type TranscriptLine } from "./audio-search-bar";
+import { displayText, SOURCE_LABEL } from "./datasets";
+import {
+  type AudioExample,
+  type AudioListView,
+  type ClipMatch,
+  type ReferenceClip,
+  transcriptQuery,
+  useListView,
+  useTranscriptSearch,
+} from "./queries";
+import { type RecentSearch, useRecentSearches } from "./recent-searches";
 import { SelectionBar, useSelection } from "./selection";
 import { Sidebar } from "./sidebar";
 import { playbackOf, useAudioPlayer } from "./use-audio-player";
@@ -31,6 +41,9 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
   }, [value, delayMs]);
   return debounced;
 }
+
+/** A text search left unchanged this long counts as done, and joins the recent searches. */
+const TEXT_SEARCH_SETTLED_MS = 2000;
 
 /**
  * The whole file is decoded before it is cut to 30 s, and decoded audio is
@@ -51,6 +64,8 @@ export function AudioBrowser() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [match, setMatch] = useState<SearchMatchFilterV1>("all");
+  // A search with a clip compares its sound unless the user picks All, Words or Meaning.
+  const [clipMatch, setClipMatch] = useState<ClipMatch>("sound");
   const [similarTo, setSimilarTo] = useState<ReferenceClip | null>(null);
   const [example, setExample] = useState<AudioExample | null>(null);
   const [exampleStatus, setExampleStatus] = useState<ExampleStatus>(null);
@@ -63,6 +78,9 @@ export function AudioBrowser() {
   const exampleUrl = useRef<{ id: string; url: string } | null>(null);
   // One player for the list, the details panel and the user's clip.
   const player = useAudioPlayer();
+  const recent = useRecentSearches();
+  const queryClient = useQueryClient();
+  const { remember } = recent;
   const [layout, setLayout] = useViewLayout();
 
   const debouncedQuery = useDebouncedValue(query, SEARCH_DEBOUNCE_MS).trim();
@@ -70,14 +88,58 @@ export function AudioBrowser() {
   const searchQuery = query.trim() === "" ? "" : debouncedQuery;
 
   const view: AudioListView = example
-    ? { kind: "file", example, source }
+    ? { kind: "file", example, source, match: clipMatch }
     : similarTo
-      ? { kind: "similar", reference: similarTo, source }
+      ? { kind: "similar", reference: similarTo, source, match: clipMatch }
       : searchQuery
         ? { kind: "search", q: searchQuery, match, source }
         : { kind: "browse", source };
   const { summary } = useListView(view);
+  const { transcript } = useTranscriptSearch(view);
+  const transcriptLine: TranscriptLine | null =
+    view.kind === "browse" || view.kind === "search" || view.match === "sound"
+      ? null
+      : transcript.status === "success"
+        ? {
+            status: "success",
+            // LibriSpeech transcripts are in capitals; show them like the list does.
+            text:
+              view.kind === "similar"
+                ? displayText({ source: view.reference.source, text: transcript.data.text })
+                : transcript.data.text,
+          }
+        : { status: transcript.status };
   const selection = useSelection();
+
+  // The list searches as you type, so a text search is kept once it settles
+  // (or on Enter, or on leaving the input: `commitQuery`), not at every pause.
+  const settledText = view.kind === "search" ? searchQuery : "";
+  useEffect(() => {
+    if (!settledText) return;
+    const timeout = setTimeout(
+      () => remember({ kind: "text", q: settledText, match, source }),
+      TEXT_SEARCH_SETTLED_MS,
+    );
+    return () => clearTimeout(timeout);
+  }, [settledText, match, source, remember]);
+
+  // A search with a clip is kept as it stands, and saved again as it changes:
+  // its match, its dataset filter, and the transcript once it is in.
+  const spoken = view.kind !== "browse" && view.kind !== "search" && view.match !== "sound" && transcript.isSuccess
+    ? transcript.data.text
+    : undefined;
+  useEffect(() => {
+    if (similarTo) {
+      remember({ kind: "similar", reference: similarTo, source, match: clipMatch, transcript: spoken });
+    } else if (example) {
+      remember({ kind: "audio", example, source, match: clipMatch, transcript: spoken });
+    }
+  }, [similarTo, example, source, clipMatch, spoken, remember]);
+
+  const commitQuery = () => {
+    const q = query.trim();
+    if (q && !similarTo && !example) remember({ kind: "text", q, match, source });
+  };
 
   useEffect(
     () => () => {
@@ -96,6 +158,7 @@ export function AudioBrowser() {
     setQuery("");
     clearExample();
     setSimilarTo(clip);
+    setClipMatch("sound");
   };
 
   const toggleExample = () => {
@@ -116,9 +179,7 @@ export function AudioBrowser() {
     try {
       const clip = await toExampleClip(audio);
       if (token !== attachToken.current) return;
-      setQuery("");
-      setSimilarTo(null);
-      setExample({
+      const searched: AudioExample = {
         id: crypto.randomUUID(),
         name,
         source: kind,
@@ -126,7 +187,11 @@ export function AudioBrowser() {
         durationSeconds: clip.durationSeconds,
         peaks: clip.peaks,
         trimmed: clip.trimmed,
-      });
+      };
+      setQuery("");
+      setSimilarTo(null);
+      setClipMatch("sound");
+      setExample(searched);
       setExampleStatus(null);
     } catch (error) {
       if (token !== attachToken.current) return;
@@ -168,6 +233,43 @@ export function AudioBrowser() {
     void searchWithAudio(file, file.name, "file");
   };
 
+  /** Runs a recent search again, with the dataset filter it ran with. */
+  const rerun = (entry: RecentSearch) => {
+    setSource(entry.source);
+    // The user's clip was transcribed already: don't send it to the model again.
+    if (entry.kind === "audio" && entry.transcript !== undefined) {
+      const { queryKey } = transcriptQuery({ kind: "file", example: entry.example, source: null, match: "all" });
+      if (queryClient.getQueryData(queryKey) === undefined) {
+        queryClient.setQueryData(queryKey, { data: { text: entry.transcript, generated: true } });
+      }
+    }
+    switch (entry.kind) {
+      case "text":
+        setSimilarTo(null);
+        clearExample();
+        setQuery(entry.q);
+        setMatch(entry.match);
+        break;
+      case "similar":
+        setQuery("");
+        clearExample();
+        setSimilarTo(entry.reference);
+        setClipMatch(entry.match ?? "sound");
+        break;
+      case "audio":
+        // Same id as when it first ran, so its results come from the cache.
+        recorder.cancel();
+        attachToken.current++;
+        setQuery("");
+        setSimilarTo(null);
+        setClipMatch(entry.match ?? "sound");
+        setExample(entry.example);
+        setExampleStatus(null);
+        break;
+    }
+    recent.promote(entry);
+  };
+
   const dropHandlers = {
     onDragEnter: (event: DragEvent) => {
       if (!hasFiles(event)) return;
@@ -204,11 +306,11 @@ export function AudioBrowser() {
         Results for <span className="text-muted-foreground">“{view.q}”</span>
       </>
     ) : view.kind === "similar" ? (
-      "Sounds similar"
-    ) : view.example.source === "recording" ? (
-      "Sounds like your recording"
+      { all: "Similar", exact: "Says something similar", text: "Says something similar", sound: "Sounds similar" }[
+        view.match
+      ]
     ) : (
-      "Sounds like your file"
+      `${{ all: "Like", exact: "Says what’s in", text: "Says what’s in", sound: "Sounds like" }[view.match]} your ${view.example.source === "recording" ? "recording" : "file"}`
     );
   const scope = source && view.kind !== "browse" ? `${SOURCE_LABEL[source]} only` : null;
 
@@ -239,6 +341,9 @@ export function AudioBrowser() {
             }}
             match={match}
             onMatchChange={setMatch}
+            clipMatch={clipMatch}
+            onClipMatchChange={setClipMatch}
+            transcript={transcriptLine}
             similarTo={similarTo}
             similarPlayback={{
               status:
@@ -276,6 +381,10 @@ export function AudioBrowser() {
               onStop: recorder.stop,
               onCancel: recorder.cancel,
             }}
+            recentSearches={recent.entries}
+            onPickRecent={rerun}
+            onClearRecent={recent.clear}
+            onCommitQuery={commitQuery}
           />
         </header>
         {layout === "map" ? (
@@ -307,6 +416,7 @@ export function AudioBrowser() {
               player={player}
               recovery={{
                 onMatchAll: () => setMatch("all"),
+                onClipMatch: setClipMatch,
                 onClearSearch: () => setQuery(""),
                 onClearSource: () => setSource(null),
               }}
@@ -336,7 +446,6 @@ export function AudioBrowser() {
     </div>
   );
 }
-
 const LAYOUTS: { value: ViewLayout; label: string; icon: typeof ListIcon }[] = [
   { value: "list", label: "List", icon: ListIcon },
   { value: "map", label: "Map", icon: ChartScatterIcon },
