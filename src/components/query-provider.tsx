@@ -11,8 +11,10 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            // The catalog rarely changes, so cached responses stay valid.
-            staleTime: 5 * 60 * 1000,
+            // The catalog is fixed on the server, so a cached response never
+            // goes stale. That keeps the catalog's loaded pages from all being
+            // fetched again on a remount or reconnect.
+            staleTime: Infinity,
             refetchOnWindowFocus: false,
             // Retrying a 429 only digs deeper into the rate limit.
             retry: (failureCount, error) =>
