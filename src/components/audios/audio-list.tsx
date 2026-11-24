@@ -11,7 +11,7 @@ import {
 import { useEffect, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
-import { fetchAudios } from "@/lib/api/v1/client";
+import { ApiError, fetchAudios } from "@/lib/api/v1/client";
 import type { AudioListItemV1, AudioSource } from "@/lib/api/v1/types";
 import { cn } from "@/lib/utils";
 
@@ -139,7 +139,9 @@ export function AudioList({
                   ) : isFetchNextPageError ? (
                     <div className="flex h-full items-center gap-3 px-4 text-sm">
                       <span className="text-destructive">
-                        Couldn&apos;t load more audios.
+                        {error instanceof ApiError && error.status === 429
+                          ? error.message
+                          : "Couldn't load more audios."}
                       </span>
                       <Button
                         variant="outline"
