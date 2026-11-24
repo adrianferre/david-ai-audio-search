@@ -5,6 +5,8 @@
  * (32 KB per second).
  */
 
+import { computePeaks, type Peaks } from "./peaks";
+
 const SAMPLE_RATE = 16_000;
 
 /** Longer files are searched by their beginning. Catalog clips are 10–35 s. */
@@ -16,6 +18,8 @@ const TRIM_TOLERANCE_SECONDS = 0.5;
 export type ExampleClip = {
   wav: Blob;
   durationSeconds: number;
+  /** Its waveform overview, like the catalog clips' `waveformPeaks`. */
+  peaks: Peaks;
   /** The file was longer than `MAX_EXAMPLE_SECONDS` and was cut. */
   trimmed: boolean;
 };
@@ -49,10 +53,12 @@ export async function toExampleClip(file: Blob): Promise<ExampleClip> {
   source.connect(offline.destination);
   source.start();
   const rendered = await offline.startRendering();
+  const samples = rendered.getChannelData(0);
 
   return {
-    wav: encodeWav(rendered.getChannelData(0), SAMPLE_RATE),
+    wav: encodeWav(samples, SAMPLE_RATE),
     durationSeconds,
+    peaks: computePeaks(samples),
     // Encoder framing and padding (Opus frames, AAC priming) make a recording
     // stopped at exactly MAX_EXAMPLE_SECONDS decode a few ms longer.
     trimmed: decoded.duration > MAX_EXAMPLE_SECONDS + TRIM_TOLERANCE_SECONDS,

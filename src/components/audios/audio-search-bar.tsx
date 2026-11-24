@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  AudioWaveformIcon,
   CircleAlertIcon,
   LoaderCircleIcon,
   MicIcon,
@@ -12,19 +11,19 @@ import {
   UploadIcon,
   XIcon,
 } from "lucide-react";
-import { type ReactNode, useRef } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { SearchMatchFilterV1 } from "@/lib/api/v1/types";
 import { MAX_EXAMPLE_SECONDS } from "@/lib/audio/to-wav";
-import type { RecorderStatus } from "@/lib/audio/use-microphone-recorder";
+import type { LevelMeter, RecorderStatus } from "@/lib/audio/use-microphone-recorder";
 import { cn } from "@/lib/utils";
 
 import { displayText } from "./datasets";
 import type { AudioExample, ReferenceClip } from "./queries";
-import { formatClock } from "./waveform";
+import { formatClock, Waveform } from "./waveform";
 
 /** Reading an attached audio file, or why it couldn't be used. */
 export type ExampleStatus =
@@ -36,6 +35,8 @@ export type ExampleStatus =
 export type RecorderControls = {
   status: RecorderStatus;
   elapsedSeconds: number;
+  /** The microphone's loudness, while it records (null if the browser can't tap it). */
+  meter: LevelMeter | null;
   maxSeconds: number;
   onStart: () => void;
   onStop: () => void;
@@ -76,6 +77,8 @@ export function AudioSearchBar({
   match,
   onMatchChange,
   similarTo,
+  similarPlayback,
+  onToggleSimilar,
   onClearSimilar,
   example,
   exampleStatus,
@@ -91,12 +94,15 @@ export function AudioSearchBar({
   onMatchChange: (match: SearchMatchFilterV1) => void;
   /** Set while the list shows the clips similar to this one. */
   similarTo: ReferenceClip | null;
+  /** The reference clip in the player: whether it plays, and the share of it played (0 to 1). */
+  similarPlayback: { status: "playing" | "loading" | null; played: number };
+  onToggleSimilar: () => void;
   onClearSimilar: () => void;
   /** Set while the list shows the clips that sound like the user's file. */
   example: AudioExample | null;
   exampleStatus: ExampleStatus;
-  /** The user's clip is playing (or loading) in the player. */
-  examplePlayback: "playing" | "loading" | null;
+  /** The user's clip in the player: whether it plays, and the share of it played (0 to 1). */
+  examplePlayback: { status: "playing" | "loading" | null; played: number };
   onToggleExample: () => void;
   onAttachFile: (file: File) => void;
   onClearExample: () => void;
@@ -107,7 +113,17 @@ export function AudioSearchBar({
   const reading = exampleStatus?.kind === "reading";
   const recording = recorder.status !== "idle";
   const error = exampleStatus?.kind === "error" ? exampleStatus.message : null;
+  // A file, a recording, or a "similar to" clip replaces the text input until its X clears it.
   const chip = reading || example !== null || similarTo !== null;
+
+  // The X that cleared the chip unmounts with it, so hand focus to the input that comes back.
+  const focusInputWhenShown = useRef(false);
+  useEffect(() => {
+    if (!chip && focusInputWhenShown.current) {
+      focusInputWhenShown.current = false;
+      inputRef.current?.focus();
+    }
+  }, [chip]);
 
   return (
     <div className="flex flex-col gap-2">
@@ -148,12 +164,12 @@ export function AudioSearchBar({
                 <IconButton
                   size="icon-sm"
                   className="size-[26px] shrink-0"
-                  label={examplePlayback ? "Pause your clip" : "Play your clip"}
+                  label={examplePlayback.status ? "Pause your clip" : "Play your clip"}
                   onClick={onToggleExample}
                 >
-                  {examplePlayback === "loading" ? (
+                  {examplePlayback.status === "loading" ? (
                     <LoaderCircleIcon className="animate-spin" />
-                  ) : examplePlayback === "playing" ? (
+                  ) : examplePlayback.status === "playing" ? (
                     <PauseIcon className="size-3 fill-current" />
                   ) : (
                     <PlayIcon className="ml-px size-3 fill-current" />
@@ -166,6 +182,16 @@ export function AudioSearchBar({
                     <span className="text-muted-foreground"> · first {MAX_EXAMPLE_SECONDS} s</span>
                   )}
                 </span>
+                <Waveform
+                  peaks={example.peaks}
+                  bars={32}
+                  height={18}
+                  played={examplePlayback.played}
+                  className="max-lg:hidden"
+                />
+                <span className="shrink-0 text-muted-foreground tabular-nums">
+                  {formatClock(example.durationSeconds)}
+                </span>
                 <IconButton
                   variant="outline"
                   size="icon-sm"
@@ -175,57 +201,88 @@ export function AudioSearchBar({
                       ? "Stop searching with this recording"
                       : "Stop searching with this file"
                   }
-                  onClick={onClearExample}
+                  onClick={() => {
+                    focusInputWhenShown.current = true;
+                    onClearExample();
+                  }}
                 >
                   <XIcon />
                 </IconButton>
               </span>
             ) : similarTo ? (
-              <span className="flex h-[34px] max-w-[70%] min-w-0 shrink items-center gap-2 rounded-full bg-muted pr-1 pl-3 text-[0.8rem]">
-                <AudioWaveformIcon aria-hidden="true" className="size-4 shrink-0" />
+              <span className="flex h-[34px] min-w-0 shrink items-center gap-2 rounded-full bg-muted px-1 text-[0.8rem]">
+                <IconButton
+                  size="icon-sm"
+                  className="size-[26px] shrink-0"
+                  label={similarPlayback.status ? "Pause the reference clip" : "Play the reference clip"}
+                  onClick={onToggleSimilar}
+                >
+                  {similarPlayback.status === "loading" ? (
+                    <LoaderCircleIcon className="animate-spin" />
+                  ) : similarPlayback.status === "playing" ? (
+                    <PauseIcon className="size-3 fill-current" />
+                  ) : (
+                    <PlayIcon className="ml-px size-3 fill-current" />
+                  )}
+                </IconButton>
                 <span className="truncate">
                   <span className="text-muted-foreground">Similar to </span>“{displayText(similarTo)}”
+                </span>
+                <Waveform
+                  peaks={similarTo.waveformPeaks}
+                  bars={32}
+                  height={18}
+                  played={similarPlayback.played}
+                  className="max-lg:hidden"
+                />
+                <span className="shrink-0 text-muted-foreground tabular-nums">
+                  {formatClock(similarTo.durationSeconds)}
                 </span>
                 <IconButton
                   variant="outline"
                   size="icon-sm"
                   className="size-[26px] shrink-0 border-transparent"
                   label="Stop showing similar clips"
-                  onClick={onClearSimilar}
+                  onClick={() => {
+                    focusInputWhenShown.current = true;
+                    onClearSimilar();
+                  }}
                 >
                   <XIcon />
                 </IconButton>
               </span>
             ) : null}
-            <input
-              ref={inputRef}
-              type="search"
-              value={query}
-              onChange={(event) => onQueryChange(event.target.value)}
-              placeholder={
-                chip
-                  ? "Or type to search instead"
-                  : "Describe a sound or what’s said, like “dog barking”"
-              }
-              aria-label="Search the catalog"
-              maxLength={200}
-              autoComplete="off"
-              spellCheck={false}
-              className="h-full min-w-20 flex-1 bg-transparent text-[0.95rem] outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
-            />
-            {query && (
-              <IconButton
-                variant="ghost"
-                size="icon"
-                className="shrink-0 text-muted-foreground"
-                label="Clear search"
-                onClick={() => {
-                  onQueryChange("");
-                  inputRef.current?.focus();
-                }}
-              >
-                <XIcon />
-              </IconButton>
+            {chip ? (
+              <span className="flex-1" />
+            ) : (
+              <>
+                <input
+                  ref={inputRef}
+                  type="search"
+                  value={query}
+                  onChange={(event) => onQueryChange(event.target.value)}
+                  placeholder="Describe a sound or what’s said, like “dog barking”"
+                  aria-label="Search the catalog"
+                  maxLength={200}
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="h-full min-w-20 flex-1 bg-transparent text-[0.95rem] outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
+                />
+                {query && (
+                  <IconButton
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0 text-muted-foreground"
+                    label="Clear search"
+                    onClick={() => {
+                      onQueryChange("");
+                      inputRef.current?.focus();
+                    }}
+                  >
+                    <XIcon />
+                  </IconButton>
+                )}
+              </>
             )}
             {!chip && (
               <div
@@ -328,7 +385,6 @@ export function AudioSearchBar({
 /** Fills the search bar while the microphone is on. */
 function RecordingControls({ recorder }: { recorder: RecorderControls }) {
   const starting = recorder.status === "starting";
-  const progress = Math.min(1, recorder.elapsedSeconds / recorder.maxSeconds);
 
   return (
     <div
@@ -356,12 +412,11 @@ function RecordingControls({ recorder }: { recorder: RecorderControls }) {
             {formatClock(recorder.elapsedSeconds)}
             <span className="text-muted-foreground"> / {formatClock(recorder.maxSeconds)}</span>
           </span>
-          <span aria-hidden="true" className="h-1 min-w-12 flex-1 overflow-hidden rounded-full bg-accent">
-            <span
-              className="block h-full rounded-full bg-foreground transition-[width] duration-200"
-              style={{ width: `${progress * 100}%` }}
-            />
-          </span>
+          <RecordingWaveform
+            meter={recorder.meter}
+            elapsedSeconds={recorder.elapsedSeconds}
+            maxSeconds={recorder.maxSeconds}
+          />
         </>
       )}
       <IconButton
@@ -384,5 +439,74 @@ function RecordingControls({ recorder }: { recorder: RecorderControls }) {
         Stop and search
       </Button>
     </div>
+  );
+}
+
+/** Bars per second of recording: 120 bars for the 30 s limit. */
+const BARS_PER_SECOND = 4;
+
+/** Peak amplitude to bar height: −54 dBFS (a quiet room) is flat, 0 dBFS is full. */
+function toLevel(peak: number) {
+  const db = 20 * Math.log10(Math.max(peak, 1e-6));
+  return Math.min(1, Math.max(0, (db + 54) / 54));
+}
+
+/**
+ * The recording's waveform as it comes in, filling the bar left to right over
+ * the time limit, so it doubles as the progress bar. Each bar is the loudest
+ * moment of its quarter second. It renders on its own, at the screen's rate.
+ */
+function RecordingWaveform({
+  meter,
+  elapsedSeconds,
+  maxSeconds,
+}: {
+  meter: LevelMeter | null;
+  elapsedSeconds: number;
+  maxSeconds: number;
+}) {
+  const bars = Math.round(maxSeconds * BARS_PER_SECOND);
+  const [levels, setLevels] = useState<number[]>([]);
+
+  useEffect(() => {
+    if (!meter) return;
+    const { analyser, startedAt } = meter;
+    const samples = new Float32Array(analyser.fftSize);
+    const collected: number[] = [];
+    let frame = 0;
+    const draw = () => {
+      analyser.getFloatTimeDomainData(samples);
+      let peak = 0;
+      for (const sample of samples) peak = Math.max(peak, Math.abs(sample));
+      const index = Math.min(
+        bars - 1,
+        Math.floor(((performance.now() - startedAt) / 1000) * BARS_PER_SECOND),
+      );
+      // Frames skipped while the tab was hidden leave their bars flat.
+      while (collected.length <= index) collected.push(0);
+      collected[index] = Math.max(collected[index], toLevel(peak));
+      setLevels(collected.slice());
+      frame = requestAnimationFrame(draw);
+    };
+    frame = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(frame);
+  }, [meter, bars]);
+
+  // Without a meter the bars stay flat but still fill, like a progress bar.
+  const recorded = Math.max(levels.length, Math.min(bars, Math.ceil(elapsedSeconds * BARS_PER_SECOND)));
+
+  return (
+    <span aria-hidden="true" className="flex h-7 min-w-12 flex-1 items-center justify-between">
+      {Array.from({ length: bars }, (_, i) => (
+        <span
+          key={i}
+          className={cn(
+            "max-w-[3px] min-w-px flex-1 rounded-full",
+            i < recorded ? "bg-foreground" : "bg-waveform",
+          )}
+          style={{ height: `max(2px, ${(levels[i] ?? 0) * 100}%)` }}
+        />
+      ))}
+    </span>
   );
 }
