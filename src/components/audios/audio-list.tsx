@@ -2,12 +2,20 @@
 
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import {
+  CircleAlertIcon,
+  LoaderCircleIcon,
+  PauseIcon,
+  PlayIcon,
+} from "lucide-react";
 import { useEffect, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
 import { fetchAudios } from "@/lib/api/v1/client";
 import type { AudioListItemV1, AudioSource } from "@/lib/api/v1/types";
 import { cn } from "@/lib/utils";
+
+import { type PlayerStatus, useAudioPlayer } from "./use-audio-player";
 
 const PAGE_SIZE = 50;
 const ROW_HEIGHT = 72;
@@ -30,6 +38,7 @@ export function AudioList({
   onSelect: (id: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const player = useAudioPlayer();
 
   const {
     data,
@@ -117,6 +126,15 @@ export function AudioList({
                       audio={row}
                       selected={row.id === selectedId}
                       onSelect={onSelect}
+                      playback={
+                        player.state.id === row.id
+                          ? {
+                              status: player.state.status,
+                              currentTime: player.state.currentTime,
+                            }
+                          : null
+                      }
+                      onTogglePlay={player.toggle}
                     />
                   ) : isFetchNextPageError ? (
                     <div className="flex h-full items-center gap-3 px-4 text-sm">
@@ -150,38 +168,93 @@ function AudioRow({
   audio,
   selected,
   onSelect,
+  playback,
+  onTogglePlay,
 }: {
   audio: AudioListItemV1;
   selected: boolean;
   onSelect: (id: string) => void;
+  /** Set when this row is the player's current audio. */
+  playback: { status: PlayerStatus; currentTime: number } | null;
+  onTogglePlay: (id: string) => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={() => onSelect(audio.id)}
-      aria-current={selected || undefined}
+    <div
       className={cn(
-        "flex h-full w-full flex-col justify-center gap-1 border-b px-4 text-left outline-none hover:bg-muted/60 focus-visible:bg-muted",
+        "flex h-full w-full items-center border-b hover:bg-muted/60 has-[>button:last-child:focus-visible]:bg-muted",
         selected && "bg-muted",
       )}
     >
-      <div className="flex min-w-0 items-center gap-2">
-        <span
-          className={cn(
-            "shrink-0 rounded px-1.5 py-0.5 text-[0.7rem] font-medium",
-            audio.source === "librispeech"
-              ? "bg-sky-500/15 text-sky-700 dark:text-sky-300"
-              : "bg-amber-500/15 text-amber-700 dark:text-amber-300",
-          )}
-        >
-          {SOURCE_LABEL[audio.source]}
-        </span>
-        <span className="truncate text-sm font-medium">{audio.title}</span>
-        <span className="ml-auto shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
-          {formatDuration(audio.durationSeconds)}
-        </span>
-      </div>
-      <p className="truncate text-sm text-muted-foreground">{audio.text}</p>
-    </button>
+      <PlayButton
+        title={audio.title}
+        status={playback?.status ?? null}
+        onClick={() => onTogglePlay(audio.id)}
+      />
+      <button
+        type="button"
+        onClick={() => onSelect(audio.id)}
+        aria-current={selected || undefined}
+        className="flex h-full min-w-0 flex-1 flex-col justify-center gap-1 pr-4 pl-2 text-left outline-none"
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            className={cn(
+              "shrink-0 rounded px-1.5 py-0.5 text-[0.7rem] font-medium",
+              audio.source === "librispeech"
+                ? "bg-sky-500/15 text-sky-700 dark:text-sky-300"
+                : "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+            )}
+          >
+            {SOURCE_LABEL[audio.source]}
+          </span>
+          <span className="truncate text-sm font-medium">{audio.title}</span>
+          <span className="ml-auto shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
+            {playback && playback.status !== "error"
+              ? `${formatDuration(playback.currentTime)} / ${formatDuration(audio.durationSeconds)}`
+              : formatDuration(audio.durationSeconds)}
+          </span>
+        </div>
+        <p className="truncate text-sm text-muted-foreground">{audio.text}</p>
+      </button>
+    </div>
+  );
+}
+
+function PlayButton({
+  title,
+  status,
+  onClick,
+}: {
+  title: string;
+  status: PlayerStatus | null;
+  onClick: () => void;
+}) {
+  const playing = status === "playing" || status === "loading";
+  const label =
+    status === "error"
+      ? `Couldn't play ${title}. Try again`
+      : playing
+        ? `Pause ${title}`
+        : `Play ${title}`;
+
+  return (
+    <Button
+      variant={status === "error" ? "destructive" : "outline"}
+      size="icon"
+      className="ml-4 rounded-full"
+      aria-label={label}
+      title={status === "error" ? "Couldn't load this audio. Click to retry." : undefined}
+      onClick={onClick}
+    >
+      {status === "loading" ? (
+        <LoaderCircleIcon className="animate-spin" />
+      ) : status === "playing" ? (
+        <PauseIcon />
+      ) : status === "error" ? (
+        <CircleAlertIcon />
+      ) : (
+        <PlayIcon />
+      )}
+    </Button>
   );
 }

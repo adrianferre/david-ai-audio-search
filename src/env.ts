@@ -18,6 +18,9 @@ export const env = createEnv({
       .default("development"),
     // Neon Postgres (pooled). Set by the Neon integration: `vercel env pull .env.local`.
     DATABASE_URL: z.url(),
+    // Private Vercel Blob store holding the FLAC files. Set by the Blob integration;
+    // reads authenticate with the Vercel OIDC token (VERCEL_OIDC_TOKEN locally).
+    BLOB_STORE_ID: z.string().min(1),
   },
   client: {
     // NEXT_PUBLIC_EXAMPLE_URL: z.url(),

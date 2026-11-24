@@ -92,6 +92,10 @@ Paginated list of every audio in the catalog: LibriSpeech first, then AudioCaps,
 
 One audio: the list fields plus a dataset-specific `metadata` object (speaker/chapter/transcript for LibriSpeech; YouTube id, start time and all captions for AudioCaps).
 
+### `GET /api/v1/audios/{id}/audio`
+
+The audio's FLAC (`audio/flac`), streamed from the private Blob store. Supports `Range` requests (`206`, or `416` for an unsatisfiable range) and `If-None-Match` (`304`). The UI uses it as the `<audio>` source of the row's play button. The Blob store stays private: deployments are behind Vercel Authentication, which is what keeps the AudioCaps audio from being public.
+
 Errors always look like `{ "error": { "code", "message", "details"? } }`: `400 invalid_request`, `404 not_found` and `500 internal_error` (e.g. the database is unreachable).
 
 ### Where the code lives

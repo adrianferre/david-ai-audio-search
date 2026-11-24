@@ -48,3 +48,8 @@ export function fetchAudio(
 ): Promise<AudioDetailResponseV1> {
   return getJson(`${BASE}/audios/${encodeURIComponent(id)}`, signal);
 }
+
+/** URL of the audio's FLAC, streamed by the API. Use it as an <audio> src. */
+export function audioFileUrl(id: string): string {
+  return `${BASE}/audios/${encodeURIComponent(id)}/audio`;
+}
