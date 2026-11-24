@@ -60,18 +60,26 @@ export function fetchAudio(
 export function searchAudios(params: {
   q: string;
   match: SearchMatchFilterV1;
+  /** At most this many results; the API defaults to 50. */
+  limit?: number;
   signal?: AbortSignal;
 }): Promise<AudioSearchResponseV1> {
   const search = new URLSearchParams({ q: params.q, match: params.match });
+  if (params.limit !== undefined) search.set("limit", String(params.limit));
   return getJson(`${BASE}/search?${search}`, params.signal);
 }
 
 /** Search by example: the audios that sound most like `id`. */
-export function fetchSimilarAudios(
-  id: string,
-  signal?: AbortSignal,
-): Promise<SimilarAudiosResponseV1> {
-  return getJson(`${BASE}/audios/${encodeURIComponent(id)}/similar`, signal);
+export function fetchSimilarAudios(params: {
+  id: string;
+  /** At most this many audios; the API defaults to 50. */
+  limit?: number;
+  signal?: AbortSignal;
+}): Promise<SimilarAudiosResponseV1> {
+  const search = new URLSearchParams();
+  if (params.limit !== undefined) search.set("limit", String(params.limit));
+  const query = search.size > 0 ? `?${search}` : "";
+  return getJson(`${BASE}/audios/${encodeURIComponent(params.id)}/similar${query}`, params.signal);
 }
 
 /** URL of the audio's FLAC, streamed by the API. Use it as an <audio> src. */

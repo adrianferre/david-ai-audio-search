@@ -12,6 +12,11 @@ import { fetchAudios, fetchSimilarAudios, searchAudios } from "@/lib/api/v1/clie
 import type { SearchMatchFilterV1 } from "@/lib/api/v1/types";
 
 export const PAGE_SIZE = 50;
+/**
+ * Search and "similar" return at most this many audios. Sent explicitly so the
+ * summary can tell a full list ("50+ results") from every match there is.
+ */
+export const RESULTS_LIMIT = 50;
 
 /**
  * The queries behind the audio list. Shared with the summary in the search bar,
@@ -28,16 +33,16 @@ export const catalogQuery = () =>
 
 export const searchQuery = (q: string, match: SearchMatchFilterV1) =>
   queryOptions({
-    queryKey: ["v1", "search", { q, match }],
-    queryFn: ({ signal }) => searchAudios({ q, match, signal }),
+    queryKey: ["v1", "search", { q, match, limit: RESULTS_LIMIT }],
+    queryFn: ({ signal }) => searchAudios({ q, match, limit: RESULTS_LIMIT, signal }),
     // Keep the previous results on screen while the next query loads.
     placeholderData: keepPreviousData,
   });
 
 export const similarQuery = (id: string) =>
   queryOptions({
-    queryKey: ["v1", "audio", id, "similar"],
-    queryFn: ({ signal }) => fetchSimilarAudios(id, signal),
+    queryKey: ["v1", "audio", id, "similar", { limit: RESULTS_LIMIT }],
+    queryFn: ({ signal }) => fetchSimilarAudios({ id, limit: RESULTS_LIMIT, signal }),
   });
 
 /** What the list shows: the whole catalog, a text search, or the audios similar to one. */
@@ -49,6 +54,8 @@ export type AudioListView =
 /**
  * A short count for the current view, e.g. "50 of 3,129 audios" or
  * "12 results of 3,129": what's shown, out of the whole catalog searched.
+ * A list cut off at `RESULTS_LIMIT` says so ("50+ results", "50 most similar"),
+ * since its length is the cap, not the number of matches.
  */
 export function useListSummary(view: AudioListView): string {
   const catalog = useInfiniteQuery(catalogQuery());
@@ -74,12 +81,17 @@ export function useListSummary(view: AudioListView): string {
       if (search.status === "error") return "Search failed";
       if (search.status === "pending" || search.isPlaceholderData) return "Searching…";
       const count = search.data.data.length;
+      if (count >= RESULTS_LIMIT) return `${count.toLocaleString()}+ results${ofTotal}`;
       return `${count.toLocaleString()} ${count === 1 ? "result" : "results"}${ofTotal}`;
     }
     case "similar": {
       if (similar.status === "error") return "Search failed";
       if (similar.status === "pending") return "Finding similar…";
-      return `${similar.data.data.length.toLocaleString()} similar${ofTotal}`;
+      // Ranked by distance with no cutoff, so a full list is the top N, not
+      // the only N that are similar.
+      const count = similar.data.data.length;
+      if (count >= RESULTS_LIMIT) return `${count.toLocaleString()} most similar${ofTotal}`;
+      return `${count.toLocaleString()} similar${ofTotal}`;
     }
   }
 }
