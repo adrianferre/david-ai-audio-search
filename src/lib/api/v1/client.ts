@@ -1,6 +1,7 @@
 import type {
   ApiErrorBody,
   AudioDetailResponseV1,
+  AudioExportRequestV1,
   AudioListResponseV1,
   AudioSearchResponseV1,
   SearchMatchFilterV1,
@@ -20,8 +21,8 @@ export class ApiError extends Error {
   }
 }
 
-async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(url, { signal, headers: { accept: "application/json" } });
+/** Throws an ApiError for any non-2xx response. */
+async function ensureOk(res: Response): Promise<void> {
   if (res.status === 429) {
     // Rate limited by the Vercel firewall, which answers with its own body.
     throw new ApiError(429, "rate_limited", "Too many requests. Wait a minute and try again.");
@@ -34,6 +35,11 @@ async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
       body?.error.message ?? `Request failed with status ${res.status}`,
     );
   }
+}
+
+async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
+  const res = await fetch(url, { signal, headers: { accept: "application/json" } });
+  await ensureOk(res);
   return res.json() as Promise<T>;
 }
 
@@ -85,4 +91,27 @@ export function fetchSimilarAudios(params: {
 /** URL of the audio's FLAC, streamed by the API. Use it as an <audio> src. */
 export function audioFileUrl(id: string): string {
   return `${BASE}/audios/${encodeURIComponent(id)}/audio`;
+}
+
+/**
+ * Starts downloading a ZIP with the FLAC and metadata of each audio (one
+ * request, whatever the number of ids). Resolves as soon as the response
+ * starts, with the ZIP still streaming in `body`.
+ */
+export async function exportAudios(
+  ids: string[],
+  signal?: AbortSignal,
+): Promise<{ body: ReadableStream<Uint8Array>; fileName: string }> {
+  const body: AudioExportRequestV1 = { ids };
+  const res = await fetch(`${BASE}/audios/export`, {
+    method: "POST",
+    signal,
+    headers: { "content-type": "application/json", accept: "application/zip" },
+    body: JSON.stringify(body),
+  });
+  await ensureOk(res);
+  if (!res.body) throw new ApiError(res.status, "empty_response", "The export came back empty");
+  const fileName =
+    /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "audios.zip";
+  return { body: res.body, fileName };
 }

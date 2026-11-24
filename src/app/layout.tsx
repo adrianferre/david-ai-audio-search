@@ -31,8 +31,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="flex min-h-full flex-col">
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
-          enableSystem
+          // Light only for now; the toggle in theme-toggle.tsx is unused.
+          forcedTheme="light"
           disableTransitionOnChange
         >
           <QueryProvider>

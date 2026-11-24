@@ -18,7 +18,7 @@ export const EMBEDDING_DIMENSIONS = 768;
  * https://ai.google.dev/gemini-api/docs/embeddings
  */
 export function toTextDocument(text: string): string {
-  // LibriSpeech transcripts are upper case.
+  // LibriSpeech transcripts are upper case; Common Voice sentences are mixed case.
   return `title: none | text: ${text.toLowerCase()}`;
 }
 

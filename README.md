@@ -54,13 +54,22 @@ it from local scripts or a SQL console unless you mean to change production.
   [AudioCaps](https://github.com/cdjkim/audiocaps). Captions are MIT; the audio was cut from
   YouTube videos and belongs to their uploaders. That is why the Blob store is private:
   don't make it public or serve AudioCaps audio to the public.
+- **Common Voice 17.0 en (sample)**: 200 crowd-sourced recordings of volunteers reading a
+  sentence, with the sentence as transcript, from [Mozilla Common Voice](https://commonvoice.mozilla.org).
+  License CC0. One clip per speaker from the dev split, among clips with at least 2 up-votes,
+  no down-votes and age, gender and accent filled in. Genders and accents are taken in turn,
+  so the sample spans 39 accents and teens to eighties. Speakers are anonymous (`clientId` is
+  Common Voice's hashed contributor id; don't try to identify them). Mozilla now distributes
+  the dataset through its Data Collective (account required), so `pnpm import-commonvoice` reads
+  the public mirror [`fsicoli/common_voice_17_0`](https://huggingface.co/datasets/fsicoli/common_voice_17_0)
+  and stores the MP3s as 16 kHz mono FLAC like the rest of the catalog.
 
 The table is described in [`src/server/db/schema.sql`](src/server/db/schema.sql).
 
 ## Search
 
 One search box answers two different questions about a clip: what its **text** says (the
-transcript of a LibriSpeech clip, the captions of an AudioCaps clip) and what it **sounds
+transcript of a LibriSpeech or Common Voice clip, the captions of an AudioCaps clip) and what it **sounds
 like**. Both use the same model, `google/gemini-embedding-2`, which puts text and audio in one
 vector space. It is called through the
 [Vercel AI Gateway](https://vercel.com/docs/ai-gateway).
@@ -91,7 +100,7 @@ Each clip has up to three things to match against, all in the `audios` table:
   the acoustics, so a clip where someone says "raining" can appear next to clips of rain.
 - **The cut-off trims, it doesn't judge.** Nearest-neighbour search always has a nearest clip,
   so a query with no good answer in the catalog still returns a handful of weak results.
-- **No vector index.** With about 3,000 clips an exact scan takes a few milliseconds and returns
+- **No vector index.** With about 3,300 clips an exact scan takes a few milliseconds and returns
   the true nearest neighbours. An HNSW index is the next step at a much larger scale.
 
 ### Embedding the catalog
@@ -111,6 +120,21 @@ The model, vector size and text formats are in
 [`src/server/search/embedding-config.ts`](src/server/search/embedding-config.ts), shared by the
 script and the app. Changing any of them means embedding the catalog again.
 
+### Adding the Common Voice sample
+
+The Common Voice clips were added by a script, and it can be re-run. It reads the transcripts
+of the mirror's en dev split and picks the sample (the same 200 clips every time). It then
+streams the 717 MB audio tar once and keeps only those MP3s, converts them to FLAC, uploads them
+to the private Blob store and upserts their rows. Like `embed-catalog`, it **writes to production**.
+It only touches `commonvoice` rows and skips blobs and rows that are already up to date. The schema
+change it needs is [`003_commonvoice.sql`](src/server/db/migrations/003_commonvoice.sql).
+
+```bash
+pnpm import-commonvoice --dry-run   # print the sample, write nothing
+pnpm import-commonvoice             # add `--count N` for a different sample size
+pnpm embed-catalog                  # embed the new clips (about $0.30 for 200)
+```
+
 ### AI Gateway
 
 Nothing to configure: the app authenticates to the gateway with the project's OIDC token, the
@@ -128,6 +152,7 @@ the AI Gateway tab of the Vercel team. To use an API key instead of OIDC, set `A
 | `pnpm lint`      | ESLint                               |
 | `pnpm typecheck` | Generate route types and run `tsc`   |
 | `pnpm embed-catalog` | Embed the clips that have no vector yet (see Search) |
+| `pnpm import-commonvoice` | Add the Common Voice sample to the database and Blob store (see Search) |
 
 ## Project layout
 
@@ -137,7 +162,7 @@ the AI Gateway tab of the Vercel team. To use an API key instead of OIDC, set `A
 - `src/lib/` – shared utilities
 - `src/server/db/` – Neon client, the catalog schema (`schema.sql`) and its migrations
 - `src/server/search/` – embedding settings and the query embedding call
-- `scripts/` – one-off scripts (`embed-catalog.mts`)
+- `scripts/` – one-off scripts (`embed-catalog.mts`, `import-commonvoice.mts`)
 - `src/env.ts` – typed, validated environment variables (`import { env } from "@/env"`)
 
 ## API
@@ -146,7 +171,7 @@ JSON endpoints served by the app. They are versioned under `/api/vN`; once a ver
 
 ### `GET /api/v1/audios`
 
-Paginated list of every audio in the catalog: LibriSpeech first, then AudioCaps, each sorted by id. Every item has the same shape whatever its dataset.
+Paginated list of every audio in the catalog: LibriSpeech first, then AudioCaps, then Common Voice, each sorted by id. Every item has the same shape whatever its dataset.
 
 | Query param | Default | Rules |
 | --- | --- | --- |
@@ -159,14 +184,14 @@ Paginated list of every audio in the catalog: LibriSpeech first, then AudioCaps,
     { "id": "librispeech-1272-128104-0000", "source": "librispeech", "title": "Reviews · read by John Rose",
       "text": "MISTER QUILTER IS THE APOSTLE OF ...", "durationSeconds": 5.855 }
   ],
-  "pagination": { "page": 1, "pageSize": 50, "total": 3129, "totalPages": 63,
+  "pagination": { "page": 1, "pageSize": 50, "total": 3329, "totalPages": 67,
                   "hasNextPage": true, "hasPreviousPage": false, "nextPage": 2, "previousPage": null }
 }
 ```
 
 ### `GET /api/v1/audios/{id}`
 
-One audio: the list fields plus a dataset-specific `metadata` object (speaker/chapter/transcript for LibriSpeech; YouTube id, start time and all captions for AudioCaps).
+One audio: the list fields plus a dataset-specific `metadata` object (speaker/chapter/transcript for LibriSpeech; YouTube id, start time and all captions for AudioCaps; anonymous speaker id, self-reported age/gender/accent, sentence and validation votes for Common Voice).
 
 ### `GET /api/v1/audios/{id}/audio`
 
@@ -203,6 +228,20 @@ Returns `503 search_unavailable` when the embedding model can't be reached.
 Search by example: the audios that sound most like `{id}`, most similar first. Each item is a list
 item plus `similarity` (cosine similarity, at most 1). `limit` works as above. `404` for an
 unknown id.
+
+### `POST /api/v1/audios/export`
+
+Downloads several audios at once as a ZIP (`application/zip`, `Content-Disposition: attachment`). Body: `{ "ids": ["librispeech-1272-128104-0000", "…"] }`, 1–200 ids (duplicates are ignored).
+
+```text
+audios-2026-11-24-2.zip
+├── metadata.json          { exportedAt, count, audios: [ <same shape as GET /api/v1/audios/{id}> … ] }
+└── audio/
+    ├── librispeech-1272-128104-0000.flac
+    └── audiocaps-rqfQRErjfk8_170.flac
+```
+
+The ZIP is streamed (so it isn't bound by the 4.5 MB function response limit) and its entries are stored uncompressed (FLAC already is). Unknown ids return `404 not_found` with `details.missingIds` before anything is streamed. It is one request for the rate limit, whatever the number of ids. The UI uses it for the row checkboxes' **Download** button.
 
 Errors always look like `{ "error": { "code", "message", "details"? } }`: `400 invalid_request`, `404 not_found`, `500 internal_error` (e.g. the database is unreachable) and `503 search_unavailable`.
 
