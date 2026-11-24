@@ -69,6 +69,11 @@ const EMPTY_HINT: Record<SearchMatchFilterV1, string> = {
 };
 
 const RELEVANCE_WORDS = ["low", "fair", "good", "high", "very high"];
+/**
+ * The most bars a result gets when nothing clearly matches the search
+ * (`strongMatch: false`): the best of weak results is still weak ("fair").
+ */
+const WEAK_MATCH_RELEVANCE = 2;
 
 /** A list item, plus why it is in the results when it comes from a search. */
 type Row = AudioListItemV1 & {
@@ -260,9 +265,11 @@ function SearchResults({
     );
   }
   const best = data.data[0]?.score ?? 0;
+  // Relative to the best result, which gets every bar only when it clearly matches.
+  const top = data.strongMatch === false ? WEAK_MATCH_RELEVANCE : RELEVANCE_WORDS.length;
   const rows: Row[] = data.data.map((hit) => ({
     ...hit,
-    relevance: best > 0 ? Math.min(5, Math.max(1, Math.round((hit.score / best) * 5))) : 1,
+    relevance: best > 0 ? Math.min(top, Math.max(1, Math.round((hit.score / best) * top))) : 1,
   }));
 
   if (rows.length === 0 && !searching) {
@@ -771,7 +778,10 @@ function AudioRow({
   );
 }
 
-/** Five bars, filled by how this result ranks next to the best one. */
+/**
+ * Five bars, filled by how this result ranks next to the best one (at most
+ * WEAK_MATCH_RELEVANCE when nothing clearly matches).
+ */
 function RelevanceMeter({ level }: { level: number }) {
   return (
     <span
