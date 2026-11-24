@@ -63,7 +63,8 @@ export type AudioPage = { items: AudioRecord[]; total: number };
 /** LibriSpeech first, then AudioCaps, each sorted by id. */
 export async function listAudios({ offset, limit }: { offset: number; limit: number }): Promise<AudioPage> {
   const sql = getSql();
-  // One round trip and one snapshot, so `total` always matches the page.
+  // One round trip and one snapshot (REPEATABLE READ; the default READ COMMITTED
+  // gives each statement its own), so `total` always matches the page.
   const [rows, [{ total }]] = await sql.transaction(
     [
       sql`
@@ -74,7 +75,7 @@ export async function listAudios({ offset, limit }: { offset: number; limit: num
       `,
       sql`SELECT count(*)::int AS total FROM audios`,
     ],
-    { readOnly: true },
+    { readOnly: true, isolationLevel: "RepeatableRead" },
   );
   return { items: rows.map(toRecord), total: total as number };
 }

@@ -92,7 +92,7 @@ Paginated list of every audio in the catalog: LibriSpeech first, then AudioCaps,
 
 One audio: the list fields plus a dataset-specific `metadata` object (speaker/chapter/transcript for LibriSpeech; YouTube id, start time and all captions for AudioCaps).
 
-Errors always look like `{ "error": { "code", "message", "details"? } }`: `400 invalid_request` and `404 not_found`.
+Errors always look like `{ "error": { "code", "message", "details"? } }`: `400 invalid_request`, `404 not_found` and `500 internal_error` (e.g. the database is unreachable).
 
 ### Where the code lives
 
