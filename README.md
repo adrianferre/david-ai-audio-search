@@ -20,21 +20,6 @@ That's enough to work on the UI. Without credentials, `/api/*` is proxied to the
 (change it with `API_UPSTREAM_URL`), so you browse the real catalog under the public
 [rate limit](#api).
 
-To run the API locally (to change route handlers or queries), you need access to the Vercel team
-`adrian-ferre` and the [Vercel CLI](https://vercel.com/docs/cli) (`npm i -g vercel`, then
-`vercel login`):
-
-```bash
-vercel link --yes --project david-ai-audio-search --scope adrian-ferre
-vercel env pull .env.local
-pnpm dev
-```
-
-> [!WARNING]
-> `.env.local` holds secrets: keep it out of git, logs and screenshots. Every environment,
-> your local dev server included, uses the **production** database and Blob store. The app only
-> reads from them, but the [catalog scripts](#scripts) write to them.
-
 ## Data
 
 | Dataset | Clips | What it is | License |
