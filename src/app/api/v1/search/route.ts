@@ -27,7 +27,7 @@ const querySchema = z.object({
 type SoundExample = { kind: "audio"; id: string } | { kind: "wav"; wav: Uint8Array };
 
 /**
- * GET /api/v1/search?q=dog+barking&match=all&limit=50&source=audiocaps&minDuration=5&maxDuration=12&label=Dog
+ * GET /api/v1/search?q=dog+barking&match=all&limit=50&source=commonvoice&minDuration=5&maxDuration=12&accent=us
  *
  * With `soundOf={id}`, the sound signal compares with that audio's sound
  * instead of the text of `q`: search with an example, by its sound and its words.

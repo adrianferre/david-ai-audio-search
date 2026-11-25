@@ -4,7 +4,6 @@ import { z } from "zod";
 
 import {
   ACCENTS,
-  AGES,
   AUDIO_SOURCES,
   type DurationRangeV1,
   type FacetFiltersV1,
@@ -53,14 +52,12 @@ const valuesOf = <T extends z.ZodType<string>>(value: T) =>
   );
 
 /**
- * The facet query parameters (FacetFiltersV1): `gender`, `age`, `accent` and
- * `label`, each repeatable. Use with `queryParams`, which keeps the repeats.
+ * The facet query parameters (FacetFiltersV1): `gender` and `accent`, each
+ * repeatable. Use with `queryParams`, which keeps the repeats.
  */
 export const facetQuerySchema = z.object({
   gender: valuesOf(z.enum(GENDERS)),
-  age: valuesOf(z.enum(AGES)),
   accent: valuesOf(z.enum(ACCENTS)),
-  label: valuesOf(z.string().max(200)),
 });
 
 /**
@@ -79,7 +76,7 @@ export function durationRange(query: z.infer<typeof durationQuerySchema>): Durat
 
 /** The facet parameters as the repository takes them. */
 export function facetFilters(query: z.infer<typeof facetQuerySchema>): FacetFiltersV1 {
-  return { gender: query.gender, age: query.age, accent: query.accent, label: query.label };
+  return { gender: query.gender, accent: query.accent };
 }
 
 /** The dataset, length and facet parameters as the repository takes them. */

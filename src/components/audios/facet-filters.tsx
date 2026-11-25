@@ -1,7 +1,6 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { SearchIcon } from "lucide-react";
 import { type ReactNode, useId, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -9,8 +8,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   ACCENTS,
   type AccentV1,
-  AGES,
-  type AgeV1,
   type AudioSource,
   type DurationRangeV1,
   FACETS,
@@ -27,18 +24,6 @@ import { SOURCE_LABEL } from "./datasets";
 import { facetsQuery } from "./queries";
 
 export const GENDER_LABEL: Record<GenderV1, string> = { female: "Female", male: "Male" };
-
-export const AGE_LABEL: Record<AgeV1, string> = {
-  teens: "Teens",
-  twenties: "20s",
-  thirties: "30s",
-  fourties: "40s",
-  fifties: "50s",
-  sixties: "60s",
-  seventies: "70s",
-  eighties: "80s",
-  nineties: "90s",
-};
 
 export const ACCENT_LABEL: Record<AccentV1, string> = {
   us: "United States",
@@ -62,16 +47,12 @@ export const ACCENT_LABEL: Record<AccentV1, string> = {
 /** The datasets that record each facet: with values picked, only their clips can match. */
 const FACET_SOURCES: Record<FacetV1, readonly AudioSource[]> = {
   gender: ["librispeech", "commonvoice"],
-  age: ["commonvoice"],
   accent: ["commonvoice"],
-  label: ["audiocaps"],
 };
 
 const FACET_TITLE: Record<FacetV1, string> = {
   gender: "Speaker gender",
-  age: "Speaker age",
   accent: "Accent",
-  label: "Sound type",
 };
 
 /** A value as the sidebar, the header and the recent searches name it. */
@@ -79,17 +60,13 @@ function valueLabel(facet: FacetV1, value: string): string {
   switch (facet) {
     case "gender":
       return GENDER_LABEL[value as GenderV1] ?? value;
-    case "age":
-      return AGE_LABEL[value as AgeV1] ?? value;
     case "accent":
       return ACCENT_LABEL[value as AccentV1] ?? value;
-    case "label":
-      return value;
   }
 }
 
 /** Plural nouns for a facet with many values picked: "3 accents". */
-const MANY: Record<FacetV1, string> = { gender: "genders", age: "ages", accent: "accents", label: "sound types" };
+const MANY: Record<FacetV1, string> = { gender: "genders", accent: "accents" };
 
 export function isNoFacets(facets: FacetFiltersV1 | undefined): boolean {
   return !facets || FACETS.every((facet) => facets[facet].length === 0);
@@ -105,7 +82,7 @@ export function sameFacets(a: FacetFiltersV1 | undefined, b: FacetFiltersV1 | un
 }
 
 /**
- * The facets picked, in words: "Female · 20s, 30s · 3 accents"; null when none.
+ * The facets picked, in words: "Female · 3 accents"; null when none.
  * More than two values of a facet are counted rather than listed.
  */
 export function describeFacets(facets: FacetFiltersV1 | undefined): string | null {
@@ -131,21 +108,20 @@ export function sourcesFor(source: AudioSource | null, facets: FacetFiltersV1): 
 }
 
 /** `values` with `value` added or removed, in a fixed order so equal filters share a cache entry. */
-function toggled<T extends string>(values: readonly T[], value: T, order: readonly T[] | null): T[] {
+function toggled<T extends string>(values: readonly T[], value: T, order: readonly T[]): T[] {
   const next = values.includes(value) ? values.filter((v) => v !== value) : [...values, value];
-  return order ? order.filter((v) => next.includes(v)) : next.toSorted((a, b) => a.localeCompare(b));
+  return order.filter((v) => next.includes(v));
 }
 
 /** How many options a list shows before "Show all". */
 const COLLAPSED_OPTIONS = 6;
 
 /**
- * The sidebar's metadata filters: the speaker's gender, age and accent, and
- * the AudioSet labels of the sound. Each lists its values with how many clips
- * of the other filters have each; picking several of one facet widens it
- * (any of them), and facets narrow each other. A facet only shows while some
- * clip it describes can still be listed: Accent hides with LibriSpeech picked,
- * or with a sound type, unless it has values picked (to clear them).
+ * The sidebar's metadata filters: the speaker's gender and accent. Each lists
+ * its values with how many clips of the other filters have each; picking
+ * several of one facet widens it (any of them), and facets narrow each other.
+ * A facet only shows while some clip it describes can still be listed: Accent
+ * hides with LibriSpeech picked, unless it has values picked (to clear them).
  */
 export function FacetFilters({
   source,
@@ -181,45 +157,15 @@ export function FacetFilters({
           )}
         </FacetSection>
       )}
-      {shown("age") && (
-        <FacetSection facet="age" picked={facets.age.length} onClear={() => set("age", [])}>
-          {(labelId) => (
-            <Chips
-              labelId={labelId}
-              // Decades no clip of the catalog has (the nineties) would only be noise.
-              options={(data?.age ?? []).filter((option) => option.count > 0 || facets.age.includes(option.value))}
-              picked={facets.age}
-              label={(value) => AGE_LABEL[value]}
-              onToggle={(value) => set("age", toggled(facets.age, value, AGES))}
-            />
-          )}
-        </FacetSection>
-      )}
       {shown("accent") && (
         <FacetSection facet="accent" picked={facets.accent.length} onClear={() => set("accent", [])}>
           {(labelId) => (
             <OptionList
               labelId={labelId}
-              facet="accent"
               options={accentOptions(data?.accent ?? [])}
               picked={facets.accent}
               label={(value) => ACCENT_LABEL[value]}
               onToggle={(value) => set("accent", toggled(facets.accent, value, ACCENTS))}
-            />
-          )}
-        </FacetSection>
-      )}
-      {shown("label") && (
-        <FacetSection facet="label" picked={facets.label.length} onClear={() => set("label", [])}>
-          {(labelId) => (
-            <OptionList
-              labelId={labelId}
-              facet="label"
-              options={data?.label ?? []}
-              picked={facets.label}
-              label={(value) => value}
-              onToggle={(value) => set("label", toggled(facets.label, value, null))}
-              searchable
             />
           )}
         </FacetSection>
@@ -320,29 +266,22 @@ function Chips<T extends string>({
 
 /**
  * Many values, as checkboxes with their counts: the first few, then "Show all".
- * The values picked always show, first. With `searchable`, a box narrows the
- * list by name.
+ * The values picked always show, first.
  */
 function OptionList<T extends string>({
   labelId,
-  facet,
   options,
   picked,
   label,
   onToggle,
-  searchable = false,
 }: {
   labelId: string;
-  facet: FacetV1;
   options: FacetCountV1<T>[];
   picked: readonly T[];
   label: (value: T) => string;
   onToggle: (value: T) => void;
-  searchable?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [filter, setFilter] = useState("");
-  const needle = filter.trim().toLowerCase();
   // A value picked that no clip of the other filters has still shows, to unpick it.
   const missing = picked
     .filter((value) => !options.some((option) => option.value === value))
@@ -352,28 +291,11 @@ function OptionList<T extends string>({
     ...picked.flatMap((value) => all.filter((option) => option.value === value)),
     ...all.filter((option) => !picked.includes(option.value)),
   ];
-  const matching = needle
-    ? ordered.filter((option) => label(option.value).toLowerCase().includes(needle))
-    : ordered;
-  const visible =
-    expanded || needle ? matching : matching.slice(0, Math.max(COLLAPSED_OPTIONS, picked.length));
-  const hidden = matching.length - visible.length;
+  const visible = expanded ? ordered : ordered.slice(0, Math.max(COLLAPSED_OPTIONS, picked.length));
+  const hidden = ordered.length - visible.length;
 
   return (
     <div className="flex flex-col gap-1.5">
-      {searchable && options.length > COLLAPSED_OPTIONS && (
-        <label className="flex h-8 items-center gap-2 rounded-full border border-input bg-background px-3 focus-within:ring-3 focus-within:ring-ring/50">
-          <SearchIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
-          <input
-            type="search"
-            value={filter}
-            onChange={(event) => setFilter(event.target.value)}
-            placeholder={`Find among ${options.length.toLocaleString()}`}
-            aria-label={`Find a ${FACET_TITLE[facet].toLowerCase()}`}
-            className="min-w-0 flex-1 bg-transparent text-[0.8rem] outline-none placeholder:text-muted-foreground"
-          />
-        </label>
-      )}
       <div role="group" aria-labelledby={labelId} className="flex flex-col">
         {visible.map((option) => {
           const on = picked.includes(option.value);
@@ -399,13 +321,11 @@ function OptionList<T extends string>({
             </label>
           );
         })}
-        {matching.length === 0 && (
-          <p className="py-1 text-[0.8rem] text-muted-foreground">
-            {needle ? `No ${FACET_TITLE[facet].toLowerCase()} matches “${filter.trim()}”` : "None with the other filters"}
-          </p>
+        {ordered.length === 0 && (
+          <p className="py-1 text-[0.8rem] text-muted-foreground">None with the other filters</p>
         )}
       </div>
-      {!needle && (hidden > 0 || expanded) && (
+      {(hidden > 0 || expanded) && (
         <Button
           variant="ghost"
           size="xs"
@@ -413,7 +333,7 @@ function OptionList<T extends string>({
           aria-expanded={expanded}
           onClick={() => setExpanded(!expanded)}
         >
-          {expanded ? "Show fewer" : `Show all ${matching.length.toLocaleString()}`}
+          {expanded ? "Show fewer" : `Show all ${ordered.length.toLocaleString()}`}
         </Button>
       )}
     </div>

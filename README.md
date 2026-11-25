@@ -269,15 +269,12 @@ Paginated list of every audio in the catalog: LibriSpeech first, then AudioCaps,
 | `minDuration` | none | seconds, 0–3,600: only audios at least that long (`total` counts only them) |
 | `maxDuration` | none | seconds, 0–3,600: only audios at most that long (`total` counts only them) |
 | `gender` | any | `female` or `male`, repeatable: only speakers of that gender (LibriSpeech and Common Voice) |
-| `age` | any | `teens`, `twenties`, `thirties`, `fourties` (Common Voice's spelling), `fifties`… `nineties`, repeatable: only Common Voice speakers of that age |
 | `accent` | any | an accent group (below), repeatable: only Common Voice speakers with that accent |
-| `label` | any | an AudioSet label as written (`Dog`, `Bee, wasp, etc.`), repeatable: only AudioCaps clips with it |
 
-`gender`, `age`, `accent` and `label` are the **facets**: filters by each clip's metadata. Repeat
-one for several values (`gender=female&gender=male`); a clip matches it when it has any of
-them, and must match every facet given. A clip whose dataset doesn't record a facet never
-matches it: `gender` leaves AudioCaps out, `age` and `accent` leave all but Common Voice out, and
-`label` all but AudioCaps. They are read from each row's `metadata` when queried
+`gender` and `accent` are the **facets**: filters by each clip's metadata. Repeat one for
+several values (`gender=female&gender=male`); a clip matches it when it has any of them, and
+must match every facet given. A clip whose dataset doesn't record a facet never matches it:
+`gender` leaves AudioCaps out, and `accent` all but Common Voice. They are read from each row's `metadata` when queried
 ([`src/server/audios/facets.ts`](src/server/audios/facets.ts)), so they need no column of their own.
 LibriSpeech's `sex` (`F`, `M`) and Common Voice's `gender` (`female_feminine`, `male_masculine`)
 both map to `female` and `male`. Common Voice speakers describe their accent in their own
@@ -314,18 +311,14 @@ Every dataset of the catalog (the `datasets` table) with its number of audios, t
 
 ### `GET /api/v1/facets`
 
-How many clips have each value of each facet: speaker `gender`, `age` and `accent`, and AudioSet
-`label`. Takes `source`, `minDuration`, `maxDuration` and the facets, as `/audios` does. A
-facet's counts apply the other facets given, not its own, so each says how many clips that
-value has among the ones the other filters leave. `gender`, `age` and `accent` list every value
-in the order above, `0` included; `label` lists only the labels some clip has, most clips first.
-The UI shows them next to each option in the sidebar.
+How many clips have each value of each facet: speaker `gender` and `accent`. Takes `source`,
+`minDuration`, `maxDuration` and the facets, as `/audios` does. A facet's counts apply the
+other facets given, not its own, so each says how many clips that value has among the ones the
+other filters leave. Both list every value in the order above, `0` included. The UI shows them next to each option in the sidebar.
 
 ```json
 { "data": { "gender": [ { "value": "female", "count": 1451 }, { "value": "male", "count": 1452 } ],
-            "age": [ { "value": "teens", "count": 23 }, { "value": "twenties", "count": 84 }, "…" ],
-            "accent": [ { "value": "us", "count": 66 }, { "value": "england", "count": 31 }, "…" ],
-            "label": [ { "value": "Speech", "count": 156 }, { "value": "Vehicle", "count": 96 }, "…" ] } }
+            "accent": [ { "value": "us", "count": 66 }, { "value": "england", "count": 31 }, "…" ] } }
 ```
 
 ### `GET /api/v1/audios/{id}`
@@ -359,7 +352,7 @@ relevant first. There is no pagination: it is a ranked top list.
 | `source` | every dataset | `librispeech`, `audiocaps` or `commonvoice`: only that dataset's clips |
 | `minDuration` | none | seconds, 0–3,600: only clips at least that long |
 | `maxDuration` | none | seconds, 0–3,600: only clips at most that long |
-| `gender`, `age`, `accent`, `label` | any | the facets, as in `/audios` |
+| `gender`, `accent` | any | the facets, as in `/audios` |
 | `soundOf` | none | An audio's id: the sound signal compares with that audio's sound instead of the text of `q` (`404` for an unknown id) |
 | `exclude` | none | An audio's id to leave out: the clip searched with, which would come first and set the bar the others are cut against |
 

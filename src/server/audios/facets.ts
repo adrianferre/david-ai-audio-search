@@ -59,11 +59,6 @@ export function genderOf(sql: Sql): Fragment {
   END)`;
 }
 
-/** The Common Voice speaker's decade, as recorded; NULL elsewhere. */
-export function ageOf(sql: Sql): Fragment {
-  return sql`(CASE WHEN a.source = 'commonvoice' THEN nullif(a.metadata->'speaker'->>'age', '') END)`;
-}
-
 /**
  * The Common Voice speaker's accent groups; NULL when they gave none, and
  * for the other datasets. The accents are split at the commas that aren't
@@ -77,13 +72,6 @@ export function accentsOf(sql: Sql): Fragment {
     LEFT JOIN unnest(${ALIASES}::text[], ${ALIAS_GROUPS}::text[]) AS m(alias, accent_group)
       ON m.alias = lower(trim(t.accent))
   ) END)`;
-}
-
-/** The AudioCaps clip's AudioSet labels; NULL for the other datasets. */
-export function labelsOf(sql: Sql): Fragment {
-  return sql`(CASE WHEN a.source = 'audiocaps' THEN
-    ARRAY(SELECT jsonb_array_elements_text(coalesce(a.metadata->'audioSetLabels', '[]'::jsonb)))
-  END)`;
 }
 
 /** True when `values` is empty, or the clip's `value` is one of them. Never NULL. */
@@ -100,9 +88,7 @@ function matchesAny(sql: Sql, list: Fragment, values: readonly string[]): Fragme
 export function facetMatches(sql: Sql, facets: FacetFilters) {
   return {
     gender: matchesOne(sql, genderOf(sql), facets.gender),
-    age: matchesOne(sql, ageOf(sql), facets.age),
     accent: matchesAny(sql, accentsOf(sql), facets.accent),
-    label: matchesAny(sql, labelsOf(sql), facets.label),
   };
 }
 
@@ -120,6 +106,6 @@ export function catalogCondition(
     (${source}::text IS NULL OR a.source = ${source})
     AND (${min}::float8 IS NULL OR a.duration_seconds >= ${min})
     AND (${max}::float8 IS NULL OR a.duration_seconds <= ${max})
-    AND ${matches.gender} AND ${matches.age} AND ${matches.accent} AND ${matches.label}
+    AND ${matches.gender} AND ${matches.accent}
   )`;
 }

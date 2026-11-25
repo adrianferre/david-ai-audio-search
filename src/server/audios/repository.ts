@@ -12,7 +12,7 @@ import {
   MIN_Z_SCORE,
 } from "@/server/search/ranking-config";
 
-import { accentsOf, ageOf, catalogCondition, facetMatches, genderOf, labelsOf } from "./facets";
+import { accentsOf, catalogCondition, facetMatches, genderOf } from "./facets";
 import {
   type AudioRecord,
   type AudioSearchHit,
@@ -190,34 +190,26 @@ export type FacetCount = { value: string; count: number };
  * of the clips of `filter`'s dataset and length. A facet's counts also apply
  * the other facets of `filter`, not its own: what picking one more of its
  * values would add. Only the values some clip has, most clips first. A clip
- * with several accents counts in each of their groups, and one with several
- * labels under each.
+ * with several accents counts in each of their groups.
  */
 export async function countFacets(filter: CatalogFilter = {}): Promise<Record<keyof FacetFilters, FacetCount[]>> {
   const sql = getSql();
   const matches = facetMatches(sql, filter.facets ?? NO_FACETS);
   const rows = await sql`
     WITH clips AS (
-      SELECT ${genderOf(sql)} AS gender, ${ageOf(sql)} AS age, ${accentsOf(sql)} AS accents, ${labelsOf(sql)} AS labels,
-             ${matches.gender} AS gender_ok, ${matches.age} AS age_ok,
-             ${matches.accent} AS accent_ok, ${matches.label} AS label_ok
+      SELECT ${genderOf(sql)} AS gender, ${accentsOf(sql)} AS accents,
+             ${matches.gender} AS gender_ok, ${matches.accent} AS accent_ok
       FROM audios a
       WHERE ${catalogCondition(sql, { source: filter.source, duration: filter.duration })}
     )
     SELECT 'gender' AS facet, gender AS value, count(*)::int AS count
-    FROM clips WHERE gender IS NOT NULL AND age_ok AND accent_ok AND label_ok GROUP BY gender
-    UNION ALL
-    SELECT 'age', age, count(*)::int
-    FROM clips WHERE age IS NOT NULL AND gender_ok AND accent_ok AND label_ok GROUP BY age
+    FROM clips WHERE gender IS NOT NULL AND accent_ok GROUP BY gender
     UNION ALL
     SELECT 'accent', accent, count(*)::int
-    FROM clips CROSS JOIN unnest(accents) AS accent WHERE gender_ok AND age_ok AND label_ok GROUP BY accent
-    UNION ALL
-    SELECT 'label', label, count(*)::int
-    FROM clips CROSS JOIN unnest(labels) AS label WHERE gender_ok AND age_ok AND accent_ok GROUP BY label
+    FROM clips CROSS JOIN unnest(accents) AS accent WHERE gender_ok GROUP BY accent
     ORDER BY count DESC, value
   `;
-  const counts: Record<keyof FacetFilters, FacetCount[]> = { gender: [], age: [], accent: [], label: [] };
+  const counts: Record<keyof FacetFilters, FacetCount[]> = { gender: [], accent: [] };
   for (const row of rows) {
     counts[row.facet as keyof FacetFilters].push({ value: row.value as string, count: row.count as number });
   }

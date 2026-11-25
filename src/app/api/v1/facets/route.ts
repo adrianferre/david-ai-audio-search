@@ -1,7 +1,7 @@
 import { connection, type NextRequest } from "next/server";
 import { z } from "zod";
 
-import { ACCENTS, AGES, type FacetCountV1, type FacetsResponseV1, GENDERS } from "@/lib/api/v1/types";
+import { ACCENTS, type FacetCountV1, type FacetsResponseV1, GENDERS } from "@/lib/api/v1/types";
 import { apiError, internalError } from "@/server/api/errors";
 import { catalogFilter, catalogFilterQuerySchema, queryParams } from "@/server/api/source-filter";
 import { countFacets, type FacetCount } from "@/server/audios/repository";
@@ -14,8 +14,8 @@ function everyValue<T extends string>(values: readonly T[], counts: FacetCount[]
 
 /**
  * GET /api/v1/facets?source=commonvoice&minDuration=5&gender=female&accent=us:
- * how many clips have each speaker gender, age and accent and each AudioSet
- * label, of that dataset and length. Each facet's counts apply the other
+ * how many clips have each speaker gender and accent, of that dataset and
+ * length. Each facet's counts apply the other
  * facets given, not its own (FacetsV1).
  */
 export async function GET(request: NextRequest) {
@@ -34,9 +34,7 @@ export async function GET(request: NextRequest) {
   const body: FacetsResponseV1 = {
     data: {
       gender: everyValue(GENDERS, counts.gender),
-      age: everyValue(AGES, counts.age),
       accent: everyValue(ACCENTS, counts.accent),
-      label: counts.label,
     },
   };
   return Response.json(body);

@@ -54,9 +54,9 @@ function durationParams(duration: DurationRangeV1 | null | undefined) {
   return { minDuration: duration?.min, maxDuration: duration?.max };
 }
 
-/** The facet params (`gender`, `age`, `accent`, `label`), each repeated once per value. */
+/** The facet params (`gender`, `accent`), each repeated once per value. */
 function facetParams(facets: FacetFiltersV1 | null | undefined) {
-  return { gender: facets?.gender, age: facets?.age, accent: facets?.accent, label: facets?.label };
+  return { gender: facets?.gender, accent: facets?.accent };
 }
 
 type QueryValue = string | number | null | undefined;

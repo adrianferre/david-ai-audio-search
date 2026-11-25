@@ -82,15 +82,11 @@ export const ANY_LENGTH: DurationRange = { min: null, max: null };
 export type FacetFilters = {
   /** `female`, `male`. */
   gender: readonly string[];
-  /** Common Voice's decades: `teens`, `twenties`… */
-  age: readonly string[];
   /** Accent groups (ACCENT_ALIASES in facets.ts), `other` included. */
   accent: readonly string[];
-  /** AudioSet labels, as written. */
-  label: readonly string[];
 };
 
-export const NO_FACETS: FacetFilters = { gender: [], age: [], accent: [], label: [] };
+export const NO_FACETS: FacetFilters = { gender: [], accent: [] };
 
 /** What the list, the searches and the counts filter by: the sidebar's filters. */
 export type CatalogFilter = {

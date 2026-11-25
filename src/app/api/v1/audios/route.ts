@@ -10,7 +10,7 @@ import { listAudios } from "@/server/audios/repository";
 
 const querySchema = paginationQuerySchema.extend(catalogFilterQuerySchema.shape);
 
-/** GET /api/v1/audios?page=1&pageSize=50&source=audiocaps&minDuration=5&maxDuration=12&label=Dog&label=Cat */
+/** GET /api/v1/audios?page=1&pageSize=50&source=commonvoice&minDuration=5&maxDuration=12&gender=female&accent=us */
 export async function GET(request: NextRequest) {
   const parsed = querySchema.safeParse(queryParams(request.nextUrl.searchParams));
   if (!parsed.success) {

@@ -1,7 +1,6 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { AudioLinesIcon } from "lucide-react";
 
 import { DavidAiLogo } from "@/components/david-ai-logo";
 import type { AudioSource, DurationRangeV1, FacetFiltersV1 } from "@/lib/api/v1/types";
@@ -16,10 +15,9 @@ import { datasetsQuery } from "./queries";
 const FILTER_ORDER: readonly AudioSource[] = ["librispeech", "commonvoice", "audiocaps"];
 
 /**
- * The left rail: the product, the dataset, length and metadata filters, and
- * how to search by sound. The filters apply to every view: browsing, text
- * search and sound search. Each dataset's count is of the clips of the chosen
- * length and metadata.
+ * The left rail: the product and the dataset, length and metadata filters.
+ * The filters apply to every view: browsing, text search and sound search.
+ * Each dataset's count is of the clips of the chosen length and metadata.
  */
 export function Sidebar({
   source,
@@ -103,17 +101,6 @@ export function Sidebar({
       <DurationFilter duration={duration} longestSeconds={longestSeconds} onDurationChange={onDurationChange} />
 
       <FacetFilters source={source} duration={duration} facets={facets} onFacetsChange={onFacetsChange} />
-
-      <div className="flex flex-col gap-2.5 rounded-[14px] border bg-background p-4">
-        <p className="flex items-center gap-2 text-sm font-medium">
-          <AudioLinesIcon aria-hidden="true" className="size-4" />
-          Search by sound
-        </p>
-        <p className="text-[0.8rem] leading-[19px] text-muted-foreground">
-          Record up to 30 s, drop any audio file on the page, or paste a link to one, to find the
-          clips that sound like it.
-        </p>
-      </div>
     </nav>
   );
 }
