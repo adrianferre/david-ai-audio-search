@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 
 import { displayText, SOURCE_LABEL } from "./datasets";
 import { describeDuration, isAnyDuration } from "./duration-filter";
+import { describeFacets } from "./facet-filters";
 import type { RecentSearch, SuggestedSearch } from "./recent-searches";
 import { formatClock, Waveform } from "./waveform";
 
@@ -180,6 +181,9 @@ function RecentSearchRow({ entry, label: suggestionLabel }: { entry: RecentSearc
       )}
       {entry.duration && !isAnyDuration(entry.duration) && (
         <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{describeDuration(entry.duration)}</span>
+      )}
+      {describeFacets(entry.facets) && (
+        <span className="max-w-[40%] shrink truncate text-xs text-muted-foreground">{describeFacets(entry.facets)}</span>
       )}
       {match && (
         // Like an unselected option of the search bar's match toggle. On the

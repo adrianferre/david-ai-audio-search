@@ -15,6 +15,7 @@ import {
   fetchAudios,
   fetchAudioTranscript,
   fetchDatasets,
+  fetchFacets,
   fetchSimilarAudios,
   searchAudios,
   searchByAudioFile,
@@ -25,6 +26,7 @@ import {
   type AudioSearchResponseV1,
   type AudioSource,
   type DurationRangeV1,
+  type FacetFiltersV1,
   MAX_SEARCH_QUERY_LENGTH,
   type SearchMatchFilterV1,
   type SimilarAudiosResponseV1,
@@ -48,26 +50,39 @@ export type SearchResultsData = AudioSearchResponseV1 & { hasMore: boolean };
  * select-all checkbox),
  * so both read the same cache entries instead of fetching twice.
  */
-export const catalogQuery = (source: AudioSource | null, duration: DurationRangeV1) =>
+export const catalogQuery = (source: AudioSource | null, duration: DurationRangeV1, facets: FacetFiltersV1) =>
   infiniteQueryOptions({
-    queryKey: ["v1", "audios", { pageSize: PAGE_SIZE, source, duration }],
+    queryKey: ["v1", "audios", { pageSize: PAGE_SIZE, source, duration, facets }],
     queryFn: ({ pageParam, signal }) =>
-      fetchAudios({ page: pageParam, pageSize: PAGE_SIZE, source, duration, signal }),
+      fetchAudios({ page: pageParam, pageSize: PAGE_SIZE, source, duration, facets, signal }),
     initialPageParam: 1,
     getNextPageParam: (lastPage) => lastPage.pagination.nextPage ?? undefined,
   });
 
 /**
- * Every dataset with its number of audios (of `duration`'s length) and its
- * shortest and longest one, for the sidebar.
+ * Every dataset with its number of audios (of `duration`'s length, with
+ * `facets`) and its shortest and longest one, for the sidebar.
  */
-export const datasetsQuery = (duration: DurationRangeV1) =>
+export const datasetsQuery = (duration: DurationRangeV1, facets: FacetFiltersV1) =>
   queryOptions({
-    queryKey: ["v1", "datasets", { duration }],
-    queryFn: ({ signal }) => fetchDatasets(duration, signal),
+    queryKey: ["v1", "datasets", { duration, facets }],
+    queryFn: ({ signal }) => fetchDatasets(duration, facets, signal),
     staleTime: 10 * 60 * 1000,
-    // The counts of the previous length stay on screen while the new ones load.
+    // The counts of the previous filters stay on screen while the new ones load.
     placeholderData: keepPreviousData,
+  });
+
+/**
+ * How many clips have each speaker gender, age and accent and each AudioSet
+ * label, of the sidebar's other filters, for its facet filters.
+ */
+export const facetsQuery = (source: AudioSource | null, duration: DurationRangeV1, facets: FacetFiltersV1) =>
+  queryOptions({
+    queryKey: ["v1", "facets", { source, duration, facets }],
+    queryFn: ({ signal }) => fetchFacets({ source, duration, facets, signal }),
+    staleTime: 10 * 60 * 1000,
+    placeholderData: keepPreviousData,
+    select: (response) => response.data,
   });
 
 /**
@@ -87,6 +102,7 @@ export const searchQuery = (
   match: SearchMatchFilterV1,
   source: AudioSource | null,
   duration: DurationRangeV1,
+  facets: FacetFiltersV1,
   excludeId: string | null = null,
   sound: ClipSound | null = null,
 ) => {
@@ -103,13 +119,25 @@ export const searchQuery = (
         match,
         source,
         duration,
+        facets,
         limit,
         ...(sound && { sound: soundOf ?? `file:${wav!.id}` }),
         ...(excludeId && { exclude: excludeId }),
       },
     ],
     queryFn: ({ signal }) =>
-      searchAudios({ q, match, source, duration, limit, soundOf, wav: wav?.wav ?? null, exclude: excludeId, signal }),
+      searchAudios({
+        q,
+        match,
+        source,
+        duration,
+        facets,
+        limit,
+        soundOf,
+        wav: wav?.wav ?? null,
+        exclude: excludeId,
+        signal,
+      }),
     // Keep the previous results on screen while the next query loads.
     placeholderData: keepPreviousData,
     select: cutToLimit,
@@ -125,10 +153,15 @@ function cutToLimit(response: AudioSearchResponseV1): SearchResultsData {
   };
 }
 
-export const similarQuery = (id: string, source: AudioSource | null, duration: DurationRangeV1) =>
+export const similarQuery = (
+  id: string,
+  source: AudioSource | null,
+  duration: DurationRangeV1,
+  facets: FacetFiltersV1,
+) =>
   queryOptions({
-    queryKey: ["v1", "audio", id, "similar", { limit: RESULTS_LIMIT, source, duration }],
-    queryFn: ({ signal }) => fetchSimilarAudios({ id, source, duration, limit: RESULTS_LIMIT, signal }),
+    queryKey: ["v1", "audio", id, "similar", { limit: RESULTS_LIMIT, source, duration, facets }],
+    queryFn: ({ signal }) => fetchSimilarAudios({ id, source, duration, facets, limit: RESULTS_LIMIT, signal }),
   });
 
 /**
@@ -154,11 +187,12 @@ export const fileQuery = (
   example: AudioExample | null,
   source: AudioSource | null,
   duration: DurationRangeV1,
+  facets: FacetFiltersV1,
 ) =>
   queryOptions({
-    queryKey: ["v1", "search", "audio", example?.id ?? "", { limit: RESULTS_LIMIT, source, duration }],
+    queryKey: ["v1", "search", "audio", example?.id ?? "", { limit: RESULTS_LIMIT, source, duration, facets }],
     queryFn: ({ signal }) =>
-      searchByAudioFile({ wav: example!.wav, source, duration, limit: RESULTS_LIMIT, signal }),
+      searchByAudioFile({ wav: example!.wav, source, duration, facets, limit: RESULTS_LIMIT, signal }),
     enabled: example !== null,
     // The result for a given file never changes.
     staleTime: Infinity,
@@ -177,14 +211,14 @@ export type ReferenceClip = {
 /**
  * What the list shows: the whole catalog, a text search, the audios similar to
  * one of the catalog, or the audios like the user's own file or recording. Each
- * from one dataset when `source` is set, and of `duration`'s length (the
- * sidebar's filters).
+ * from one dataset when `source` is set, of `duration`'s length and with
+ * `facets`' metadata (the sidebar's filters).
  *
  * A search with a clip compares its sound (`match: "sound"`, the default) or
  * what's said in it: its transcript, searched like typed text by its exact
  * words (`"exact"`) or its meaning (`"text"`).
  */
-export type AudioListView = { source: AudioSource | null; duration: DurationRangeV1 } & (
+export type AudioListView = { source: AudioSource | null; duration: DurationRangeV1; facets: FacetFiltersV1 } & (
   | { kind: "browse" }
   | { kind: "search"; q: string; match: SearchMatchFilterV1 }
   | { kind: "similar"; reference: ReferenceClip; match: ClipMatch }
@@ -282,7 +316,7 @@ export function useTranscriptSearch(view: AudioListView): {
         : { kind: "file", example: clip.example };
   const searchable = clip !== null && transcript.isSuccess && (q !== "" || clip.match === "all");
   const search = useQuery({
-    ...searchQuery(q, clip?.match ?? "text", view.source, view.duration, excludeId, sound),
+    ...searchQuery(q, clip?.match ?? "text", view.source, view.duration, view.facets, excludeId, sound),
     enabled: searchable,
   });
   return { transcript, search, q, excludeId, sound, searchable };
@@ -296,23 +330,24 @@ export function useListView(view: AudioListView): {
   rows: readonly { id: string; durationSeconds: number }[];
   summary: string;
 } {
-  const { source, duration } = view;
-  const catalog = useInfiniteQuery({ ...catalogQuery(source, duration), enabled: view.kind === "browse" });
+  const { source, duration, facets } = view;
+  const catalog = useInfiniteQuery({ ...catalogQuery(source, duration, facets), enabled: view.kind === "browse" });
   const search = useQuery({
     ...searchQuery(
       view.kind === "search" ? view.q : "",
       view.kind === "search" ? view.match : "all",
       source,
       duration,
+      facets,
     ),
     enabled: view.kind === "search",
   });
   const similar = useQuery({
-    ...similarQuery(view.kind === "similar" ? view.reference.id : "", source, duration),
+    ...similarQuery(view.kind === "similar" ? view.reference.id : "", source, duration, facets),
     enabled: view.kind === "similar" && view.match === "sound",
   });
   const file = useQuery(
-    fileQuery(view.kind === "file" && view.match === "sound" ? view.example : null, source, duration),
+    fileQuery(view.kind === "file" && view.match === "sound" ? view.example : null, source, duration, facets),
   );
   const words = useTranscriptSearch(view);
   const byWords = searchesTranscript(view);

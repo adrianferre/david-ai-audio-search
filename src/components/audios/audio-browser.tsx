@@ -5,7 +5,14 @@ import { AudioLinesIcon } from "lucide-react";
 import { type DragEvent, useEffect, useRef, useState } from "react";
 
 import { ApiError, fetchRemoteAudio } from "@/lib/api/v1/client";
-import { ANY_DURATION, type AudioSource, type DurationRangeV1, type SearchMatchFilterV1 } from "@/lib/api/v1/types";
+import {
+  ANY_DURATION,
+  type AudioSource,
+  type DurationRangeV1,
+  type FacetFiltersV1,
+  NO_FACETS,
+  type SearchMatchFilterV1,
+} from "@/lib/api/v1/types";
 import { MAX_EXAMPLE_SECONDS, toExampleClip, UnreadableAudioError } from "@/lib/audio/to-wav";
 import { useMicrophoneRecorder } from "@/lib/audio/use-microphone-recorder";
 
@@ -14,6 +21,7 @@ import { AudioList } from "./audio-list";
 import { AudioSearchBar, type ExampleStatus, parseLink, type TranscriptLine } from "./audio-search-bar";
 import { displayText, SOURCE_LABEL } from "./datasets";
 import { describeDuration } from "./duration-filter";
+import { describeFacets } from "./facet-filters";
 import {
   type AudioExample,
   type AudioListView,
@@ -71,6 +79,7 @@ function hasFiles(event: DragEvent) {
 export function AudioBrowser() {
   const [source, setSource] = useState<AudioSource | null>(null);
   const [duration, setDuration] = useState<DurationRangeV1>(ANY_DURATION);
+  const [facets, setFacets] = useState<FacetFiltersV1>(NO_FACETS);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [match, setMatch] = useState<SearchMatchFilterV1>("all");
@@ -100,12 +109,12 @@ export function AudioBrowser() {
   const searchQuery = query.trim() === "" || parseLink(debouncedQuery) ? "" : debouncedQuery;
 
   const view: AudioListView = example
-    ? { kind: "file", example, source, duration, match: clipMatch }
+    ? { kind: "file", example, source, duration, facets, match: clipMatch }
     : similarTo
-      ? { kind: "similar", reference: similarTo, source, duration, match: clipMatch }
+      ? { kind: "similar", reference: similarTo, source, duration, facets, match: clipMatch }
       : searchQuery
-        ? { kind: "search", q: searchQuery, match, source, duration }
-        : { kind: "browse", source, duration };
+        ? { kind: "search", q: searchQuery, match, source, duration, facets }
+        : { kind: "browse", source, duration, facets };
   const { summary } = useListView(view);
   const { transcript } = useTranscriptSearch(view);
   const transcriptLine: TranscriptLine | null =
@@ -129,28 +138,28 @@ export function AudioBrowser() {
   useEffect(() => {
     if (!settledText) return;
     const timeout = setTimeout(
-      () => remember({ kind: "text", q: settledText, match, source, duration }),
+      () => remember({ kind: "text", q: settledText, match, source, duration, facets }),
       TEXT_SEARCH_SETTLED_MS,
     );
     return () => clearTimeout(timeout);
-  }, [settledText, match, source, duration, remember]);
+  }, [settledText, match, source, duration, facets, remember]);
 
   // A search with a clip is kept as it stands, and saved again as it changes:
-  // its match, its dataset and length filters, and the transcript once it is in.
+  // its match, its dataset, length and metadata filters, and the transcript once it is in.
   const spoken = view.kind !== "browse" && view.kind !== "search" && view.match !== "sound" && transcript.isSuccess
     ? transcript.data.text
     : undefined;
   useEffect(() => {
     if (similarTo) {
-      remember({ kind: "similar", reference: similarTo, source, duration, match: clipMatch, transcript: spoken });
+      remember({ kind: "similar", reference: similarTo, source, duration, facets, match: clipMatch, transcript: spoken });
     } else if (example) {
-      remember({ kind: "audio", example, source, duration, match: clipMatch, transcript: spoken });
+      remember({ kind: "audio", example, source, duration, facets, match: clipMatch, transcript: spoken });
     }
-  }, [similarTo, example, source, duration, clipMatch, spoken, remember]);
+  }, [similarTo, example, source, duration, facets, clipMatch, spoken, remember]);
 
   const commitQuery = () => {
     const q = query.trim();
-    if (q && !similarTo && !example) remember({ kind: "text", q, match, source, duration });
+    if (q && !similarTo && !example) remember({ kind: "text", q, match, source, duration, facets });
   };
 
   useEffect(
@@ -274,11 +283,12 @@ export function AudioBrowser() {
     void searchWithAudio({ url: url.href }, linkName(url), "link");
   };
 
-  /** Runs a recent search again, with the dataset and length filters it ran with. */
+  /** Runs a recent search again, with the dataset, length and metadata filters it ran with. */
   const rerun = (entry: RecentSearch) => {
     setSource(entry.source);
-    // Saved before the length filter existed: any length.
+    // Saved before the length or metadata filters existed: any length, any metadata.
     setDuration(entry.duration ?? ANY_DURATION);
+    setFacets(entry.facets ?? NO_FACETS);
     // The user's clip was transcribed already: don't send it to the model again.
     if (entry.kind === "audio" && entry.transcript !== undefined) {
       const { queryKey } = transcriptQuery({
@@ -286,6 +296,7 @@ export function AudioBrowser() {
         example: entry.example,
         source: null,
         duration: ANY_DURATION,
+        facets: NO_FACETS,
         match: "all",
       });
       if (queryClient.getQueryData(queryKey) === undefined) {
@@ -364,11 +375,19 @@ export function AudioBrowser() {
   const scope = [
     source && view.kind !== "browse" ? `${SOURCE_LABEL[source]} only` : null,
     describeDuration(duration),
+    describeFacets(facets),
   ];
 
   return (
     <div className="relative flex min-h-0 flex-1" {...dropHandlers}>
-      <Sidebar source={source} onSourceChange={setSource} duration={duration} onDurationChange={setDuration} />
+      <Sidebar
+        source={source}
+        onSourceChange={setSource}
+        duration={duration}
+        onDurationChange={setDuration}
+        facets={facets}
+        onFacetsChange={setFacets}
+      />
       <main className="flex min-w-0 flex-1 flex-col">
         <header className="flex shrink-0 flex-col gap-4 px-6 pt-7 pb-4">
           <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
@@ -452,6 +471,7 @@ export function AudioBrowser() {
               onClearSearch: () => setQuery(""),
               onClearSource: () => setSource(null),
               onClearDuration: () => setDuration(ANY_DURATION),
+              onClearFacets: () => setFacets(NO_FACETS),
             }}
           />
           <SelectionBar selection={selection} />

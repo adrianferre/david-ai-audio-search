@@ -74,6 +74,27 @@ export type DurationRange = { min: number | null; max: number | null };
 /** No length filter. */
 export const ANY_LENGTH: DurationRange = { min: null, max: null };
 
+/**
+ * Filters by the clips' metadata (src/server/audios/facets.ts): a clip matches
+ * a facet when it has any of its values, and must match every facet that has
+ * values. An empty list doesn't filter.
+ */
+export type FacetFilters = {
+  /** `female`, `male`. */
+  gender: readonly string[];
+  /** Accent groups (ACCENT_ALIASES in facets.ts), `other` included. */
+  accent: readonly string[];
+};
+
+export const NO_FACETS: FacetFilters = { gender: [], accent: [] };
+
+/** What the list, the searches and the counts filter by: the sidebar's filters. */
+export type CatalogFilter = {
+  source?: AudioSource | null;
+  duration?: DurationRange;
+  facets?: FacetFilters;
+};
+
 /** A row of the `datasets` table: facts that hold for every clip of a dataset. */
 export type DatasetRecord = {
   source: AudioSource;

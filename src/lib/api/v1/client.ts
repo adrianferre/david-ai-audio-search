@@ -7,6 +7,8 @@ import type {
   AudioSource,
   DatasetsResponseV1,
   DurationRangeV1,
+  FacetFiltersV1,
+  FacetsResponseV1,
   SearchMatchFilterV1,
   SimilarAudiosResponseV1,
   TranscriptResponseV1,
@@ -52,11 +54,23 @@ function durationParams(duration: DurationRangeV1 | null | undefined) {
   return { minDuration: duration?.min, maxDuration: duration?.max };
 }
 
-/** `?…` for these params, leaving out the unset ones; "" when none is set. */
-function queryString(params: Record<string, string | number | null | undefined>): string {
+/** The facet params (`gender`, `accent`), each repeated once per value. */
+function facetParams(facets: FacetFiltersV1 | null | undefined) {
+  return { gender: facets?.gender, accent: facets?.accent };
+}
+
+type QueryValue = string | number | null | undefined;
+
+/**
+ * `?…` for these params, leaving out the unset ones; "" when none is set. An
+ * array is the param once per value.
+ */
+function queryString(params: Record<string, QueryValue | readonly QueryValue[]>): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null) search.set(key, String(value));
+    for (const each of Array.isArray(value) ? value : [value]) {
+      if (each !== undefined && each !== null) search.append(key, String(each));
+    }
   }
   return search.size > 0 ? `?${search}` : "";
 }
@@ -68,6 +82,8 @@ export function fetchAudios(params: {
   source?: AudioSource | null;
   /** Only the audios of this length; any length when null or unset. */
   duration?: DurationRangeV1 | null;
+  /** Only the audios with this metadata; no filter when null or unset. */
+  facets?: FacetFiltersV1 | null;
   signal?: AbortSignal;
 }): Promise<AudioListResponseV1> {
   const query = queryString({
@@ -75,16 +91,39 @@ export function fetchAudios(params: {
     pageSize: params.pageSize,
     source: params.source,
     ...durationParams(params.duration),
+    ...facetParams(params.facets),
   });
   return getJson(`${BASE}/audios${query}`, params.signal);
 }
 
-/** Every dataset of the catalog with its number of audios, of `duration`'s length when set. */
+/**
+ * Every dataset of the catalog with its number of audios, of `duration`'s
+ * length and with `facets` when set.
+ */
 export function fetchDatasets(
   duration: DurationRangeV1 | null = null,
+  facets: FacetFiltersV1 | null = null,
   signal?: AbortSignal,
 ): Promise<DatasetsResponseV1> {
-  return getJson(`${BASE}/datasets${queryString(durationParams(duration))}`, signal);
+  return getJson(`${BASE}/datasets${queryString({ ...durationParams(duration), ...facetParams(facets) })}`, signal);
+}
+
+/**
+ * How many clips have each value of each facet, of `source` and of
+ * `duration`'s length; each facet's counts apply the other facets of `facets`.
+ */
+export function fetchFacets(params: {
+  source?: AudioSource | null;
+  duration?: DurationRangeV1 | null;
+  facets?: FacetFiltersV1 | null;
+  signal?: AbortSignal;
+}): Promise<FacetsResponseV1> {
+  const query = queryString({
+    source: params.source,
+    ...durationParams(params.duration),
+    ...facetParams(params.facets),
+  });
+  return getJson(`${BASE}/facets${query}`, params.signal);
 }
 
 export function fetchAudio(
@@ -107,6 +146,7 @@ export async function searchAudios(params: {
   limit?: number;
   source?: AudioSource | null;
   duration?: DurationRangeV1 | null;
+  facets?: FacetFiltersV1 | null;
   soundOf?: string | null;
   wav?: Blob | null;
   /** An audio to leave out of the results: the clip searched with. */
@@ -119,6 +159,7 @@ export async function searchAudios(params: {
     limit: params.limit,
     source: params.source,
     ...durationParams(params.duration),
+    ...facetParams(params.facets),
     soundOf: params.soundOf,
     exclude: params.exclude,
   });
@@ -140,9 +181,15 @@ export function fetchSimilarAudios(params: {
   limit?: number;
   source?: AudioSource | null;
   duration?: DurationRangeV1 | null;
+  facets?: FacetFiltersV1 | null;
   signal?: AbortSignal;
 }): Promise<SimilarAudiosResponseV1> {
-  const query = queryString({ limit: params.limit, source: params.source, ...durationParams(params.duration) });
+  const query = queryString({
+    limit: params.limit,
+    source: params.source,
+    ...durationParams(params.duration),
+    ...facetParams(params.facets),
+  });
   return getJson(`${BASE}/audios/${encodeURIComponent(params.id)}/similar${query}`, params.signal);
 }
 
@@ -153,9 +200,15 @@ export async function searchByAudioFile(params: {
   limit?: number;
   source?: AudioSource | null;
   duration?: DurationRangeV1 | null;
+  facets?: FacetFiltersV1 | null;
   signal?: AbortSignal;
 }): Promise<SimilarAudiosResponseV1> {
-  const query = queryString({ limit: params.limit, source: params.source, ...durationParams(params.duration) });
+  const query = queryString({
+    limit: params.limit,
+    source: params.source,
+    ...durationParams(params.duration),
+    ...facetParams(params.facets),
+  });
   const res = await fetch(`${BASE}/search/audio${query}`, {
     method: "POST",
     body: params.wav,

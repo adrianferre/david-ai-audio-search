@@ -132,6 +132,7 @@ body. Preview deployments require a Vercel login.
 | --- | --- |
 | `GET /api/v1/audios` | The catalog, paginated (`page`, `pageSize` up to 100) |
 | `GET /api/v1/datasets` | Each dataset with its clip count, duration range, split and original format |
+| `GET /api/v1/facets` | How many clips have each speaker gender and accent (see [Facets](#facets)) |
 | `GET /api/v1/audios/{id}` | One clip, with its dataset's metadata (speaker, captions, AudioSet labels…) |
 | `GET /api/v1/audios/{id}/audio` | The FLAC, streamed (supports `Range` and `If-None-Match`) |
 | `GET /api/v1/audios/{id}/similar` | The clips that sound most like this one, each with its `similarity` |
@@ -144,11 +145,34 @@ body. Preview deployments require a Vercel login.
 | `GET /api/v1/remote-audio?url=…` | The file behind a public audio or video link, fetched for the browser (up to 20 MB, 30 s timeout, public addresses only) |
 
 - **Filters** for the list, search and similar endpoints: `source` (`librispeech`,
-  `audiocaps` or `commonvoice`), `minDuration` and `maxDuration` (in seconds), and `limit`
-  (1–100, 50 by default) for searches.
+  `audiocaps` or `commonvoice`), `minDuration` and `maxDuration` (in seconds), the
+  [facets](#facets) `gender` and `accent`, and `limit` (1–100, 50 by default) for searches.
 - **WAV bodies** use `Content-Type: audio/wav`, up to 2 MB, 16 kHz mono. They are processed and
   then thrown away.
 - **Every clip** in every response includes `waveformPeaks`: 64 levels from 0 to 1, or `null`.
+
+### Facets
+
+`gender` (`female`, `male`) and `accent` filter by each clip's metadata. Repeat one for several
+values (`gender=female&gender=male`): a clip matches when it has any of them, and must match every
+facet given. A dataset that doesn't record a facet never matches it: `gender` leaves AudioCaps
+out, and `accent` everything but Common Voice. LibriSpeech's `sex` and Common Voice's `gender` both
+map to `female` and `male`. Common Voice speakers describe their accent in their own words and may
+give several, so each is put in a group: `us`, `england`, `south-asia`, `canada`, `australia`,
+`ireland`, `southern-africa`, `hong-kong`, `new-zealand`, `philippines`, `malaysia`, `wales`,
+`west-indies`, `singapore`, `scotland`, or `other`. A speaker counts in each of their groups. The
+facets are read from each row's `metadata` at query time
+([`src/server/audios/facets.ts`](src/server/audios/facets.ts)), so they need no column of their own.
+
+`GET /api/v1/facets` counts the clips with each value, under `source`, `minDuration`,
+`maxDuration` and the facets. Each facet's counts apply the other facets, not its own, and every
+value is listed in the order above, `0` included. With facets, `GET /api/v1/datasets` counts only
+the clips that pass them.
+
+```json
+{ "data": { "gender": [ { "value": "female", "count": 1451 }, { "value": "male", "count": 1452 } ],
+            "accent": [ { "value": "us", "count": 66 }, { "value": "england", "count": 31 }, "…" ] } }
+```
 
 ### Search
 

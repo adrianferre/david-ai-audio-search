@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { type AudioSearchResponseV1, MAX_SEARCH_QUERY_LENGTH } from "@/lib/api/v1/types";
 import { apiError, internalError } from "@/server/api/errors";
-import { catalogFilterQuerySchema, durationRange } from "@/server/api/source-filter";
+import { catalogFilter, catalogFilterQuerySchema, queryParams } from "@/server/api/source-filter";
 import { toAudioSearchResultV1 } from "@/server/api/v1/audios";
 import { readWavBody } from "@/server/api/wav-body";
 import { getAudio, searchAudios, searchAudiosByExactWords } from "@/server/audios/repository";
@@ -27,7 +27,7 @@ const querySchema = z.object({
 type SoundExample = { kind: "audio"; id: string } | { kind: "wav"; wav: Uint8Array };
 
 /**
- * GET /api/v1/search?q=dog+barking&match=all&limit=50&source=audiocaps&minDuration=5&maxDuration=12
+ * GET /api/v1/search?q=dog+barking&match=all&limit=50&source=commonvoice&minDuration=5&maxDuration=12&accent=us
  *
  * With `soundOf={id}`, the sound signal compares with that audio's sound
  * instead of the text of `q`: search with an example, by its sound and its words.
@@ -53,12 +53,12 @@ export async function POST(request: NextRequest) {
 }
 
 async function search(request: NextRequest, example: SoundExample | null) {
-  const parsed = querySchema.safeParse(Object.fromEntries(request.nextUrl.searchParams));
+  const parsed = querySchema.safeParse(queryParams(request.nextUrl.searchParams));
   if (!parsed.success) {
     return apiError(400, "invalid_request", "Invalid query parameters", z.flattenError(parsed.error).fieldErrors);
   }
-  const { match, limit, source, exclude = null } = parsed.data;
-  const duration = durationRange(parsed.data);
+  const { match, limit, exclude = null } = parsed.data;
+  const filter = catalogFilter(parsed.data);
   const q = parsed.data.q ?? "";
   if (q === "" && !(example && (match === "all" || match === "sound"))) {
     return apiError(400, "invalid_request", "Invalid query parameters", {
@@ -70,7 +70,7 @@ async function search(request: NextRequest, example: SoundExample | null) {
   if (match === "exact") {
     let hits;
     try {
-      hits = await searchAudiosByExactWords({ query: q, limit, source, duration, exclude });
+      hits = await searchAudiosByExactWords({ query: q, limit, exclude, ...filter });
     } catch (error) {
       return internalError(error);
     }
@@ -118,9 +118,8 @@ async function search(request: NextRequest, example: SoundExample | null) {
       // Only when the example's sound is searched with: with Meaning alone it is a typed search.
       soundIsExample: example !== null && signals.includes("sound"),
       limit,
-      source,
-      duration,
       exclude,
+      ...filter,
     });
   } catch (error) {
     return internalError(error);
