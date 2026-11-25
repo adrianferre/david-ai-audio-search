@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import type { SimilarAudiosResponseV1 } from "@/lib/api/v1/types";
 import { apiError, internalError } from "@/server/api/errors";
-import { catalogFilterQuerySchema, durationRange } from "@/server/api/source-filter";
+import { catalogFilter, catalogFilterQuerySchema, queryParams } from "@/server/api/source-filter";
 import { toSimilarAudioV1 } from "@/server/api/v1/audios";
 import { findSimilarAudios } from "@/server/audios/repository";
 
@@ -14,20 +14,20 @@ const querySchema = z.object({
   limit: z.coerce.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
 }).extend(catalogFilterQuerySchema.shape);
 
-/** GET /api/v1/audios/{id}/similar?limit=50&source=librispeech&minDuration=5&maxDuration=12 */
+/** GET /api/v1/audios/{id}/similar?limit=50&source=librispeech&minDuration=5&maxDuration=12&gender=female */
 export async function GET(
   request: NextRequest,
   ctx: RouteContext<"/api/v1/audios/[id]/similar">,
 ) {
   const { id } = await ctx.params;
-  const parsed = querySchema.safeParse(Object.fromEntries(request.nextUrl.searchParams));
+  const parsed = querySchema.safeParse(queryParams(request.nextUrl.searchParams));
   if (!parsed.success) {
     return apiError(400, "invalid_request", "Invalid query parameters", z.flattenError(parsed.error).fieldErrors);
   }
 
   let hits;
   try {
-    hits = await findSimilarAudios(id, parsed.data.limit, parsed.data.source, durationRange(parsed.data));
+    hits = await findSimilarAudios(id, parsed.data.limit, catalogFilter(parsed.data));
   } catch (error) {
     return internalError(error);
   }

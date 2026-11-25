@@ -18,6 +18,79 @@ export type DurationRangeV1 = { min: number | null; max: number | null };
 
 export const ANY_DURATION: DurationRangeV1 = { min: null, max: null };
 
+/**
+ * The speaker's gender: LibriSpeech's `sex` (F, M) and Common Voice's
+ * self-reported `gender` (female_feminine, male_masculine). AudioCaps clips have no speaker.
+ */
+export const GENDERS = ["female", "male"] as const;
+export type GenderV1 = (typeof GENDERS)[number];
+
+/** The speaker's age, by decade, as Common Voice records it (self-reported; its spelling, "fourties"). */
+export const AGES = [
+  "teens",
+  "twenties",
+  "thirties",
+  "fourties",
+  "fifties",
+  "sixties",
+  "seventies",
+  "eighties",
+  "nineties",
+] as const;
+export type AgeV1 = (typeof AGES)[number];
+
+/**
+ * The speaker's accent, as Common Voice speakers describe it, grouped: each
+ * of Common Voice's English accents, and `other` for the rest (a free-text
+ * accent, or one with few speakers). A speaker who gives several accents
+ * ("United States English, England English") is in each of their groups.
+ */
+export const ACCENTS = [
+  "us",
+  "england",
+  "south-asia",
+  "canada",
+  "australia",
+  "ireland",
+  "southern-africa",
+  "hong-kong",
+  "new-zealand",
+  "philippines",
+  "malaysia",
+  "wales",
+  "west-indies",
+  "singapore",
+  "scotland",
+  "other",
+] as const;
+export type AccentV1 = (typeof ACCENTS)[number];
+
+/**
+ * Filters by the clips' metadata: the `gender`, `age`, `accent` and `label`
+ * query parameters of every endpoint that takes `source`, each repeatable
+ * (`gender=female&gender=male`). A clip matches a filter when it has any of
+ * its values, and must match every filter that has values; an empty list
+ * doesn't filter. A clip without that metadata doesn't match: with `gender`,
+ * no AudioCaps clip; with `age` or `accent`, only Common Voice clips; with
+ * `label`, only AudioCaps clips.
+ */
+export type FacetFiltersV1 = {
+  gender: GenderV1[];
+  age: AgeV1[];
+  accent: AccentV1[];
+  /** AudioSet labels, as written (`Dog`, `Bee, wasp, etc.`): AudioCaps clips with any of them. */
+  label: string[];
+};
+
+export type FacetV1 = keyof FacetFiltersV1;
+
+export const FACETS = ["gender", "age", "accent", "label"] as const satisfies readonly FacetV1[];
+
+export const NO_FACETS: FacetFiltersV1 = { gender: [], age: [], accent: [], label: [] };
+
+/** Most values one facet parameter takes. */
+export const MAX_FACET_VALUES = 50;
+
 export type Pagination = {
   page: number;
   pageSize: number;
@@ -117,7 +190,8 @@ export type AudioListResponseV1 = PaginatedResponse<AudioListItemV1>;
 
 /**
  * One dataset of the catalog and how many audios it has (`GET /api/v1/datasets`).
- * With `minDuration`/`maxDuration`, `count` is of the audios of that length only;
+ * With `minDuration`/`maxDuration` or the facet filters (`gender`, `age`,
+ * `accent`, `label`), `count` is of the audios that pass them only;
  * `durationSeconds` is always of the whole dataset.
  */
 export type DatasetV1 = {
@@ -128,6 +202,25 @@ export type DatasetV1 = {
 } & DatasetFactsV1;
 
 export type DatasetsResponseV1 = DataResponse<DatasetV1[]>;
+
+/** How many clips have one value of a facet. */
+export type FacetCountV1<T extends string = string> = { value: T; count: number };
+
+/**
+ * The values of each facet and how many clips have each (`GET /api/v1/facets`),
+ * of the `source` and length given. A facet's counts also apply the other
+ * facets' filters, not its own, so they say what picking that value would add.
+ * `gender`, `age` and `accent` list every value, in their order, 0 included;
+ * `label` only those some clip has, most clips first.
+ */
+export type FacetsV1 = {
+  gender: FacetCountV1<GenderV1>[];
+  age: FacetCountV1<AgeV1>[];
+  accent: FacetCountV1<AccentV1>[];
+  label: FacetCountV1[];
+};
+
+export type FacetsResponseV1 = DataResponse<FacetsV1>;
 export type AudioDetailResponseV1 = DataResponse<AudioDetailV1>;
 
 /**

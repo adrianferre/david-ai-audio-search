@@ -4,33 +4,39 @@ import { useQuery } from "@tanstack/react-query";
 import { AudioLinesIcon } from "lucide-react";
 
 import { DavidAiLogo } from "@/components/david-ai-logo";
-import type { AudioSource, DurationRangeV1 } from "@/lib/api/v1/types";
+import type { AudioSource, DurationRangeV1, FacetFiltersV1 } from "@/lib/api/v1/types";
 import { cn } from "@/lib/utils";
 
 import { SOURCE_LABEL, SOURCE_SWATCH_CLASS } from "./datasets";
 import { DurationFilter } from "./duration-filter";
+import { FacetFilters } from "./facet-filters";
 import { datasetsQuery } from "./queries";
 
 /** The speech datasets first, then the sound one. */
 const FILTER_ORDER: readonly AudioSource[] = ["librispeech", "commonvoice", "audiocaps"];
 
 /**
- * The left rail: the product, the dataset and length filters, and how to search
- * by sound. The filters apply to every view: browsing, text search and sound
- * search. Each dataset's count is of the clips of the chosen length.
+ * The left rail: the product, the dataset, length and metadata filters, and
+ * how to search by sound. The filters apply to every view: browsing, text
+ * search and sound search. Each dataset's count is of the clips of the chosen
+ * length and metadata.
  */
 export function Sidebar({
   source,
   onSourceChange,
   duration,
   onDurationChange,
+  facets,
+  onFacetsChange,
 }: {
   source: AudioSource | null;
   onSourceChange: (source: AudioSource | null) => void;
   duration: DurationRangeV1;
   onDurationChange: (duration: DurationRangeV1) => void;
+  facets: FacetFiltersV1;
+  onFacetsChange: (facets: FacetFiltersV1) => void;
 }) {
-  const { data } = useQuery(datasetsQuery(duration));
+  const { data } = useQuery(datasetsQuery(duration, facets));
   const datasets = new Map(data?.data.map((dataset) => [dataset.source, dataset]));
   const total = data?.data.reduce((sum, dataset) => sum + dataset.count, 0);
   const lengths = data?.data.flatMap((dataset) => (dataset.durationSeconds ? [dataset.durationSeconds.max] : []));
@@ -95,6 +101,8 @@ export function Sidebar({
       </div>
 
       <DurationFilter duration={duration} longestSeconds={longestSeconds} onDurationChange={onDurationChange} />
+
+      <FacetFilters source={source} duration={duration} facets={facets} onFacetsChange={onFacetsChange} />
 
       <div className="flex flex-col gap-2.5 rounded-[14px] border bg-background p-4">
         <p className="flex items-center gap-2 text-sm font-medium">
