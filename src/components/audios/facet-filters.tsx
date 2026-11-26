@@ -20,7 +20,6 @@ import {
 } from "@/lib/api/v1/types";
 import { cn } from "@/lib/utils";
 
-import { SOURCE_LABEL } from "./datasets";
 import { facetsQuery } from "./queries";
 
 export const GENDER_LABEL: Record<GenderV1, string> = { female: "Female", male: "Male" };
@@ -193,28 +192,23 @@ function FacetSection({
   children: (labelId: string) => ReactNode;
 }) {
   const labelId = useId();
-  const sources = FACET_SOURCES[facet].map((source) => SOURCE_LABEL[source]).join(", ");
   return (
     <div className="flex flex-col gap-2.5">
-      <div className="flex flex-col">
-        <div className="flex min-h-6 items-center justify-between gap-2">
-          <p id={labelId} className="text-xs font-medium text-muted-foreground">
-            {FACET_TITLE[facet]}
-          </p>
-          {picked > 0 && (
-            <Button
-              variant="ghost"
-              size="xs"
-              className="-mr-2 text-muted-foreground"
-              aria-label={`Clear the ${FACET_TITLE[facet].toLowerCase()} filter`}
-              onClick={onClear}
-            >
-              Clear
-            </Button>
-          )}
-        </div>
-        {/* Which datasets record it: picking a value leaves the others out. */}
-        <p className="-mt-0.5 text-[11.5px] leading-[14px] text-muted-foreground">{sources}</p>
+      <div className="flex min-h-6 items-center justify-between gap-2">
+        <p id={labelId} className="text-xs font-medium text-muted-foreground">
+          {FACET_TITLE[facet]}
+        </p>
+        {picked > 0 && (
+          <Button
+            variant="ghost"
+            size="xs"
+            className="-mr-2 text-muted-foreground"
+            aria-label={`Clear the ${FACET_TITLE[facet].toLowerCase()} filter`}
+            onClick={onClear}
+          >
+            Clear
+          </Button>
+        )}
       </div>
       {children(labelId)}
     </div>
