@@ -253,11 +253,14 @@ export function useRecentSearches(): {
       .catch((): RecentSearch[] => [])
       .then((stored) => {
         if (cancelled) return;
-        // Searches made while loading come first; stored ones they repeat go.
+        // Searches made while loading come first; stored ones they repeat go, and so do
+        // those saved before they became a suggestion, which is listed above them already.
         setEntries((current) =>
           [
             ...current,
-            ...stored.filter((entry) => !current.some((c) => c.id === entry.id || repeats(c, entry))),
+            ...stored.filter(
+              (entry) => !isSuggested(entry) && !current.some((c) => c.id === entry.id || repeats(c, entry)),
+            ),
           ].slice(0, MAX_RECENT_SEARCHES),
         );
         setLoaded(true);
