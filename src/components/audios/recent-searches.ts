@@ -42,31 +42,31 @@ type ClipSearchState = {
 
 /**
  * A search offered above the recent ones, always: a slice of the catalog a
- * speech team would ask for, which the sample answers well. Its `label` says
- * what it looks for. Not stored, and Clear leaves it.
+ * speech team would ask for, which the sample answers well. Each searches all
+ * the datasets. Its `label` says what it looks for. Not stored, and Clear leaves it.
  */
 export type SuggestedSearch = RecentSearch & { label: string };
 
 export const SUGGESTED_SEARCHES: readonly SuggestedSearch[] = [
   {
-    // AudioCaps clips where people talk over other sounds: speech in noisy settings.
+    // People talking over other sounds, speech in noisy settings: 9 of the top 10 are AudioCaps clips.
     id: "suggested-noisy-speech",
     at: 0,
     label: "People talking in a noisy crowd",
     kind: "text",
     q: "people talking in a noisy crowd",
     match: "all",
-    source: "audiocaps",
+    source: null,
   },
   {
-    // A Common Voice speaker with an Indian accent: half of the 10 clips that sound most like
-    // them have that accent too, against 12% of the sample.
+    // A Common Voice speaker with an Indian accent: 3 of the 10 clips that sound most like them
+    // have that accent too, against 23 of the 3,329 clips in the catalog.
     id: "suggested-indian-accent",
     at: 0,
     label: "Indian-accented English, more like this speaker",
     kind: "similar",
     match: "sound",
-    source: "commonvoice",
+    source: null,
     reference: {
       id: "commonvoice-common_voice_en_17292485",
       source: "commonvoice",
@@ -82,15 +82,25 @@ export const SUGGESTED_SEARCHES: readonly SuggestedSearch[] = [
     },
   },
   {
-    // LibriSpeech lines that apologize, found by what they mean: the top results say "I'm not
-    // sorry now", "I offer you my humble apologies", "I was wrong", rarely the query's words.
+    // Lines that apologize, found by what they mean (all from LibriSpeech): the top results say
+    // "I'm not sorry now", "I offer you my humble apologies", "I was wrong", rarely the query's words.
     id: "suggested-apology",
     at: 0,
     label: "Someone apologizing, in other words",
     kind: "text",
     q: "someone apologizing",
     match: "text",
-    source: "librispeech",
+    source: null,
+  },
+  {
+    // A sound, not speech: the top 10 are all AudioCaps clips with a baby crying.
+    id: "suggested-baby-crying",
+    at: 0,
+    label: "Baby crying",
+    kind: "text",
+    q: "baby crying",
+    match: "all",
+    source: null,
   },
 ];
 
